@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Page Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
+        <div>
+            <h1 class="h3 mb-1"><i class="bi bi-grid-1x2 me-2 text-gradient"></i>Dashboard</h1>
+            <p class="text-muted mb-0">Welcome back, <strong>{{ user.username }}</strong>!</p>
+        </div>
+        <a href="{% url 'profile-settings' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-gear me-1"></i>Settings
+        </a>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="row g-3 mb-4 stagger-children">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon feature-icon-blue">
+                        <i class="bi bi-person-badge"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Username</div>
+                        <div class="stat-value" style="font-size: 1.25rem;">{{ user.username }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon feature-icon-purple">
+                        <i class="bi bi-shield-check"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Level</div>
+                        <div class="stat-value" style="font-size: 1.25rem;">
+                            <span class="badge badge-level">{{ profile.level }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon feature-icon-green">
+                        <i class="bi bi-star"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Total XP</div>
+                        <div class="stat-value" style="font-size: 1.25rem;">
+                            <span class="badge badge-xp">{{ profile.xp }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #F59E0B;">
+                        <i class="bi bi-trophy"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Badges</div>
+                        <div class="stat-value" style="font-size: 1.25rem;">
+                            {% if profile.badges %}{{ profile.badges|length }}{% else %}0{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- XP Progress Bar -->
+    <div class="card border-0 mb-4 fade-in-up">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h2 class="h6 mb-0"><i class="bi bi-bar-chart-steps me-2" style="color: var(--aq-primary);"></i>XP Progress</h2>
+                <span class="badge badge-primary">Level {{ profile.level }}</span>
+            </div>
+            <div class="xp-progress-container mt-3">
+                <div class="progress progress-lg progress-animated">
+                    <div class="progress-bar" role="progressbar"
+                         style="width: {{ xp_percentage|default:'45' }}%;"
+                         aria-valuenow="{{ profile.xp }}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                        {{ profile.xp }} XP
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Left Column: Profile & Badges -->
+        <div class="col-lg-4">
+            <div class="card border-0 mb-4 fade-in-up">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-award me-2" style="color: var(--aq-accent);"></i>Badges</h2>
+                    {% if profile.badges %}
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for badge in profile.badges %}
+                                <span class="badge badge-level" tabindex="0">{{ badge }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="bi bi-award"></i></div>
+                            <p>No badges yet. Complete challenges to earn them!</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Top Global Players -->
+            <div class="card border-0 fade-in-up">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-globe me-2" style="color: var(--aq-primary);"></i>Top Global Players</h2>
+                    <ol class="list-group list-group-numbered list-group-flush">
+                        {% for entry in global_rankings %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
+                                <span>{{ entry.user.username }}</span>
+                                <strong class="badge badge-xp">{{ entry.score }}</strong>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-lg-8">
+            <!-- Recommended Challenges -->
+            <div class="card border-0 mb-4 fade-in-up">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-compass me-2" style="color: var(--aq-primary);"></i>Recommended Next Challenges</h2>
+                    <div class="row g-3">
+                        {% for challenge in recommendations %}
+                            <div class="col-md-6">
+                                <a href="{% url 'challenge-detail' challenge.slug %}" class="text-decoration-none d-block h-100">
+                                    <div class="recommendation-card" tabindex="0">
+                                        <h3 class="h6 mb-1">{{ challenge.title }}</h3>
+                                        <small class="text-muted">
+                                            <span class="badge badge-primary me-1" style="font-size: 0.7rem;">{{ challenge.get_difficulty_display }}</span>
+                                            {{ challenge.get_challenge_type_display }}
+                                        </small>
+                                    </div>
+                                </a>
+                            </div>
+                        {% empty %}
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="bi bi-compass"></i></div>
+                                <p>No recommendations available yet. Try some challenges first!</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Attempts -->
+            <div class="card border-0 mb-4 fade-in-up">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-clock-history me-2" style="color: var(--aq-warning);"></i>Recent Attempts</h2>
+                    <ul class="list-group list-group-flush">
+                        {% for attempt in recent_attempts %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center" tabindex="0">
+                                <span><i class="bi bi-check2-circle me-2" style="color: var(--aq-accent);"></i>{{ attempt.challenge.title }}</span>
+                                <span class="badge badge-xp">{{ attempt.score }} pts</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-inbox me-1"></i>No attempts yet.
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Recent Rewards -->
+            <div class="card border-0 mb-4 fade-in-up">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-gift me-2" style="color: #8B5CF6;"></i>Recent Rewards</h2>
+                    <ul class="list-group list-group-flush">
+                        {% for reward in rewards %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>{{ reward.badge_icon }} {{ reward.name }}</span>
+                                <span class="badge badge-accent">+{{ reward.points_awarded }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-gift me-1"></i>No rewards earned yet.
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

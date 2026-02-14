@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h1 class="h3 mb-1"><i class="bi bi-trophy me-2 text-gradient"></i>Leaderboard</h1>
+        <p class="text-muted mb-0">See who's leading the pack in algorithm mastery</p>
+    </div>
+
+    <div class="row g-4">
+        <!-- Global Leaderboard -->
+        <div class="col-lg-6">
+            <div class="card border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <div class="stat-icon feature-icon-blue">
+                            <i class="bi bi-globe"></i>
+                        </div>
+                        <h2 class="h5 mb-0">Global Leaderboard</h2>
+                    </div>
+                    <ol class="list-group list-group-numbered list-group-flush">
+                        {% for entry in global_board %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}" tabindex="0">
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if forloop.counter == 1 %}
+                                        <i class="bi bi-trophy-fill" style="color: #D97706; font-size: 1.1rem;"></i>
+                                    {% elif forloop.counter == 2 %}
+                                        <i class="bi bi-trophy-fill" style="color: #64748B; font-size: 1.1rem;"></i>
+                                    {% elif forloop.counter == 3 %}
+                                        <i class="bi bi-trophy-fill" style="color: #EA580C; font-size: 1.1rem;"></i>
+                                    {% else %}
+                                        <span class="text-muted" style="font-size: 0.8rem; min-width: 1.1rem; text-align: center;">#{{ forloop.counter }}</span>
+                                    {% endif %}
+                                    <span>{{ entry.user.username }}</span>
+                                </div>
+                                <span class="badge badge-xp">{{ entry.score }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-center py-4">
+                                <div class="empty-state" style="padding: 0;">
+                                    <div class="empty-icon"><i class="bi bi-trophy"></i></div>
+                                    <p>No data yet. Be the first to compete!</p>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Leaderboard -->
+        <div class="col-lg-6">
+            <div class="card border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #F59E0B;">
+                            <i class="bi bi-calendar-week"></i>
+                        </div>
+                        <h2 class="h5 mb-0">Weekly Leaderboard</h2>
+                    </div>
+                    <ol class="list-group list-group-numbered list-group-flush">
+                        {% for entry in weekly_board %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}" tabindex="0">
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if forloop.counter == 1 %}
+                                        <i class="bi bi-trophy-fill" style="color: #D97706; font-size: 1.1rem;"></i>
+                                    {% elif forloop.counter == 2 %}
+                                        <i class="bi bi-trophy-fill" style="color: #64748B; font-size: 1.1rem;"></i>
+                                    {% elif forloop.counter == 3 %}
+                                        <i class="bi bi-trophy-fill" style="color: #EA580C; font-size: 1.1rem;"></i>
+                                    {% else %}
+                                        <span class="text-muted" style="font-size: 0.8rem; min-width: 1.1rem; text-align: center;">#{{ forloop.counter }}</span>
+                                    {% endif %}
+                                    <span>{{ entry.user.username }}</span>
+                                </div>
+                                <span class="badge badge-xp">{{ entry.score }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-center py-4">
+                                <div class="empty-state" style="padding: 0;">
+                                    <div class="empty-icon"><i class="bi bi-calendar-week"></i></div>
+                                    <p>No data yet. Start competing this week!</p>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

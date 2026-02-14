@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="fade-in-up">
+    <div class="row g-4">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Challenge Info -->
+            <div class="card border-0 mb-4">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="badge badge-primary" tabindex="0">{{ challenge.get_challenge_type_display }}</span>
+                        <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #B45309;">
+                            <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
+                        </span>
+                    </div>
+                    <h1 class="h3 mb-3">{{ challenge.title }}</h1>
+                    <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
+                        <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Visualization -->
+            <div class="card border-0 mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h2 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Interactive Visualization</h2>
+                        <span class="badge badge-primary">{{ challenge.algorithm_type|upper|default:"ALGORITHM" }}</span>
+                    </div>
+                    <div id="visualizationOutput" style="min-height: 500px;"></div>
+                    <button class="btn btn-primary btn-sm mb-3 px-4" id="runVisualizationBtn" data-algorithm="{{ challenge.algorithm_type }}" style="display: none;">
+                        <i class="bi bi-play-fill me-1"></i>Initialize Visualization
+                    </button>
+                </div>
+            </div>
+
+            <!-- Submit Answer -->
+            {% if user.is_authenticated %}
+                <div class="card border-0">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3"><i class="bi bi-send me-2" style="color: var(--aq-accent);"></i>Submit Answer</h2>
+                        <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
+                            {% csrf_token %}
+                            <textarea class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
+                            <button type="submit" class="btn btn-success px-4" id="submitAnswerBtn">
+                                <i class="bi bi-check2-circle me-1"></i>Submit
+                            </button>
+                        </form>
+                        <div class="mt-3" id="attemptResult"></div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>Please <a href="{% url 'login' %}">login</a> to submit attempts.
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-0">
+                <div class="card-body">
+                    <h2 class="h6 mb-3"><i class="bi bi-clock-history me-2" style="color: var(--aq-warning);"></i>Your Recent Attempts</h2>
+                    <ul class="list-group list-group-flush">
+                        {% for attempt in user_attempts %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center" tabindex="0">
+                                <span style="font-size: 0.875rem;">
+                                    <i class="bi bi-calendar3 me-1" style="color: var(--aq-text-secondary);"></i>
+                                    {{ attempt.created_at|date:"M d, H:i" }}
+                                </span>
+                                <span class="badge badge-xp">{{ attempt.score }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-inbox me-1"></i>No attempts yet.
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/visualization.js' %}"></script>
+<script>
+    const attemptForm = document.getElementById("attemptForm");
+    const attemptResult = document.getElementById("attemptResult");
+    const submitBtn = document.getElementById("submitAnswerBtn");
+
+    if (attemptForm) {
+        attemptForm.addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            // Loading state
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+            }
+
+            const formData = new FormData(attemptForm);
+            try {
+                const response = await fetch(attemptForm.action, {
+                    method: "POST",
+                    body: formData,
+                    headers: {"X-Requested-With": "XMLHttpRequest"}
+                });
+                const data = await response.json();
+                attemptResult.innerHTML = `<div class="alert alert-${data.is_correct ? "success" : "warning"} fade-in">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-${data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill'} fs-5"></i>
+                        <div>
+                            <strong>Score: ${data.score}</strong> &middot; XP gained: <strong>${data.xp_gained}</strong> &middot;
+                            Level: <strong>${data.current_level}</strong>
+                        </div>
+                    </div>
+                </div>`;
+            } catch (err) {
+                attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
+                    <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
+                </div>`;
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Submit';
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}
+

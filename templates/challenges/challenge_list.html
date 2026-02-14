@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Page Header -->
+    <div class="section-header mb-4">
+        <div>
+            <h1 class="h3 mb-1"><i class="bi bi-puzzle me-2 text-gradient"></i>Challenges</h1>
+            <p class="text-muted mb-0">Explore algorithm challenges and sharpen your skills</p>
+        </div>
+    </div>
+
+    <!-- Challenge Grid -->
+    <div class="row g-4 stagger-children">
+        {% for challenge in challenges %}
+            <div class="col-md-6 col-lg-4">
+                <div class="challenge-card card border-0">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge badge-primary" tabindex="0">{{ challenge.get_challenge_type_display }}</span>
+                            {% if challenge.get_difficulty_display == 'Easy' %}
+                                <span class="badge badge-easy">Easy</span>
+                            {% elif challenge.get_difficulty_display == 'Medium' %}
+                                <span class="badge badge-medium">Medium</span>
+                            {% elif challenge.get_difficulty_display == 'Hard' %}
+                                <span class="badge badge-hard">Hard</span>
+                            {% else %}
+                                <span class="badge badge-primary">{{ challenge.get_difficulty_display }}</span>
+                            {% endif %}
+                        </div>
+                        <h2 class="h5 fw-semibold mb-2">{{ challenge.title }}</h2>
+                        <p class="text-muted mb-3" style="font-size: 0.9rem;">{{ challenge.description|truncatewords:18 }}</p>
+                        <div class="d-flex align-items-center justify-content-between mt-auto">
+                            <span class="d-flex align-items-center gap-1" style="color: var(--aq-accent); font-weight: 600; font-size: 0.875rem;">
+                                <i class="bi bi-star-fill"></i> {{ challenge.xp_reward }} XP
+                            </span>
+                            <a href="{% url 'challenge-detail' challenge.slug %}" class="btn btn-outline-primary btn-sm px-3">
+                                Open <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-12">
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-puzzle"></i></div>
+                    <p>No challenges available yet. Check back soon!</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

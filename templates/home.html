@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section fade-in-up">
+    <div class="row align-items-center">
+        <div class="col-lg-7">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="badge badge-accent"><i class="bi bi-stars me-1"></i>Gamified Learning</span>
+                <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818CF8;">v2.0</span>
+            </div>
+            <h1 class="display-5 fw-bold mb-3">Master Algorithms.<br>Battle in Real Time.</h1>
+            <p class="lead mb-4" style="color: rgba(255,255,255,0.75); max-width: 550px;">
+                AlgoQuest combines interactive learning, quizzes, live battles, and progression-based rewards to make algorithm mastery engaging and fun.
+            </p>
+            <div class="d-flex flex-wrap gap-3">
+                <a class="hero-cta" href="{% url 'challenges-list' %}">
+                    <i class="bi bi-rocket-takeoff me-2"></i>Start Learning
+                </a>
+                <a class="btn btn-outline-light btn-lg px-4" href="{% url 'leaderboard-page' %}" style="border-radius: var(--aq-radius-md);">
+                    <i class="bi bi-trophy me-2"></i>View Leaderboard
+                </a>
+            </div>
+        </div>
+        <div class="col-lg-5 d-none d-lg-flex justify-content-center">
+            <div class="position-relative" style="font-size: 8rem; line-height: 1;">
+                <div class="float" style="opacity: 0.12;">
+                    <i class="bi bi-braces-asterisk"></i>
+                </div>
+                <div class="position-absolute" style="top: 1rem; right: -1rem; font-size: 3rem; opacity: 0.08;">
+                    <i class="bi bi-diagram-3 float" style="animation-delay: 0.5s;"></i>
+                </div>
+                <div class="position-absolute" style="bottom: 0; left: 0; font-size: 2.5rem; opacity: 0.06;">
+                    <i class="bi bi-lightning-charge float" style="animation-delay: 1s;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Feature Cards -->
+<section class="row g-4 mt-1 stagger-children">
+    <div class="col-md-4">
+        <div class="feature-card fade-in-up">
+            <div class="feature-icon feature-icon-blue">
+                <i class="bi bi-diagram-3"></i>
+            </div>
+            <span class="badge badge-primary mb-2">Challenges</span>
+            <h5 class="fw-semibold mt-2">Interactive Challenges</h5>
+            <p class="text-muted mb-0">Explore BFS, DFS, A*, and Minimax with visual feedback, step-by-step animations, and real-time scoring.</p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="feature-card fade-in-up">
+            <div class="feature-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--aq-danger);">
+                <i class="bi bi-lightning-charge"></i>
+            </div>
+            <span class="badge badge-danger mb-2">Battle</span>
+            <h5 class="fw-semibold mt-2">Live Battle Mode</h5>
+            <p class="text-muted mb-0">Join level-matched real-time battles and compete head-to-head on live scoreboards with WebSocket updates.</p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="feature-card fade-in-up">
+            <div class="feature-icon feature-icon-purple">
+                <i class="bi bi-graph-up-arrow"></i>
+            </div>
+            <span class="badge" style="background: rgba(139, 92, 246, 0.1); color: #7C3AED;">Progress</span>
+            <h5 class="fw-semibold mt-2 mb-2">Gamified Growth</h5>
+            <p class="text-muted mb-0">Earn XP, unlock levels, gain badges, and climb global and weekly leaderboards as you improve.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section class="row g-4 mt-4 mb-3 stagger-children">
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-icon mx-auto mb-2 feature-icon-blue">
+                <i class="bi bi-code-square"></i>
+            </div>
+            <div class="stat-value">4+</div>
+            <div class="stat-label">Algorithm Types</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-icon mx-auto mb-2" style="background: rgba(239, 68, 68, 0.1); color: var(--aq-danger);">
+                <i class="bi bi-lightning"></i>
+            </div>
+            <div class="stat-value">Live</div>
+            <div class="stat-label">Real-time Battles</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-icon mx-auto mb-2 feature-icon-green">
+                <i class="bi bi-award"></i>
+            </div>
+            <div class="stat-value">XP</div>
+            <div class="stat-label">Progression System</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-icon mx-auto mb-2 feature-icon-purple">
+                <i class="bi bi-bar-chart-line"></i>
+            </div>
+            <div class="stat-value">Weekly</div>
+            <div class="stat-label">Leaderboard Resets</div>
+        </div>
+    </div>
+</section>
+{% endblock %}

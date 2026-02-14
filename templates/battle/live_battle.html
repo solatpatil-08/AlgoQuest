@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Battle Header -->
+    <div class="mb-4">
+        <h1 class="h3 mb-1">
+            <i class="bi bi-lightning-charge me-2" style="color: var(--aq-danger);"></i>
+            Live Battle: <span class="text-gradient">{{ match.room_code }}</span>
+        </h1>
+        <p class="text-muted mb-0">Real-time competitive coding battle</p>
+    </div>
+
+    <div class="card border-0 mb-4">
+        <div class="card-body">
+            <!-- Player Scores -->
+            <div class="row g-3 align-items-center mb-4">
+                <div class="col-md-5">
+                    <div class="battle-player-card" tabindex="0">
+                        <div class="player-label"><i class="bi bi-person-fill me-1"></i>Player One</div>
+                        <p id="playerOneScore" class="player-score mb-0">{{ match.player_one.username }}: {{ match.player_one_score }}</p>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="battle-vs">
+                        <span class="badge">VS</span>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="battle-player-card" tabindex="0">
+                        <div class="player-label"><i class="bi bi-person-fill me-1"></i>Player Two</div>
+                        <p id="playerTwoScore" class="player-score mb-0">
+                            {% if match.player_two %}
+                                {{ match.player_two.username }}: {{ match.player_two_score }}
+                            {% else %}
+                                <span class="text-muted" style="font-size: 1rem;">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Waiting for opponent...
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="d-flex flex-wrap align-items-end gap-3 p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
+                <div>
+                    <label class="form-label mb-1 fw-semibold" for="scoreDelta" style="font-size: 0.8125rem;">Score Delta</label>
+                    <input id="scoreDelta" class="form-control" type="number" value="10" style="min-width: 100px; max-width: 120px;">
+                </div>
+                <button id="sendScoreBtn" class="btn btn-success px-4">
+                    <i class="bi bi-send me-1"></i>Submit Score
+                </button>
+                <button id="endBattleBtn" class="btn btn-outline-danger px-4">
+                    <i class="bi bi-stop-circle me-1"></i>End Battle
+                </button>
+            </div>
+
+            <!-- Status -->
+            <div class="mt-3" id="battleStatus"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.BATTLE_ROOM_CODE = "{{ match.room_code }}";
+</script>
+<script src="{% static 'js/battle-client.js' %}"></script>
+{% endblock %}
+

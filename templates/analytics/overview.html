@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h1 class="h3 mb-1"><i class="bi bi-bar-chart-line me-2 text-gradient"></i>Performance Analytics</h1>
+        <p class="text-muted mb-0">Track your progress and identify areas for improvement</p>
+    </div>
+
+    <div class="row g-4">
+        <!-- Performance Data -->
+        <div class="col-lg-8">
+            <div class="card border-0">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-graph-up me-2" style="color: var(--aq-secondary);"></i>Performance History</h2>
+                    <ul class="list-group list-group-flush stagger-children">
+                        {% for item in performances %}
+                            <li class="list-group-item" tabindex="0">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center">
+                                    <strong style="color: var(--aq-text);">{{ item.challenge.title|default:"General" }}</strong>
+                                    <div class="d-flex gap-3 mt-1 mt-sm-0">
+                                        <span class="d-flex align-items-center gap-1" style="font-size: 0.875rem;">
+                                            <i class="bi bi-bullseye" style="color: var(--aq-secondary);"></i>
+                                            Score: <strong>{{ item.score }}</strong>
+                                        </span>
+                                        <span class="d-flex align-items-center gap-1" style="font-size: 0.875rem;">
+                                            <i class="bi bi-check2-all" style="color: var(--aq-accent);"></i>
+                                            Accuracy: <strong>{{ item.accuracy }}</strong>
+                                        </span>
+                                        <span class="d-flex align-items-center gap-1" style="font-size: 0.875rem;">
+                                            <i class="bi bi-stopwatch" style="color: var(--aq-warning);"></i>
+                                            <strong>{{ item.time_spent_seconds }}s</strong>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-center py-4">
+                                <div class="empty-state" style="padding: 0;">
+                                    <div class="empty-icon"><i class="bi bi-bar-chart-line"></i></div>
+                                    <p>No analytics data yet. Complete some challenges first!</p>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Suggested Next -->
+        <div class="col-lg-4">
+            <div class="card border-0">
+                <div class="card-body">
+                    <h2 class="h6 mb-3"><i class="bi bi-compass me-2" style="color: var(--aq-accent);"></i>Suggested Next</h2>
+                    <ul class="list-group list-group-flush">
+                        {% for challenge in recommendations %}
+                            <li class="list-group-item" tabindex="0">
+                                <a href="{% url 'challenge-detail' challenge.slug %}" class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-arrow-right-circle" style="color: var(--aq-secondary);"></i>
+                                    {{ challenge.title }}
+                                </a>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-compass me-1"></i>No recommendations available.
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

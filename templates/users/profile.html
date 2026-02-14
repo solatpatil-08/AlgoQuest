@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-xl-6">
+            <div class="card auth-card border-0">
+                <div class="card-body p-4">
+                    <!-- Profile Header -->
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="avatar-placeholder">
+                            {{ user.username|make_list|first|upper }}
+                        </div>
+                        <div>
+                            <h2 class="h4 mb-1">Profile &amp; Settings</h2>
+                            <p class="text-muted mb-0">Manage your account details</p>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-4">
+                            <div class="stat-card text-center p-3">
+                                <div class="stat-label">Username</div>
+                                <div class="fw-bold" style="color: var(--aq-text);">{{ user.username }}</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-card text-center p-3">
+                                <div class="stat-label">Level</div>
+                                <div class="fw-bold"><span class="badge badge-level">{{ profile.level }}</span></div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-card text-center p-3">
+                                <div class="stat-label">XP</div>
+                                <div class="fw-bold"><span class="badge badge-xp">{{ profile.xp }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <hr class="divider-gradient">
+
+                    <!-- Form -->
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ form.as_p }}
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4 py-2">
+                            <i class="bi bi-check-lg me-1"></i>Save Changes
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

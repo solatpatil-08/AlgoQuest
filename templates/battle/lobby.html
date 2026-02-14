@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h1 class="h3 mb-1"><i class="bi bi-lightning me-2 text-gradient"></i>Battle Arena</h1>
+        <p class="text-muted mb-0">Find opponents and compete in real-time algorithm battles</p>
+    </div>
+
+    <div class="row g-4">
+        <!-- Find Match -->
+        <div class="col-lg-6">
+            <div class="card border-0 h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--aq-danger);">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                        </div>
+                        <div>
+                            <h2 class="h5 mb-0">Find a Match</h2>
+                            <p class="text-muted mb-0" style="font-size: 0.875rem;">Level-matched opponent matchmaking</p>
+                        </div>
+                    </div>
+                    <p class="text-muted">Get paired with an opponent of similar skill level and battle it out in real-time coding challenges.</p>
+                    {% if user.is_authenticated %}
+                        {% csrf_token %}
+                        <div class="mt-auto">
+                            <button id="matchmakeBtn" class="btn btn-primary px-4 py-2">
+                                <i class="bi bi-search me-2"></i>Find Match
+                            </button>
+                            <p class="mt-3 text-muted mb-0" id="matchStatus" style="font-size: 0.875rem;"></p>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info mt-auto mb-0">
+                            <i class="bi bi-info-circle me-2"></i><a href="{% url 'login' %}">Login</a> to join battles.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Matches -->
+        <div class="col-lg-6">
+            <div class="card border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="stat-icon feature-icon-green">
+                            <i class="bi bi-broadcast"></i>
+                        </div>
+                        <div>
+                            <h2 class="h5 mb-0">Active Matches</h2>
+                            <p class="text-muted mb-0" style="font-size: 0.875rem;">Currently running battles</p>
+                        </div>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        {% for match in active_matches %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center" tabindex="0">
+                                <div>
+                                    <span class="fw-semibold">{{ match.room_code }}</span>
+                                    <span class="badge badge-accent ms-2" style="font-size: 0.7rem;">{{ match.status }}</span>
+                                </div>
+                                <a href="{% url 'battle-live' match.room_code %}" class="btn btn-outline-primary btn-sm px-3">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Open
+                                </a>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-center py-4">
+                                <div class="empty-state" style="padding: 0;">
+                                    <div class="empty-icon"><i class="bi bi-broadcast"></i></div>
+                                    <p>No active matches currently.</p>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const button = document.getElementById("matchmakeBtn");
+    const statusEl = document.getElementById("matchStatus");
+
+    function getCsrfToken() {
+        const tokenInput = document.querySelector("input[name='csrfmiddlewaretoken']");
+        return tokenInput ? tokenInput.value : "";
+    }
+
+    if (button) {
+        button.addEventListener("click", async () => {
+            // Loading state
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Searching...';
+            statusEl.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Searching for a compatible opponent...';
+
+            try {
+                const response = await fetch("/api/battle/", {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCsrfToken(),
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                if (data.is_waiting) {
+                    statusEl.innerHTML = `<i class="bi bi-clock me-1"></i>Match created (<strong>${data.room_code}</strong>). Waiting for opponent...`;
+                } else {
+                    statusEl.innerHTML = '<i class="bi bi-check-circle me-1" style="color: var(--aq-accent);"></i>Opponent found! Redirecting to live battle...';
+                }
+                setTimeout(() => window.location.href = `/battle/live/${data.room_code}/`, 800);
+            } catch (err) {
+                statusEl.innerHTML = '<i class="bi bi-exclamation-triangle me-1" style="color: var(--aq-danger);"></i>Failed to find match. Please try again.';
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-search me-2"></i>Find Match';
+            }
+        });
+    }
+</script>
+{% endblock %}
+
