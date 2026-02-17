@@ -1,74 +1,306 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% load static %}
 
 {% block content %}
 <div class="fade-in-up">
-    <!-- Battle Header -->
-    <div class="mb-4">
-        <h1 class="h3 mb-1">
-            <i class="bi bi-lightning-charge me-2" style="color: var(--aq-danger);"></i>
-            Live Battle: <span class="text-gradient">{{ match.room_code }}</span>
-        </h1>
-        <p class="text-muted mb-0">Real-time competitive coding battle</p>
-    </div>
-
-    <div class="card border-0 mb-4">
-        <div class="card-body">
-            <!-- Player Scores -->
-            <div class="row g-3 align-items-center mb-4">
-                <div class="col-md-5">
-                    <div class="battle-player-card" tabindex="0">
-                        <div class="player-label"><i class="bi bi-person-fill me-1"></i>Player One</div>
-                        <p id="playerOneScore" class="player-score mb-0">{{ match.player_one.username }}: {{ match.player_one_score }}</p>
+    <div class="row g-4">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Challenge Info -->
+            <div class="card border-0 mb-4">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
+                        {% if challenge.algorithm_category_display %}
+                            <span class="badge badge-accent">{{ challenge.algorithm_category_display }}</span>
+                        {% endif %}
+                        <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #B45309;">
+                            <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
+                        </span>
                     </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="battle-vs">
-                        <span class="badge">VS</span>
+                    <h1 class="h3 mb-3">{{ challenge.title }}</h1>
+                    <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
+                        <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
                     </div>
-                </div>
-                <div class="col-md-5">
-                    <div class="battle-player-card" tabindex="0">
-                        <div class="player-label"><i class="bi bi-person-fill me-1"></i>Player Two</div>
-                        <p id="playerTwoScore" class="player-score mb-0">
-                            {% if match.player_two %}
-                                {{ match.player_two.username }}: {{ match.player_two_score }}
-                            {% else %}
-                                <span class="text-muted" style="font-size: 1rem;">
-                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                    Waiting for opponent...
-                                </span>
-                            {% endif %}
+                    {% if challenge.starter_code %}
+                        <p class="mt-3 mb-0 text-muted" style="font-size: 0.875rem;">
+                            <i class="bi bi-info-circle me-1"></i>{{ challenge.starter_code }}
                         </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Interactive Visualization -->
+            <div class="card border-0 mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h2 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Interactive Visualization</h2>
+                        <span class="badge badge-primary">{{ challenge.get_algorithm_type_display|default:"ALGORITHM" }}</span>
+                    </div>
+                    
+                    <!-- Visualization Controls -->
+                    <div class="visualization-controls">
+                        <div class="control-group">
+                            <button class="viz-btn viz-btn-start" id="startBtn">
+                                <i class="bi bi-play-fill"></i> Start
+                            </button>
+                            <button class="viz-btn viz-btn-pause" id="pauseBtn" disabled>
+                                <i class="bi bi-pause-fill"></i> Pause
+                            </button>
+                            <button class="viz-btn viz-btn-reset" id="resetBtn">
+                                <i class="bi bi-arrow-clockwise"></i> Reset
+                            </button>
+                        </div>
+                        
+                        <div class="control-group ms-auto">
+                            <label for="speedControl">
+                                <i class="bi bi-speedometer2 me-1"></i> Speed:
+                            </label>
+                            <input type="range" id="speedControl" min="100" max="900" value="500" step="100">
+                            <span class="speed-indicator" id="speedIndicator">Normal</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Visualization Output Container -->
+                    <div id="visualizationOutput"></div>
+                </div>
+            </div>
+
+            <!-- Submit Answer -->
+            {% if user.is_authenticated %}
+                <div class="card border-0">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3"><i class="bi bi-send me-2" style="color: var(--aq-accent);"></i>Submit Answer</h2>
+                        <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
+                            {% csrf_token %}
+                            <textarea class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
+                            <button type="submit" class="btn btn-success px-4" id="submitAnswerBtn">
+                                <i class="bi bi-check2-circle me-1"></i>Submit
+                            </button>
+                        </form>
+                        <div class="mt-3" id="attemptResult"></div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Controls -->
-            <div class="d-flex flex-wrap align-items-end gap-3 p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
-                <div>
-                    <label class="form-label mb-1 fw-semibold" for="scoreDelta" style="font-size: 0.8125rem;">Score Delta</label>
-                    <input id="scoreDelta" class="form-control" type="number" value="10" style="min-width: 100px; max-width: 120px;">
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>Please <a href="{% url 'login' %}">login</a> to submit attempts.
                 </div>
-                <button id="sendScoreBtn" class="btn btn-success px-4">
-                    <i class="bi bi-send me-1"></i>Submit Score
-                </button>
-                <button id="endBattleBtn" class="btn btn-outline-danger px-4">
-                    <i class="bi bi-stop-circle me-1"></i>End Battle
-                </button>
-            </div>
+            {% endif %}
+        </div>
 
-            <!-- Status -->
-            <div class="mt-3" id="battleStatus"></div>
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-0">
+                <div class="card-body">
+                    <h2 class="h6 mb-3"><i class="bi bi-clock-history me-2" style="color: var(--aq-warning);"></i>Your Recent Attempts</h2>
+                    <ul class="list-group list-group-flush">
+                        {% for attempt in user_attempts %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span style="font-size: 0.875rem;">
+                                    <i class="bi bi-calendar3 me-1" style="color: var(--aq-text-secondary);"></i>
+                                    {{ attempt.created_at|date:"M d, H:i" }}
+                                </span>
+                                <span class="badge badge-xp">{{ attempt.score }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-inbox me-1"></i>No attempts yet.
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<link href="{% static 'css/visualization.css' %}" rel="stylesheet">
+<script src="{% static 'js/visualization.js' %}"></script>
 <script>
-    window.BATTLE_ROOM_CODE = "{{ match.room_code }}";
+    const attemptForm = document.getElementById("attemptForm");
+    const attemptResult = document.getElementById("attemptResult");
+    const submitBtn = document.getElementById("submitAnswerBtn");
+
+    if (attemptForm) {
+        attemptForm.addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            // Loading state
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+            }
+
+            const formData = new FormData(attemptForm);
+            try {
+                const response = await fetch(attemptForm.action, {
+                    method: "POST",
+                    body: formData,
+                    headers: {"X-Requested-With": "XMLHttpRequest"}
+                });
+                const data = await response.json();
+                
+                // Determine alert style based on correctness
+                const alertClass = data.is_correct ? 'success' : 'warning';
+                const iconClass = data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill';
+                
+                // Build message content
+                let messageContent = `<strong>${data.message}</strong>`;
+                if (data.score !== undefined) {
+                    messageContent += ` &middot; Score: <strong>${data.score}</strong>`;
+                }
+                if (data.xp_gained !== undefined) {
+                    messageContent += ` &middot; XP: <strong>${data.xp_gained}</strong>`;
+                }
+                if (data.current_level !== undefined) {
+                    messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
+                }
+                
+                attemptResult.innerHTML = `<div class="alert alert-${alertClass} fade-in">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-${iconClass} fs-5"></i>
+                        <div>${messageContent}</div>
+                    </div>
+                </div>`;
+            } catch (err) {
+                attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
+                    <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
+                </div>`;
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Submit';
+                }
+            }
+        });
+    }
+
+    // ============================================
+    // VISUALIZATION CONTROLS
+    // ============================================
+    
+    const algorithmType = "{{ challenge.algorithm_type }}";
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedControl = document.getElementById('speedControl');
+    const speedIndicator = document.getElementById('speedIndicator');
+    let visualizationStatePoller = null;
+
+    function getVisualizationState() {
+        if (!window.VisualizationEngine || !window.VisualizationEngine.getState) {
+            return { isRunning: false, isPaused: false };
+        }
+        return window.VisualizationEngine.getState();
+    }
+
+    function syncVisualizationButtons() {
+        const state = getVisualizationState();
+        if (startBtn) {
+            startBtn.disabled = state.isRunning;
+        }
+        if (pauseBtn) {
+            pauseBtn.disabled = !state.isRunning;
+            pauseBtn.innerHTML = state.isPaused
+                ? '<i class="bi bi-play-fill"></i> Resume'
+                : '<i class="bi bi-pause-fill"></i> Pause';
+        }
+    }
+
+    function stopVisualizationStatePolling() {
+        if (visualizationStatePoller) {
+            clearInterval(visualizationStatePoller);
+            visualizationStatePoller = null;
+        }
+    }
+
+    function startVisualizationStatePolling() {
+        stopVisualizationStatePolling();
+        visualizationStatePoller = setInterval(() => {
+            syncVisualizationButtons();
+            if (!getVisualizationState().isRunning) {
+                stopVisualizationStatePolling();
+            }
+        }, 150);
+    }
+
+    function updateSpeedIndicator(value) {
+        if (!speedIndicator) return;
+        if (value <= 300) {
+            speedIndicator.textContent = 'Slow';
+        } else if (value <= 600) {
+            speedIndicator.textContent = 'Normal';
+        } else {
+            speedIndicator.textContent = 'Fast';
+        }
+    }
+
+    if (startBtn) {
+        startBtn.addEventListener('click', function () {
+            if (!window.VisualizationEngine) {
+                return;
+            }
+            window.VisualizationEngine.start(algorithmType);
+            syncVisualizationButtons();
+            startVisualizationStatePolling();
+        });
+    }
+
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', function () {
+            if (window.VisualizationEngine) {
+                window.VisualizationEngine.pause();
+                syncVisualizationButtons();
+            }
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            if (window.VisualizationEngine) {
+                window.VisualizationEngine.reset();
+            }
+            stopVisualizationStatePolling();
+            syncVisualizationButtons();
+        });
+    }
+
+    if (speedControl) {
+        speedControl.addEventListener('input', function () {
+            const speed = parseInt(this.value, 10);
+            if (window.VisualizationEngine) {
+                window.VisualizationEngine.setSpeed(speed);
+            }
+            updateSpeedIndicator(speed);
+        });
+    }
+    if (speedControl && window.VisualizationEngine) {
+        const initialSpeed = parseInt(speedControl.value, 10);
+        window.VisualizationEngine.setSpeed(initialSpeed);
+        updateSpeedIndicator(initialSpeed);
+    }
+    syncVisualizationButtons();
+    
+    // Auto-initialize visualization on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show initial message
+        const vizOutput = document.getElementById('visualizationOutput');
+        if (vizOutput && algorithmType) {
+            vizOutput.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;">
+                    <i class="bi bi-play-circle" style="font-size:4rem;color:var(--aq-primary);margin-bottom:1rem;"></i>
+                    <h3 style="color:var(--aq-text);margin-bottom:0.5rem;">Interactive Algorithm Visualization</h3>
+                    <p style="color:var(--aq-text-secondary);max-width:500px;">
+                        Click <strong>Start</strong> to see the <strong>${algorithmType.replace(/_/g, ' ').toUpperCase()}</strong> algorithm in action!
+                        Watch step-by-step animations and understand how it works visually.
+                    </p>
+                </div>
+            `;
+        }
+    });
 </script>
-<script src="{% static 'js/battle-client.js' %}"></script>
 {% endblock %}
 

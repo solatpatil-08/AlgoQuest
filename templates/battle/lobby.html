@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block content %}
 <div class="fade-in-up">
@@ -55,7 +55,7 @@
                     </div>
                     <ul class="list-group list-group-flush">
                         {% for match in active_matches %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center" tabindex="0">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <div>
                                     <span class="fw-semibold">{{ match.room_code }}</span>
                                     <span class="badge badge-accent ms-2" style="font-size: 0.7rem;">{{ match.status }}</span>
@@ -77,14 +77,134 @@
             </div>
         </div>
     </div>
+
+    <!-- Algorithm/Topic Battle Cards -->
+    {% if topic_data %}
+        <div class="mt-5">
+            <div class="mb-4">
+                <h2 class="h4"><i class="bi bi-database me-2 text-gradient"></i>Battle Topics</h2>
+                <p class="text-muted">Select a topic to battle challenges in that area</p>
+            </div>
+            <div class="row g-4">
+                {% for item in topic_data %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card border-0 battle-card h-100" style="cursor: pointer; transition: all 0.3s ease;">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    {% if item.topic.visualization_type == 'graph' %}
+                                        <i class="bi bi-diagram-3" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% elif item.topic.visualization_type == 'tree' %}
+                                        <i class="bi bi-diagram-2" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% elif item.topic.visualization_type == 'matrix' or item.topic.visualization_type == 'grid' %}
+                                        <i class="bi bi-grid-3x3" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% else %}
+                                        <i class="bi bi-puzzle" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% endif %}
+                                    <div>
+                                        <h3 class="h6 mb-0">{{ item.topic.label }}</h3>
+                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">{{ item.topic.category|title }}</p>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">{{ item.topic.description|truncatewords:15 }}</p>
+                                
+                                <!-- Challenge Count -->
+                                <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 0.875rem;">
+                                    <i class="bi bi-list-check me-1"></i>{{ item.challenge_count }} challenges
+                                </div>
+                                
+                                <!-- Difficulty Distribution -->
+                                <div class="mb-3">
+                                    <div class="row g-2">
+                                        <div class="col-4 text-center">
+                                            <div class="p-2 rounded" style="background: rgba(34, 197, 94, 0.1);">
+                                                <div style="font-weight: 600; color: #22c55e;">{{ item.difficulty_distribution.easy }}</div>
+                                                <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Easy</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <div class="p-2 rounded" style="background: rgba(245, 158, 11, 0.1);">
+                                                <div style="font-weight: 600; color: #f59e0b;">{{ item.difficulty_distribution.medium }}</div>
+                                                <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Medium</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <div class="p-2 rounded" style="background: rgba(239, 68, 68, 0.1);">
+                                                <div style="font-weight: 600; color: #ef4444;">{{ item.difficulty_distribution.hard }}</div>
+                                                <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Hard</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button type="button" class="btn btn-primary mt-auto battle-topic-btn" data-topic-id="{{ item.topic.stable_id }}">
+                                    <i class="bi bi-lightning me-1"></i>Battle This Topic
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const button = document.getElementById("matchmakeBtn");
-    const statusEl = document.getElementById("matchStatus");
-
+    const topicBattleButtons = document.querySelectorAll('.battle-topic-btn');
+    
+    topicBattleButtons.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const topicId = this.getAttribute('data-topic-id');
+            
+            // Disable button and show loading
+            this.disabled = true;
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Starting...';
+            
+            // Call matchmaking API with topic preference
+            const matchBtn = document.getElementById('matchmakeBtn');
+            if (matchBtn) {
+                matchBtn.disabled = true;
+            }
+            
+            fetch('/api/battle/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrfmiddlewaretoken"]').value,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ topic_preference: topicId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Redirect to battle
+                setTimeout(() => window.location.href = `/battle/live/${data.room_code}/`, 800);
+            })
+            .catch(err => {
+                console.error('Error starting battle:', err);
+                this.disabled = false;
+                this.innerHTML = originalText;
+                if (matchBtn) matchBtn.disabled = false;
+                alert('Failed to start battle. Please try again.');
+            });
+        });
+    });
+    
+    // Hover effect for battle cards
+    const battleCards = document.querySelectorAll('.battle-card');
+    battleCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.boxShadow = '0 10px 25px rgba(37, 99, 235, 0.15)';
+            this.style.transform = 'translateY(-4px)';
+        });
+        card.addEventListener('mouseleave', function() {
+            this.style.boxShadow = 'none';
+            this.style.transform = 'translateY(0)';
+        });
+    });
+    
     function getCsrfToken() {
         const tokenInput = document.querySelector("input[name='csrfmiddlewaretoken']");
         return tokenInput ? tokenInput.value : "";
@@ -122,4 +242,5 @@
     }
 </script>
 {% endblock %}
+
 

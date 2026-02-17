@@ -1,646 +1,1273 @@
 /* ============================================
-   VISUALIZATION.JS — AlgoQuest Algorithm Visualizer v3.0
-   Interactive Graphical Algorithm Demonstrations
-   Supports: BFS, DFS, A*, Minimax
+   VISUALIZATION.JS - AlgoQuest Interactive Algorithm Visualizer v2.1
+   Complete visual animation system with responsive canvas
    ============================================ */
 
-class AlgorithmVisualizer {
-    constructor(containerId, algorithm) {
-        this.container = document.getElementById(containerId);
-        if (!this.container) {
-            console.error('Visualization container not found');
-            return;
-        }
-        
-        this.algorithm = algorithm;
-        this.canvas = null;
-        this.ctx = null;
-        this.animationId = null;
-        this.isPlaying = false;
-        this.currentStep = 0;
-        this.steps = [];
-        this.speed = 800; // ms per step
-        
-        this.init();
-    }
-    
-    init() {
-        this.createControls();
-        this.createCanvas();
-        this.setupAlgorithm();
-    }
-    
-    createControls() {
-        const controlsHTML = `
-            <div class="viz-controls mb-3" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-                <button id="vizPlay" class="btn btn-success btn-sm px-3">
-                    <i class="bi bi-play-fill"></i> Play
-                </button>
-                <button id="vizPause" class="btn btn-warning btn-sm px-3" disabled>
-                    <i class="bi bi-pause-fill"></i> Pause
-                </button>
-                <button id="vizReset" class="btn btn-secondary btn-sm px-3">
-                    <i class="bi bi-arrow-counterclockwise"></i> Reset
-                </button>
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
-                    <label for="vizSpeed" style="font-size: 0.8125rem; font-weight: 500; color: var(--aq-text-secondary); margin: 0;">Speed:</label>
-                    <input type="range" id="vizSpeed" min="200" max="2000" value="800" step="200" style="width: 100px;">
-                    <span id="vizSpeedLabel" style="font-size: 0.8125rem; font-weight: 600; color: var(--aq-primary); min-width: 50px;">1x</span>
-                </div>
-            </div>
-            <div id="vizStatus" class="mb-2" style="font-size: 0.875rem; font-weight: 500; color: var(--aq-text-secondary); min-height: 24px;"></div>
-        `;
-        
-        const controlsDiv = document.createElement('div');
-        controlsDiv.innerHTML = controlsHTML;
-        this.container.insertBefore(controlsDiv, this.container.firstChild);
-        
-        // Event listeners
-        document.getElementById('vizPlay').addEventListener('click', () => this.play());
-        document.getElementById('vizPause').addEventListener('click', () => this.pause());
-        document.getElementById('vizReset').addEventListener('click', () => this.reset());
-        document.getElementById('vizSpeed').addEventListener('input', (e) => {
-            this.speed = 2200 - parseInt(e.target.value);
-            const speedLabel = document.getElementById('vizSpeedLabel');
-            const speedX = (2200 - this.speed) / 400;
-            speedLabel.textContent = speedX.toFixed(1) + 'x';
-        });
-    }
-    
-    createCanvas() {
-        this.canvas = document.createElement('canvas');
-        this.canvas.width = Math.min(this.container.clientWidth - 40, 800);
-        this.canvas.height = 400;
-        this.canvas.style.border = '1px solid var(--aq-border)';
-        this.canvas.style.borderRadius = 'var(--aq-radius-md)';
-        this.canvas.style.background = 'linear-gradient(135deg, #1E293B, #0F172A)';
-        this.canvas.style.boxShadow = 'var(--aq-shadow)';
-        this.container.appendChild(this.canvas);
-        
-        this.ctx = this.canvas.getContext('2d');
-    }
-    
-    setupAlgorithm() {
-        switch(this.algorithm) {
-            case 'bfs':
-                this.setupBFS();
-                break;
-            case 'dfs':
-                this.setupDFS();
-                break;
-            case 'astar':
-                this.setupAStar();
-                break;
-            case 'minimax':
-                this.setupMinimax();
-                break;
-            default:
-                this.setupBFS();
-        }
-        this.draw();
-    }
-    
-    /* ============================================
-       BFS VISUALIZATION
-       ============================================ */
-    
-    setupBFS() {
-        // Graph structure: nodes and edges
-        this.nodes = [
-            { id: 'A', x: 150, y: 100, visited: false, inQueue: false },
-            { id: 'B', x: 100, y: 200, visited: false, inQueue: false },
-            { id: 'C', x: 200, y: 200, visited: false, inQueue: false },
-            { id: 'D', x: 50, y: 300, visited: false, inQueue: false },
-            { id: 'E', x: 150, y: 300, visited: false, inQueue: false },
-            { id: 'F', x: 250, y: 300, visited: false, inQueue: false }
-        ];
-        
-        this.edges = [
-            ['A', 'B'], ['A', 'C'],
-            ['B', 'D'], ['B', 'E'],
-            ['C', 'F']
-        ];
-        
-        this.queue = [];
-        
-        // Generate BFS steps
-        this.steps = [
-            { action: 'start', node: 'A', queue: ['A'], message: 'Start at node A, add to queue' },
-            { action: 'visit', node: 'A', queue: ['B', 'C'], message: 'Visit A, enqueue neighbors B, C' },
-            { action: 'visit', node: 'B', queue: ['C', 'D', 'E'], message: 'Visit B, enqueue neighbors D, E' },
-            { action: 'visit', node: 'C', queue: ['D', 'E', 'F'], message: 'Visit C, enqueue neighbor F' },
-            { action: 'visit', node: 'D', queue: ['E', 'F'], message: 'Visit D (no new neighbors)' },
-            { action: 'visit', node: 'E', queue: ['F'], message: 'Visit E (no new neighbors)' },
-            { action: 'visit', node: 'F', queue: [], message: 'Visit F, queue empty' },
-            { action: 'complete', queue: [], message: '✓ BFS traversal complete: A → B → C → D → E → F' }
-        ];
-    }
-    
-    drawBFS() {
-        const step = this.steps[this.currentStep];
-        
-        // Draw edges
-        this.ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)';
-        this.ctx.lineWidth = 2;
-        this.edges.forEach(([from, to]) => {
-            const fromNode = this.nodes.find(n => n.id === from);
-            const toNode = this.nodes.find(n => n.id === to);
-            this.ctx.beginPath();
-            this.ctx.moveTo(fromNode.x, fromNode.y);
-            this.ctx.lineTo(toNode.x, toNode.y);
-            this.ctx.stroke();
-        });
-        
-        // Draw nodes
-        this.nodes.forEach(node => {
-            let fillColor = '#1E293B';
-            let strokeColor = '#64748B';
-            
-            if (step && step.node === node.id && step.action === 'visit') {
-                fillColor = '#10B981'; // Visiting
-                strokeColor = '#059669';
-            } else if (node.visited) {
-                fillColor = '#2563EB'; // Visited
-                strokeColor = '#1E40AF';
-            } else if (node.inQueue) {
-                fillColor = '#F59E0B'; // In queue
-                strokeColor = '#D97706';
-            }
-            
-            this.ctx.beginPath();
-            this.ctx.arc(node.x, node.y, 25, 0, Math.PI * 2);
-            this.ctx.fillStyle = fillColor;
-            this.ctx.fill();
-            this.ctx.strokeStyle = strokeColor;
-            this.ctx.lineWidth = 3;
-            this.ctx.stroke();
-            
-            // Node label
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 16px Inter';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(node.id, node.x, node.y);
-        });
-        
-        // Draw queue visualization
-        if (step && step.queue) {
-            this.ctx.fillStyle = '#F1F5F9';
-            this.ctx.font = '14px Inter';
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Queue: [' + step.queue.join(', ') + ']', 400, 50);
-        }
-        
-        // Draw legend
-        this.drawLegend([
-            { color: '#10B981', label: 'Current' },
-            { color: '#2563EB', label: 'Visited' },
-            { color: '#F59E0B', label: 'In Queue' },
-            { color: '#1E293B', label: 'Unvisited' }
-        ], 400, 100);
-    }
-    
-    /* ============================================
-       DFS VISUALIZATION
-       ============================================ */
-    
-    setupDFS() {
-        this.nodes = [
-            { id: 'A', x: 150, y: 100, visited: false },
-            { id: 'B', x: 100, y: 200, visited: false },
-            { id: 'C', x: 200, y: 200, visited: false },
-            { id: 'D', x: 50, y: 300, visited: false },
-            { id: 'E', x: 150, y: 300, visited: false },
-            { id: 'F', x: 250, y: 300, visited: false }
-        ];
-        
-        this.edges = [
-            ['A', 'B'], ['A', 'C'],
-            ['B', 'D'], ['B', 'E'],
-            ['C', 'F']
-        ];
-        
-        this.steps = [
-            { action: 'start', node: 'A', stack: ['A'], path: ['A'], message: 'Start at node A' },
-            { action: 'visit', node: 'B', stack: ['A', 'B'], path: ['A', 'B'], message: 'Go deep: A → B' },
-            { action: 'visit', node: 'D', stack: ['A', 'B', 'D'], path: ['A', 'B', 'D'], message: 'Go deep: B → D' },
-            { action: 'backtrack', node: 'B', stack: ['A', 'B'], path: ['A', 'B', 'D'], message: 'Backtrack to B' },
-            { action: 'visit', node: 'E', stack: ['A', 'B', 'E'], path: ['A', 'B', 'D', 'E'], message: 'Visit E from B' },
-            { action: 'backtrack', node: 'A', stack: ['A'], path: ['A', 'B', 'D', 'E'], message: 'Backtrack to A' },
-            { action: 'visit', node: 'C', stack: ['A', 'C'], path: ['A', 'B', 'D', 'E', 'C'], message: 'Visit C from A' },
-            { action: 'visit', node: 'F', stack: ['A', 'C', 'F'], path: ['A', 'B', 'D', 'E', 'C', 'F'], message: 'Visit F from C' },
-            { action: 'complete', stack: [], path: ['A', 'B', 'D', 'E', 'C', 'F'], message: '✓ DFS complete' }
-        ];
-    }
-    
-    drawDFS() {
-        const step = this.steps[this.currentStep];
-        
-        // Draw edges
-        this.ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)';
-        this.ctx.lineWidth = 2;
-        this.edges.forEach(([from, to]) => {
-            const fromNode = this.nodes.find(n => n.id === from);
-            const toNode = this.nodes.find(n => n.id === to);
-            this.ctx.beginPath();
-            this.ctx.moveTo(fromNode.x, fromNode.y);
-            this.ctx.lineTo(toNode.x, toNode.y);
-            this.ctx.stroke();
-        });
-        
-        // Highlight path
-        if (step && step.path) {
-            this.ctx.strokeStyle = '#10B981';
-            this.ctx.lineWidth = 3;
-            for (let i = 0; i < step.path.length - 1; i++) {
-                const fromNode = this.nodes.find(n => n.id === step.path[i]);
-                const toNode = this.nodes.find(n => n.id === step.path[i + 1]);
-                if (fromNode && toNode) {
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(fromNode.x, fromNode.y);
-                    this.ctx.lineTo(toNode.x, toNode.y);
-                    this.ctx.stroke();
-                }
-            }
-        }
-        
-        // Draw nodes
-        this.nodes.forEach(node => {
-            let fillColor = '#1E293B';
-            let strokeColor = '#64748B';
-            
-            if (step && step.node === node.id) {
-                fillColor = '#EF4444'; // Current
-                strokeColor = '#DC2626';
-            } else if (step && step.path && step.path.includes(node.id)) {
-                fillColor = '#2563EB'; // Visited
-                strokeColor = '#1E40AF';
-            }
-            
-            this.ctx.beginPath();
-            this.ctx.arc(node.x, node.y, 25, 0, Math.PI * 2);
-            this.ctx.fillStyle = fillColor;
-            this.ctx.fill();
-            this.ctx.strokeStyle = strokeColor;
-            this.ctx.lineWidth = 3;
-            this.ctx.stroke();
-            
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 16px Inter';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(node.id, node.x, node.y);
-        });
-        
-        // Draw stack
-        if (step && step.stack) {
-            this.ctx.fillStyle = '#F1F5F9';
-            this.ctx.font = '14px Inter';
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Stack: [' + step.stack.join(', ') + ']', 400, 50);
-        }
-        
-        this.drawLegend([
-            { color: '#EF4444', label: 'Current' },
-            { color: '#2563EB', label: 'Visited' },
-            { color: '#1E293B', label: 'Unvisited' }
-        ], 400, 100);
-    }
-    
-    /* ============================================
-       A* VISUALIZATION
-       ============================================ */
-    
-    setupAStar() {
-        this.gridSize = 10;
-        this.cellSize = 35;
-        this.grid = [];
-        
-        // Initialize grid
-        for (let y = 0; y < this.gridSize; y++) {
-            this.grid[y] = [];
-            for (let x = 0; x < this.gridSize; x++) {
-                this.grid[y][x] = {
-                    x, y,
-                    isWall: false,
-                    isStart: x === 1 && y === 1,
-                    isGoal: x === 8 && y === 8,
-                    inOpen: false,
-                    inClosed: false,
-                    isPath: false,
-                    g: 0, h: 0, f: 0
-                };
-            }
-        }
-        
-        // Add some walls
-        [[3,3], [3,4], [3,5], [4,5], [5,5], [6,5], [6,4], [6,3]].forEach(([x, y]) => {
-            this.grid[y][x].isWall = true;
-        });
-        
-        this.steps = [
-            { message: 'Initialize: Start (1,1), Goal (8,8)', openSet: [[1,1]], closedSet: [] },
-            { message: 'Expand (1,1): Add neighbors to open set', openSet: [[1,2], [2,1]], closedSet: [[1,1]], current: [1,1] },
-            { message: 'Select lowest f(n): (2,1)', openSet: [[1,2], [2,2], [3,1]], closedSet: [[1,1], [2,1]], current: [2,1] },
-            { message: 'Continue expanding...', openSet: [[1,2], [2,2], [3,2]], closedSet: [[1,1], [2,1], [3,1]], current: [3,1] },
-            { message: 'Navigate around obstacles', openSet: [[2,2], [3,2], [4,2]], closedSet: [[1,1], [2,1], [3,1], [1,2]], current: [1,2] },
-            { message: 'Path found! Reconstruct shortest path', path: [[1,1], [2,1], [3,1], [4,2], [5,3], [6,4], [7,5], [8,6], [8,7], [8,8]] }
-        ];
-    }
-    
-    drawAStar() {
-        const step = this.steps[this.currentStep];
-        const offsetX = 20;
-        const offsetY = 20;
-        
-        // Draw grid
-        for (let y = 0; y < this.gridSize; y++) {
-            for (let x = 0; x < this.gridSize; x++) {
-                const cell = this.grid[y][x];
-                const px = offsetX + x * this.cellSize;
-                const py = offsetY + y * this.cellSize;
-                
-                let fillColor = '#1E293B';
-                
-                if (cell.isWall) {
-                    fillColor = '#475569';
-                } else if (cell.isStart) {
-                    fillColor = '#10B981';
-                } else if (cell.isGoal) {
-                    fillColor = '#EF4444';
-                } else if (step && step.path && step.path.some(([px, py]) => px === x && py === y)) {
-                    fillColor = '#F59E0B';
-                } else if (step && step.current && step.current[0] === x && step.current[1] === y) {
-                    fillColor = '#6366F1';
-                } else if (step && step.closedSet && step.closedSet.some(([px, py]) => px === x && py === y)) {
-                    fillColor = '#2563EB';
-                } else if (step && step.openSet && step.openSet.some(([px, py]) => px === x && py === y)) {
-                    fillColor = '#0EA5E9';
-                }
-                
-                this.ctx.fillStyle = fillColor;
-                this.ctx.fillRect(px, py, this.cellSize - 2, this.cellSize - 2);
-                
-                // Grid lines
-                this.ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
-                this.ctx.lineWidth = 1;
-                this.ctx.strokeRect(px, py, this.cellSize - 2, this.cellSize - 2);
-            }
-        }
-        
-        this.drawLegend([
-            { color: '#10B981', label: 'Start' },
-            { color: '#EF4444', label: 'Goal' },
-            { color: '#F59E0B', label: 'Path' },
-            { color: '#6366F1', label: 'Current' },
-            { color: '#0EA5E9', label: 'Open Set' },
-            { color: '#2563EB', label: 'Closed Set' },
-            { color: '#475569', label: 'Wall' }
-        ], 400, 50);
-    }
-    
-    /* ============================================
-       MINIMAX VISUALIZATION
-       ============================================ */
-    
-    setupMinimax() {
-        this.tree = {
-            value: null,
-            isMax: true,
-            children: [
-                {
-                    value: null,
-                    isMax: false,
-                    children: [
-                        { value: 3, isMax: true, children: [] },
-                        { value: 5, isMax: true, children: [] }
-                    ]
-                },
-                {
-                    value: null,
-                    isMax: false,
-                    children: [
-                        { value: 2, isMax: true, children: [] },
-                        { value: 9, isMax: true, children: [] }
-                    ]
-                },
-                {
-                    value: null,
-                    isMax: false,
-                    children: [
-                        { value: 0, isMax: true, children: [] },
-                        { value: 1, isMax: true, children: [] }
-                    ]
-                }
-            ]
-        };
-        
-        this.steps = [
-            { message: 'Minimax tree: Max player at root', highlight: [] },
-            { message: 'Evaluate leaf nodes', highlight: [3, 5, 2, 9, 0, 1] },
-            { message: 'Min layer: select minimum from children', highlight: [[3,5], [2,9], [0,1]], minValues: [3, 2, 0] },
-            { message: 'Max layer: select maximum = 3', highlight: [], maxValue: 3, bestMove: 0 },
-            { message: '✓ Best move: Branch 1 (value = 3)', bestMove: 0 }
-        ];
-    }
-    
-    drawMinimax() {
-        const step = this.steps[this.currentStep];
-        
-        // Draw tree structure
-        const drawNode = (node, x, y, level, index, parentX, parentY) => {
-            // Draw edge to parent
-            if (parentX !== undefined) {
-                this.ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)';
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.moveTo(parentX, parentY);
-                this.ctx.lineTo(x, y);
-                this.ctx.stroke();
-            }
-            
-            // Draw node
-            let fillColor = node.isMax ? '#2563EB' : '#EF4444';
-            if (step && step.bestMove === index && level === 1) {
-                fillColor = '#10B981';
-            }
-            
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, 20, 0, Math.PI * 2);
-            this.ctx.fillStyle = fillColor;
-            this.ctx.fill();
-            this.ctx.strokeStyle = node.isMax ? '#1E40AF' : '#DC2626';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-            
-            // Node label
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 12px Inter';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            const label = node.value !== null ? node.value.toString() : (node.isMax ? 'MAX' : 'MIN');
-            this.ctx.fillText(label, x, y);
-            
-            // Draw children
-            if (node.children && node.children.length > 0) {
-                const childSpacing = 80;
-                const startX = x - (node.children.length - 1) * childSpacing / 2;
-                node.children.forEach((child, i) => {
-                    drawNode(child, startX + i * childSpacing, y + 80, level + 1, i, x, y);
-                });
-            }
-        };
-        
-        drawNode(this.tree, 400, 50, 0, 0);
-        
-        // Draw values from step
-        if (step && step.minValues) {
-            this.ctx.fillStyle = '#F1F5F9';
-            this.ctx.font = '14px Inter';
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Min values: [' + step.minValues.join(', ') + ']', 50, 350);
-        }
-        if (step && step.maxValue !== undefined) {
-            this.ctx.fillText('Max value: ' + step.maxValue, 50, 370);
-        }
-        
-        this.drawLegend([
-            { color: '#2563EB', label: 'Max Node' },
-            { color: '#EF4444', label: 'Min Node' },
-            { color: '#10B981', label: 'Best Move' }
-        ], 400, 300);
-    }
-    
-    /* ============================================
-       COMMON METHODS
-       ============================================ */
-    
-    drawLegend(items, x, y) {
-        this.ctx.font = '12px Inter';
-        this.ctx.textAlign = 'left';
-        items.forEach((item, i) => {
-            const yPos = y + i * 25;
-            
-            // Color box
-            this.ctx.fillStyle = item.color;
-            this.ctx.fillRect(x, yPos, 16, 16);
-            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            this.ctx.lineWidth = 1;
-            this.ctx.strokeRect(x, yPos, 16, 16);
-            
-            // Label
-            this.ctx.fillStyle = '#F1F5F9';
-            this.ctx.fillText(item.label, x + 22, yPos + 12);
-        });
-    }
-    
-    draw() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        switch(this.algorithm) {
-            case 'bfs':
-                this.drawBFS();
-                break;
-            case 'dfs':
-                this.drawDFS();
-                break;
-            case 'astar':
-                this.drawAStar();
-                break;
-            case 'minimax':
-                this.drawMinimax();
-                break;
-        }
-        
-        // Update status message
-        const statusEl = document.getElementById('vizStatus');
-        if (statusEl && this.steps[this.currentStep]) {
-            statusEl.textContent = `Step ${this.currentStep + 1}/${this.steps.length}: ${this.steps[this.currentStep].message}`;
-        }
-        
-        // Update node states for BFS/DFS
-        if ((this.algorithm === 'bfs' || this.algorithm === 'dfs') && this.steps[this.currentStep]) {
-            const step = this.steps[this.currentStep];
-            this.nodes.forEach(node => {
-                if (step.path && step.path.includes(node.id)) {
-                    node.visited = true;
-                }
-                if (this.algorithm === 'bfs' && step.queue && step.queue.includes(node.id)) {
-                    node.inQueue = true;
-                } else {
-                    node.inQueue = false;
-                }
-            });
-        }
-    }
-    
-    play() {
-        if (this.isPlaying) return;
-        this.isPlaying = true;
-        
-        document.getElementById('vizPlay').disabled = true;
-        document.getElementById('vizPause').disabled = false;
-        
-        const animate = () => {
-            if (!this.isPlaying) return;
-            
-            if (this.currentStep < this.steps.length - 1) {
-                this.currentStep++;
-                this.draw();
-                this.animationId = setTimeout(animate, this.speed);
-            } else {
-                this.pause();
-            }
-        };
-        
-        animate();
-    }
-    
-    pause() {
-        this.isPlaying = false;
-        if (this.animationId) {
-            clearTimeout(this.animationId);
-            this.animationId = null;
-        }
-        
-        document.getElementById('vizPlay').disabled = false;
-        document.getElementById('vizPause').disabled = true;
-    }
-    
-    reset() {
-        this.pause();
-        this.currentStep = 0;
-        
-        // Reset node states
-        if (this.nodes) {
-            this.nodes.forEach(node => {
-                node.visited = false;
-                node.inQueue = false;
-            });
-        }
-        
-        this.draw();
+// Global state management
+const VisualizationState = {
+    isRunning: false,
+    isPaused: false,
+    speed: 500,
+    currentStep: 0,
+    animationId: null,
+    canvas: null,
+    ctx: null
+};
+
+// Utility: Delay function for animations
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Utility: Check if animation should continue
+function shouldContinue() {
+    return VisualizationState.isRunning;
+}
+
+// Utility: Wait for unpause
+async function waitForUnpause() {
+    while (VisualizationState.isPaused && VisualizationState.isRunning) {
+        await delay(100);
     }
 }
 
-// Auto-initialize if button exists
-document.addEventListener('DOMContentLoaded', function() {
-    const vizBtn = document.getElementById('runVisualizationBtn');
-    if (vizBtn) {
-        const algorithm = vizBtn.dataset.algorithm;
-        const container = document.getElementById('visualizationOutput');
+let visualizationResizeBound = false;
+let visualizationResizeTimeout = null;
+
+function applyResponsiveCanvasSize(container, canvas) {
+    if (!canvas || !container) return;
+    const containerWidth = container.clientWidth || 1000;
+    const width = Math.max(280, Math.min(containerWidth - 24, 1000));
+    const height = window.innerWidth < 768 ? 360 : 500;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.maxWidth = "100%";
+    canvas.style.height = "auto";
+}
+
+function applyOverlayResponsiveStyles(panel) {
+    if (!panel) return;
+    const desktopMaxWidth = panel.dataset.desktopMaxWidth || "300px";
+    const isMobile = window.innerWidth < 768;
+    panel.style.cssText = isMobile
+        ? "position:absolute;bottom:10px;left:10px;right:10px;background:#FFF;padding:12px;border:2px solid #2563EB;border-radius:8px;max-width:calc(100% - 20px);"
+        : "position:absolute;top:10px;right:10px;background:#FFF;padding:15px;border:2px solid #2563EB;border-radius:8px;max-width:" + desktopMaxWidth + ";";
+}
+
+function handleCanvasResize() {
+    const canvas = VisualizationState.canvas;
+    if (!canvas) return;
+    const container = canvas.parentElement;
+    if (!container) return;
+    applyResponsiveCanvasSize(container, canvas);
+    container.querySelectorAll('[data-viz-overlay=\"true\"]').forEach((panel) => {
+        applyOverlayResponsiveStyles(panel);
+    });
+    clearCanvas();
+}
+
+function bindCanvasResizeHandlers() {
+    if (visualizationResizeBound) return;
+    visualizationResizeBound = true;
+    const debouncedResize = () => {
+        clearTimeout(visualizationResizeTimeout);
+        visualizationResizeTimeout = setTimeout(handleCanvasResize, 250);
+    };
+    window.addEventListener("resize", debouncedResize, { passive: true });
+    window.addEventListener("orientationchange", debouncedResize, { passive: true });
+}
+
+// Initialize canvas with responsive sizing
+function initCanvas(containerId = 'visualizationOutput') {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+    
+    container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    applyResponsiveCanvasSize(container, canvas);
+    
+    canvas.style.border = '2px solid var(--aq-border)';
+    canvas.style.borderRadius = 'var(--aq-radius-md)';
+    canvas.style.background = '#FFFFFF';
+    container.appendChild(canvas);
+    
+    VisualizationState.canvas = canvas;
+    VisualizationState.ctx = canvas.getContext('2d');
+    bindCanvasResizeHandlers();
+    
+    return canvas;
+}
+
+// Clear canvas
+function clearCanvas() {
+    if (VisualizationState.ctx && VisualizationState.canvas) {
+        VisualizationState.ctx.clearRect(0, 0, VisualizationState.canvas.width, VisualizationState.canvas.height);
+    }
+}
+
+function clearVisualizationOverlays() {
+    const container = document.getElementById('visualizationOutput');
+    if (!container) return;
+    container.querySelectorAll('[data-viz-overlay="true"]').forEach((node) => node.remove());
+}
+
+// Draw array as horizontal boxes
+function drawArray(arr, highlightIndices = [], compareIndices = [], x = 50, y = 200) {
+    const ctx = VisualizationState.ctx;
+    const canvas = VisualizationState.canvas;
+    const boxWidth = Math.min(60, (canvas.width - 100) / arr.length - 10);
+    const boxHeight = 60;
+    const spacing = 10;
+    
+    arr.forEach((value, index) => {
+        const posX = x + index * (boxWidth + spacing);
         
-        if (container) {
-            // Clear container
-            container.innerHTML = '';
-            container.style.minHeight = '500px';
+        // Determine color
+        let fillColor = '#E0E7FF';
+        if (highlightIndices.includes(index)) fillColor = '#10B981';
+        if (compareIndices.includes(index)) fillColor = '#F59E0B';
+        
+        // Draw box
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(posX, y, boxWidth, boxHeight);
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(posX, y, boxWidth, boxHeight);
+        
+        // Draw value
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 20px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, posX + boxWidth / 2, y + boxHeight / 2);
+        
+        // Draw index
+        ctx.font = '14px Inter';
+        ctx.fillStyle = '#64748B';
+        ctx.fillText(index, posX + boxWidth / 2, y + boxHeight + 20);
+    });
+}
+
+// Draw bars for sorting visualization
+function drawBars(arr, highlightIndices = [], compareIndices = []) {
+    const ctx = VisualizationState.ctx;
+    const canvas = VisualizationState.canvas;
+    clearCanvas();
+    
+    const maxVal = Math.max(...arr);
+    const barWidth = (canvas.width - 100) / arr.length;
+    const maxHeight = canvas.height - 100;
+    
+    arr.forEach((value, index) => {
+        const barHeight = (value / maxVal) * maxHeight;
+        const x = 50 + index * barWidth;
+        const y = canvas.height - 50 - barHeight;
+        
+        // Determine color
+        let fillColor = '#3B82F6';
+        if (highlightIndices.includes(index)) fillColor = '#10B981';
+        if (compareIndices.includes(index)) fillColor = '#F59E0B';
+        
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(x, y, barWidth - 2, barHeight);
+        
+        // Draw value
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '12px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText(value, x + barWidth / 2, y - 5);
+    });
+}
+
+// Draw graph nodes and edges
+function drawGraph(nodes, edges, visitedNodes = [], currentNode = null) {
+    const ctx = VisualizationState.ctx;
+    const canvas = VisualizationState.canvas;
+    clearCanvas();
+    
+    const nodeRadius = 30;
+    
+    // Draw edges first
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.lineWidth = 2;
+    edges.forEach(([from, to]) => {
+        const fromNode = nodes[from];
+        const toNode = nodes[to];
+        ctx.beginPath();
+        ctx.moveTo(fromNode.x, fromNode.y);
+        ctx.lineTo(toNode.x, toNode.y);
+        ctx.stroke();
+    });
+    
+    // Draw nodes
+    nodes.forEach((node, index) => {
+        let fillColor = '#E0E7FF';
+        if (visitedNodes.includes(index)) fillColor = '#10B981';
+        if (currentNode === index) fillColor = '#F59E0B';
+        
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, nodeRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Draw label
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.label || index, node.x, node.y);
+    });
+}
+
+// Draw stack (vertical LIFO structure)
+function drawStack(stack, highlightTop = false) {
+    const ctx = VisualizationState.ctx;
+    const canvas = VisualizationState.canvas;
+    
+    const boxWidth = 100;
+    const boxHeight = 50;
+    const startX = canvas.width / 2 - boxWidth / 2;
+    const startY = canvas.height - 80;
+    
+    // Draw stack elements from bottom to top
+    stack.forEach((value, index) => {
+        const y = startY - index * (boxHeight + 5);
+        
+        let fillColor = '#E0E7FF';
+        if (highlightTop && index === stack.length - 1) fillColor = '#F59E0B';
+        
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(startX, y, boxWidth, boxHeight);
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(startX, y, boxWidth, boxHeight);
+        
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 18px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, startX + boxWidth / 2, y + boxHeight / 2);
+    });
+    
+    // Draw TOP pointer
+    if (stack.length > 0) {
+        const topY = startY - (stack.length - 1) * (boxHeight + 5);
+        ctx.fillStyle = '#EF4444';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillText('<- TOP', startX + boxWidth + 10, topY + boxHeight / 2);
+    }
+    
+    // Draw stack label
+    ctx.fillStyle = '#64748B';
+    ctx.font = 'bold 14px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Stack (Size: ${stack.length})`, startX + boxWidth / 2, startY + boxHeight + 30);
+}
+
+// Draw queue (horizontal FIFO structure)
+function drawQueue(queue, highlightFront = false, highlightRear = false) {
+    const ctx = VisualizationState.ctx;
+    const canvas = VisualizationState.canvas;
+    
+    const boxWidth = 80;
+    const boxHeight = 60;
+    const startX = 100;
+    const startY = canvas.height / 2 - boxHeight / 2;
+    
+    // Draw queue elements from front to rear
+    queue.forEach((value, index) => {
+        const x = startX + index * (boxWidth + 5);
+        
+        let fillColor = '#E0E7FF';
+        if (highlightFront && index === 0) fillColor = '#10B981';
+        if (highlightRear && index === queue.length - 1) fillColor = '#F59E0B';
+        
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(x, startY, boxWidth, boxHeight);
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, startY, boxWidth, boxHeight);
+        
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 18px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, x + boxWidth / 2, startY + boxHeight / 2);
+    });
+    
+    // Draw FRONT pointer
+    if (queue.length > 0) {
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 14px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('FRONT v', startX + boxWidth / 2, startY - 20);
+    }
+    
+    // Draw REAR pointer
+    if (queue.length > 0) {
+        const rearX = startX + (queue.length - 1) * (boxWidth + 5);
+        ctx.fillStyle = '#F59E0B';
+        ctx.textAlign = 'center';
+        ctx.fillText('REAR v', rearX + boxWidth / 2, startY - 20);
+    }
+    
+    // Draw queue label
+    ctx.fillStyle = '#64748B';
+    ctx.font = 'bold 14px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Queue (Size: ${queue.length})`, canvas.width / 2, startY + boxHeight + 30);
+}
+
+// Draw binary tree
+function drawBinaryTree(root, highlightNode = null) {
+    const ctx = VisualizationState.ctx;
+    const canvas = VisualizationState.canvas;
+    clearCanvas();
+    
+    const nodeRadius = 25;
+    const levelHeight = 80;
+    
+    function drawNode(node, x, y, level, offset) {
+        if (!node) return;
+        
+        // Draw edges to children
+        ctx.strokeStyle = '#CBD5E1';
+        ctx.lineWidth = 2;
+        
+        if (node.left) {
+            const childX = x - offset;
+            const childY = y + levelHeight;
+            ctx.beginPath();
+            ctx.moveTo(x, y + nodeRadius);
+            ctx.lineTo(childX, childY - nodeRadius);
+            ctx.stroke();
+            drawNode(node.left, childX, childY, level + 1, offset / 2);
+        }
+        
+        if (node.right) {
+            const childX = x + offset;
+            const childY = y + levelHeight;
+            ctx.beginPath();
+            ctx.moveTo(x, y + nodeRadius);
+            ctx.lineTo(childX, childY - nodeRadius);
+            ctx.stroke();
+            drawNode(node.right, childX, childY, level + 1, offset / 2);
+        }
+        
+        // Draw node
+        let fillColor = '#E0E7FF';
+        if (highlightNode === node.value) fillColor = '#F59E0B';
+        
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        ctx.arc(x, y, nodeRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw value
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 14px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.value, x, y);
+    }
+    
+    if (root) {
+        drawNode(root, canvas.width / 2, 50, 0, canvas.width / 4);
+    }
+}
+
+// ============================================
+// SORTING ALGORITHMS
+// ============================================
+
+async function runBubbleSort() {
+    initCanvas();
+    const arr = [64, 34, 25, 12, 22, 11, 90, 88, 45, 50];
+    
+    VisualizationState.isRunning = true;
+    
+    for (let i = 0; i < arr.length - 1; i++) {
+        for (let j = 0; j < arr.length - i - 1; j++) {
+            if (!shouldContinue()) return;
+            await waitForUnpause();
             
-            // Initialize visualizer
-            const visualizer = new AlgorithmVisualizer('visualizationOutput', algorithm);
+            drawBars(arr, [], [j, j + 1]);
+            await delay(VisualizationState.speed);
             
-            // Remove old button, controls are now built-in
-            vizBtn.style.display = 'none';
+            if (arr[j] > arr[j + 1]) {
+                [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+                drawBars(arr, [j, j + 1], []);
+                await delay(VisualizationState.speed);
+            }
+        }
+        drawBars(arr, [arr.length - i - 1], []);
+        await delay(VisualizationState.speed / 2);
+    }
+    
+    drawBars(arr, Array.from({length: arr.length}, (_, i) => i), []);
+    VisualizationState.isRunning = false;
+}
+
+async function runSelectionSort() {
+    initCanvas();
+    const arr = [64, 25, 12, 22, 11, 90, 45, 50, 34, 88];
+    
+    VisualizationState.isRunning = true;
+    
+    for (let i = 0; i < arr.length - 1; i++) {
+        let minIdx = i;
+        
+        for (let j = i + 1; j < arr.length; j++) {
+            if (!shouldContinue()) return;
+            await waitForUnpause();
+            
+            drawBars(arr, [minIdx], [j]);
+            await delay(VisualizationState.speed);
+            
+            if (arr[j] < arr[minIdx]) {
+                minIdx = j;
+            }
+        }
+        
+        if (minIdx !== i) {
+            [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
+            drawBars(arr, [i, minIdx], []);
+            await delay(VisualizationState.speed);
         }
     }
-});
+    
+    drawBars(arr, Array.from({length: arr.length}, (_, i) => i), []);
+    VisualizationState.isRunning = false;
+}
 
+async function runInsertionSort() {
+    initCanvas();
+    const arr = [12, 11, 13, 5, 6, 7, 45, 23, 34, 67];
+    
+    VisualizationState.isRunning = true;
+    
+    for (let i = 1; i < arr.length; i++) {
+        const key = arr[i];
+        let j = i - 1;
+        
+        while (j >= 0 && arr[j] > key) {
+            if (!shouldContinue()) return;
+            await waitForUnpause();
+            
+            drawBars(arr, [j + 1], [j]);
+            await delay(VisualizationState.speed);
+            
+            arr[j + 1] = arr[j];
+            j--;
+        }
+        
+        arr[j + 1] = key;
+        drawBars(arr, [j + 1], []);
+        await delay(VisualizationState.speed);
+    }
+    
+    drawBars(arr, Array.from({length: arr.length}, (_, i) => i), []);
+    VisualizationState.isRunning = false;
+}
+
+async function runMergeSort() {
+    initCanvas();
+    const arr = [38, 27, 43, 3, 9, 82, 10, 45, 23, 67];
+    
+    VisualizationState.isRunning = true;
+    
+    async function merge(arr, left, mid, right) {
+        const leftArr = arr.slice(left, mid + 1);
+        const rightArr = arr.slice(mid + 1, right + 1);
+        
+        let i = 0, j = 0, k = left;
+        
+        while (i < leftArr.length && j < rightArr.length) {
+            if (!shouldContinue()) return;
+            await waitForUnpause();
+            
+            drawBars(arr, [k], [left + i, mid + 1 + j]);
+            await delay(VisualizationState.speed);
+            
+            if (leftArr[i] <= rightArr[j]) {
+                arr[k] = leftArr[i];
+                i++;
+            } else {
+                arr[k] = rightArr[j];
+                j++;
+            }
+            k++;
+        }
+        
+        while (i < leftArr.length) {
+            arr[k] = leftArr[i];
+            i++;
+            k++;
+        }
+        
+        while (j < rightArr.length) {
+            arr[k] = rightArr[j];
+            j++;
+            k++;
+        }
+    }
+    
+    async function mergeSortHelper(arr, left, right) {
+        if (left < right) {
+            const mid = Math.floor((left + right) / 2);
+            await mergeSortHelper(arr, left, mid);
+            await mergeSortHelper(arr, mid + 1, right);
+            await merge(arr, left, mid, right);
+        }
+    }
+    
+    await mergeSortHelper(arr, 0, arr.length - 1);
+    drawBars(arr, Array.from({length: arr.length}, (_, i) => i), []);
+    VisualizationState.isRunning = false;
+}
+
+async function runQuickSort() {
+    initCanvas();
+    const arr = [10, 80, 30, 90, 40, 50, 70, 20, 60, 15];
+    
+    VisualizationState.isRunning = true;
+    
+    async function partition(arr, low, high) {
+        const pivot = arr[high];
+        let i = low - 1;
+        
+        for (let j = low; j < high; j++) {
+            if (!shouldContinue()) return i + 1;
+            await waitForUnpause();
+            
+            drawBars(arr, [high], [j]);
+            await delay(VisualizationState.speed);
+            
+            if (arr[j] < pivot) {
+                i++;
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+                drawBars(arr, [i, j], [high]);
+                await delay(VisualizationState.speed);
+            }
+        }
+        
+        [arr[i + 1], arr[high]] = [arr[high], arr[i + 1]];
+        drawBars(arr, [i + 1], []);
+        await delay(VisualizationState.speed);
+        
+        return i + 1;
+    }
+    
+    async function quickSortHelper(arr, low, high) {
+        if (low < high) {
+            const pi = await partition(arr, low, high);
+            await quickSortHelper(arr, low, pi - 1);
+            await quickSortHelper(arr, pi + 1, high);
+        }
+    }
+    
+    await quickSortHelper(arr, 0, arr.length - 1);
+    drawBars(arr, Array.from({length: arr.length}, (_, i) => i), []);
+    VisualizationState.isRunning = false;
+}
+
+async function runHeapSort() {
+    initCanvas();
+    const arr = [12, 11, 13, 5, 6, 7, 45, 23, 34, 67];
+    
+    VisualizationState.isRunning = true;
+    
+    async function heapify(arr, n, i) {
+        let largest = i;
+        const left = 2 * i + 1;
+        const right = 2 * i + 2;
+        
+        if (left < n && arr[left] > arr[largest]) {
+            largest = left;
+        }
+        
+        if (right < n && arr[right] > arr[largest]) {
+            largest = right;
+        }
+        
+        if (largest !== i) {
+            if (!shouldContinue()) return;
+            await waitForUnpause();
+            
+            [arr[i], arr[largest]] = [arr[largest], arr[i]];
+            drawBars(arr, [i, largest], []);
+            await delay(VisualizationState.speed);
+            
+            await heapify(arr, n, largest);
+        }
+    }
+    
+    const n = arr.length;
+    
+    // Build heap
+    for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
+        await heapify(arr, n, i);
+    }
+    
+    // Extract elements from heap
+    for (let i = n - 1; i > 0; i--) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        [arr[0], arr[i]] = [arr[i], arr[0]];
+        drawBars(arr, [0, i], []);
+        await delay(VisualizationState.speed);
+        
+        await heapify(arr, i, 0);
+    }
+    
+    drawBars(arr, Array.from({length: arr.length}, (_, i) => i), []);
+    VisualizationState.isRunning = false;
+}
+
+// ============================================
+// SEARCHING ALGORITHMS
+// ============================================
+
+async function runLinearSearch() {
+    initCanvas();
+    const arr = [10, 23, 45, 70, 11, 15, 36, 48, 92, 81];
+    const target = 36;
+    
+    clearCanvas();
+    drawArray(arr);
+    
+    const ctx = VisualizationState.ctx;
+    ctx.fillStyle = '#64748B';
+    ctx.font = 'bold 16px Inter';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Searching for: ${target}`, 50, 50);
+    
+    VisualizationState.isRunning = true;
+    
+    for (let i = 0; i < arr.length; i++) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        clearCanvas();
+        drawArray(arr, [], [i]);
+        ctx.fillStyle = '#64748B';
+        ctx.font = 'bold 16px Inter';
+        ctx.fillText(`Searching for: ${target}`, 50, 50);
+        ctx.fillText(`Checking index ${i}: ${arr[i]}`, 50, 80);
+        
+        await delay(VisualizationState.speed);
+        
+        if (arr[i] === target) {
+            clearCanvas();
+            drawArray(arr, [i], []);
+            ctx.fillStyle = '#10B981';
+            ctx.font = 'bold 18px Inter';
+            ctx.fillText(`[OK] Found at index ${i}!`, 50, 50);
+            VisualizationState.isRunning = false;
+            return;
+        }
+    }
+    
+    clearCanvas();
+    drawArray(arr);
+    ctx.fillStyle = '#EF4444';
+    ctx.font = 'bold 18px Inter';
+    ctx.fillText(`[X] Not found`, 50, 50);
+    VisualizationState.isRunning = false;
+}
+
+async function runBinarySearch() {
+    initCanvas();
+    const arr = [11, 15, 23, 36, 45, 48, 70, 81, 92, 100];
+    const target = 48;
+    
+    clearCanvas();
+    drawArray(arr);
+    
+    const ctx = VisualizationState.ctx;
+    ctx.fillStyle = '#64748B';
+    ctx.font = 'bold 16px Inter';
+    ctx.fillText(`Searching for: ${target} (Sorted Array)`, 50, 50);
+    
+    VisualizationState.isRunning = true;
+    
+    let left = 0;
+    let right = arr.length - 1;
+    
+    while (left <= right) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        const mid = Math.floor((left + right) / 2);
+        
+        clearCanvas();
+        drawArray(arr, [], [left, mid, right]);
+        ctx.fillStyle = '#64748B';
+        ctx.font = 'bold 16px Inter';
+        ctx.fillText(`Searching for: ${target}`, 50, 50);
+        ctx.fillText(`Left: ${left}, Mid: ${mid}, Right: ${right}`, 50, 80);
+        ctx.fillText(`arr[${mid}] = ${arr[mid]}`, 50, 110);
+        
+        await delay(VisualizationState.speed);
+        
+        if (arr[mid] === target) {
+            clearCanvas();
+            drawArray(arr, [mid], []);
+            ctx.fillStyle = '#10B981';
+            ctx.font = 'bold 18px Inter';
+            ctx.fillText(`[OK] Found at index ${mid}!`, 50, 50);
+            VisualizationState.isRunning = false;
+            return;
+        }
+        
+        if (arr[mid] < target) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+    
+    clearCanvas();
+    drawArray(arr);
+    ctx.fillStyle = '#EF4444';
+    ctx.font = 'bold 18px Inter';
+    ctx.fillText(`[X] Not found`, 50, 50);
+    VisualizationState.isRunning = false;
+}
+
+// ============================================
+// GRAPH ALGORITHMS (BFS/DFS)
+// ============================================
+
+async function runBFS() {
+    initCanvas();
+    
+    // Create sample graph
+    const nodes = [
+        { x: 200, y: 100, label: '0' },
+        { x: 100, y: 200, label: '1' },
+        { x: 300, y: 200, label: '2' },
+        { x: 100, y: 350, label: '3' },
+        { x: 300, y: 350, label: '4' },
+        { x: 500, y: 250, label: '5' }
+    ];
+    
+    const edges = [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]];
+    const adjacencyList = { 0: [1, 2], 1: [0, 3], 2: [0, 4, 5], 3: [1], 4: [2], 5: [2] };
+    
+    VisualizationState.isRunning = true;
+    
+    const visited = [];
+    const queue = [0];
+    
+    // Draw initial state
+    drawGraph(nodes, edges, visited, null);
+    
+    // Draw queue visualization - mobile responsive
+    const canvas = VisualizationState.canvas;
+    const queueCanvas = document.createElement('div');
+    queueCanvas.dataset.vizOverlay = 'true';
+    queueCanvas.dataset.desktopMaxWidth = '300px';
+    applyOverlayResponsiveStyles(queueCanvas);
+    queueCanvas.innerHTML = '<strong style="color:#2563EB;font-size:0.875rem;">BFS Queue (FIFO)</strong><div id="queueViz" style="margin-top:10px;font-size:0.875rem;"></div>';
+    canvas.parentElement.appendChild(queueCanvas);
+    
+    function updateQueueViz() {
+        const queueViz = document.getElementById('queueViz');
+        if (queueViz) {
+            queueViz.innerHTML = queue.map((node, idx) => {
+                const color = idx === 0 ? '#10B981' : '#E0E7FF';
+                return `<span style="display:inline-block;padding:6px 10px;margin:2px;background:${color};border:2px solid #2563EB;border-radius:4px;font-weight:bold;font-size:0.8125rem;">${node}</span>`;
+            }).join(' -> ') || '<span style="color:#64748B;">Empty</span>';
+        }
+    }
+    
+    updateQueueViz();
+    await delay(VisualizationState.speed * 2);
+    
+    while (queue.length > 0) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        const current = queue.shift();
+        updateQueueViz();
+        
+        if (visited.includes(current)) continue;
+        
+        visited.push(current);
+        drawGraph(nodes, edges, visited, current);
+        await delay(VisualizationState.speed);
+        
+        const neighbors = adjacencyList[current] || [];
+        for (const neighbor of neighbors) {
+            if (!visited.includes(neighbor) && !queue.includes(neighbor)) {
+                queue.push(neighbor);
+                updateQueueViz();
+                await delay(VisualizationState.speed / 2);
+            }
+        }
+    }
+    
+    drawGraph(nodes, edges, visited, null);
+    VisualizationState.isRunning = false;
+}
+
+async function runDFS() {
+    initCanvas();
+    
+    // Create sample graph
+    const nodes = [
+        { x: 200, y: 100, label: '0' },
+        { x: 100, y: 200, label: '1' },
+        { x: 300, y: 200, label: '2' },
+        { x: 100, y: 350, label: '3' },
+        { x: 300, y: 350, label: '4' },
+        { x: 500, y: 250, label: '5' }
+    ];
+    
+    const edges = [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]];
+    const adjacencyList = { 0: [1, 2], 1: [0, 3], 2: [0, 4, 5], 3: [1], 4: [2], 5: [2] };
+    
+    VisualizationState.isRunning = true;
+    
+    const visited = [];
+    const stack = [0];
+    
+    // Draw initial state
+    drawGraph(nodes, edges, visited, null);
+    
+    // Draw stack visualization - mobile responsive
+    const canvas = VisualizationState.canvas;
+    const stackCanvas = document.createElement('div');
+    stackCanvas.dataset.vizOverlay = 'true';
+    stackCanvas.dataset.desktopMaxWidth = '220px';
+    applyOverlayResponsiveStyles(stackCanvas);
+    stackCanvas.innerHTML = '<strong style="color:#2563EB;font-size:0.875rem;">DFS Stack (LIFO)</strong><div id="stackViz" style="margin-top:10px;font-size:0.875rem;"></div>';
+    canvas.parentElement.appendChild(stackCanvas);
+    
+    function updateStackViz() {
+        const stackViz = document.getElementById('stackViz');
+        if (stackViz) {
+            stackViz.innerHTML = stack.slice().reverse().map((node, idx) => {
+                const color = idx === 0 ? '#F59E0B' : '#E0E7FF';
+                return `<div style="padding:6px 10px;margin:2px;background:${color};border:2px solid #2563EB;border-radius:4px;font-weight:bold;text-align:center;font-size:0.8125rem;">${node}</div>`;
+            }).join('') || '<span style="color:#64748B;">Empty</span>';
+            
+            if (stack.length > 0) {
+                stackViz.innerHTML += '<div style="color:#EF4444;font-weight:bold;margin-top:5px;text-align:center;font-size:0.75rem;">^ TOP</div>';
+            }
+        }
+    }
+    
+    updateStackViz();
+    await delay(VisualizationState.speed * 2);
+    
+    while (stack.length > 0) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        const current = stack.pop();
+        updateStackViz();
+        
+        if (visited.includes(current)) continue;
+        
+        visited.push(current);
+        drawGraph(nodes, edges, visited, current);
+        await delay(VisualizationState.speed);
+        
+        const neighbors = adjacencyList[current] || [];
+        for (let i = neighbors.length - 1; i >= 0; i--) {
+            const neighbor = neighbors[i];
+            if (!visited.includes(neighbor) && !stack.includes(neighbor)) {
+                stack.push(neighbor);
+                updateStackViz();
+                await delay(VisualizationState.speed / 2);
+            }
+        }
+    }
+    
+    drawGraph(nodes, edges, visited, null);
+    VisualizationState.isRunning = false;
+}
+
+// ============================================
+// DATA STRUCTURE DEMOS
+// ============================================
+
+async function runStackDemo() {
+    initCanvas();
+    const stack = [];
+    
+    VisualizationState.isRunning = true;
+    
+    const operations = [
+        { type: 'push', value: 10 },
+        { type: 'push', value: 20 },
+        { type: 'push', value: 30 },
+        { type: 'pop' },
+        { type: 'push', value: 40 },
+        { type: 'pop' },
+        { type: 'pop' }
+    ];
+    
+    const ctx = VisualizationState.ctx;
+    
+    for (const op of operations) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        clearCanvas();
+        
+        if (op.type === 'push') {
+            stack.push(op.value);
+            ctx.fillStyle = '#2563EB';
+            ctx.font = 'bold 18px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`PUSH(${op.value}) - Adding to TOP`, VisualizationState.canvas.width / 2, 30);
+        } else {
+            const popped = stack.pop();
+            ctx.fillStyle = '#EF4444';
+            ctx.font = 'bold 18px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`POP() - Removing from TOP: ${popped}`, VisualizationState.canvas.width / 2, 30);
+        }
+        
+        drawStack(stack, true);
+        
+        ctx.fillStyle = '#64748B';
+        ctx.font = '14px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('LIFO: Last In, First Out', VisualizationState.canvas.width / 2, VisualizationState.canvas.height - 20);
+        
+        await delay(VisualizationState.speed * 1.5);
+    }
+    
+    VisualizationState.isRunning = false;
+}
+
+async function runQueueDemo() {
+    initCanvas();
+    const queue = [];
+    
+    VisualizationState.isRunning = true;
+    
+    const operations = [
+        { type: 'enqueue', value: 10 },
+        { type: 'enqueue', value: 20 },
+        { type: 'enqueue', value: 30 },
+        { type: 'dequeue' },
+        { type: 'enqueue', value: 40 },
+        { type: 'dequeue' },
+        { type: 'dequeue' }
+    ];
+    
+    const ctx = VisualizationState.ctx;
+    
+    for (const op of operations) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        clearCanvas();
+        
+        if (op.type === 'enqueue') {
+            queue.push(op.value);
+            ctx.fillStyle = '#2563EB';
+            ctx.font = 'bold 18px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`ENQUEUE(${op.value}) - Adding to REAR`, VisualizationState.canvas.width / 2, 30);
+        } else {
+            const dequeued = queue.shift();
+            ctx.fillStyle = '#10B981';
+            ctx.font = 'bold 18px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`DEQUEUE() - Removing from FRONT: ${dequeued}`, VisualizationState.canvas.width / 2, 30);
+        }
+        
+        drawQueue(queue, op.type === 'dequeue', op.type === 'enqueue');
+        
+        ctx.fillStyle = '#64748B';
+        ctx.font = '14px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('FIFO: First In, First Out', VisualizationState.canvas.width / 2, VisualizationState.canvas.height - 20);
+        
+        await delay(VisualizationState.speed * 1.5);
+    }
+    
+    VisualizationState.isRunning = false;
+}
+
+async function runBSTDemo() {
+    initCanvas();
+    
+    class TreeNode {
+        constructor(value) {
+            this.value = value;
+            this.left = null;
+            this.right = null;
+        }
+    }
+    
+    let root = null;
+    
+    function insert(root, value) {
+        if (!root) return new TreeNode(value);
+        
+        if (value < root.value) {
+            root.left = insert(root.left, value);
+        } else {
+            root.right = insert(root.right, value);
+        }
+        
+        return root;
+    }
+    
+    VisualizationState.isRunning = true;
+    
+    const values = [50, 30, 70, 20, 40, 60, 80];
+    
+    const ctx = VisualizationState.ctx;
+    
+    for (const value of values) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        root = insert(root, value);
+        
+        clearCanvas();
+        ctx.fillStyle = '#2563EB';
+        ctx.font = 'bold 18px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Inserting: ${value}`, VisualizationState.canvas.width / 2, 30);
+        
+        drawBinaryTree(root, value);
+        
+        await delay(VisualizationState.speed * 1.5);
+    }
+    
+    VisualizationState.isRunning = false;
+}
+
+// ============================================
+// DIJKSTRA'S ALGORITHM
+// ============================================
+
+async function runDijkstra() {
+    initCanvas();
+    
+    const nodes = [
+        { x: 100, y: 250, label: 'A' },
+        { x: 250, y: 150, label: 'B' },
+        { x: 250, y: 350, label: 'C' },
+        { x: 400, y: 150, label: 'D' },
+        { x: 400, y: 350, label: 'E' },
+        { x: 550, y: 250, label: 'F' }
+    ];
+    
+    const edges = [
+        { from: 0, to: 1, weight: 4 },
+        { from: 0, to: 2, weight: 2 },
+        { from: 1, to: 3, weight: 5 },
+        { from: 2, to: 4, weight: 3 },
+        { from: 3, to: 5, weight: 1 },
+        { from: 4, to: 5, weight: 6 }
+    ];
+    
+    VisualizationState.isRunning = true;
+    
+    const distances = Array(nodes.length).fill(Infinity);
+    distances[0] = 0;
+    const visited = [];
+    const previous = Array(nodes.length).fill(null);
+    
+    const ctx = VisualizationState.ctx;
+    
+    function drawDijkstra(currentNode = null) {
+        clearCanvas();
+        
+        // Draw edges with weights
+        ctx.strokeStyle = '#CBD5E1';
+        ctx.lineWidth = 2;
+        ctx.font = '12px Inter';
+        ctx.fillStyle = '#64748B';
+        
+        edges.forEach(edge => {
+            const from = nodes[edge.from];
+            const to = nodes[edge.to];
+            
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            ctx.lineTo(to.x, to.y);
+            ctx.stroke();
+            
+            // Draw weight
+            const midX = (from.x + to.x) / 2;
+            const midY = (from.y + to.y) / 2;
+            ctx.fillText(edge.weight, midX, midY);
+        });
+        
+        // Draw nodes
+        nodes.forEach((node, index) => {
+            let fillColor = '#E0E7FF';
+            if (visited.includes(index)) fillColor = '#10B981';
+            if (currentNode === index) fillColor = '#F59E0B';
+            
+            ctx.fillStyle = fillColor;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 30, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#2563EB';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Draw label and distance
+            ctx.fillStyle = '#0F172A';
+            ctx.font = 'bold 16px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(node.label, node.x, node.y - 5);
+            
+            ctx.font = '12px Inter';
+            const dist = distances[index] === Infinity ? 'INF' : distances[index];
+            ctx.fillText(dist, node.x, node.y + 12);
+        });
+    }
+    
+    drawDijkstra();
+    await delay(VisualizationState.speed * 2);
+    
+    while (visited.length < nodes.length) {
+        if (!shouldContinue()) return;
+        await waitForUnpause();
+        
+        // Find unvisited node with minimum distance
+        let minDist = Infinity;
+        let minNode = -1;
+        
+        for (let i = 0; i < nodes.length; i++) {
+            if (!visited.includes(i) && distances[i] < minDist) {
+                minDist = distances[i];
+                minNode = i;
+            }
+        }
+        
+        if (minNode === -1) break;
+        
+        visited.push(minNode);
+        drawDijkstra(minNode);
+        
+        ctx.fillStyle = '#2563EB';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Visiting: ${nodes[minNode].label} (Distance: ${distances[minNode]})`, 20, 30);
+        
+        await delay(VisualizationState.speed);
+        
+        // Update distances to neighbors
+        edges.forEach(edge => {
+            if (edge.from === minNode) {
+                const newDist = distances[minNode] + edge.weight;
+                if (newDist < distances[edge.to]) {
+                    distances[edge.to] = newDist;
+                    previous[edge.to] = minNode;
+                }
+            }
+        });
+        
+        drawDijkstra(minNode);
+        await delay(VisualizationState.speed);
+    }
+    
+    drawDijkstra();
+    ctx.fillStyle = '#10B981';
+    ctx.font = 'bold 18px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('Shortest paths found!', VisualizationState.canvas.width / 2, 30);
+    
+    VisualizationState.isRunning = false;
+}
+
+// ============================================
+// CONTROL FUNCTIONS
+// ============================================
+
+function startVisualization(algorithmType) {
+    VisualizationState.isRunning = false;
+    VisualizationState.isPaused = false;
+    clearVisualizationOverlays();
+    
+    // Map algorithm types to functions
+    const algorithmMap = {
+        'bubble_sort': runBubbleSort,
+        'selection_sort': runSelectionSort,
+        'insertion_sort': runInsertionSort,
+        'merge_sort': runMergeSort,
+        'quick_sort': runQuickSort,
+        'heap_sort': runHeapSort,
+        'linear_search': runLinearSearch,
+        'binary_search': runBinarySearch,
+        'bfs': runBFS,
+        'dfs': runDFS,
+        'dijkstra': runDijkstra,
+        'stack': runStackDemo,
+        'queue': runQueueDemo,
+        'bst': runBSTDemo
+    };
+    
+    const runFunction = algorithmMap[algorithmType];
+    
+    if (runFunction) {
+        runFunction();
+    } else {
+        console.warn(`No visualization available for: ${algorithmType}`);
+        initCanvas();
+        const ctx = VisualizationState.ctx;
+        ctx.fillStyle = '#64748B';
+        ctx.font = 'bold 18px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Visualization for "${algorithmType}" coming soon!`, VisualizationState.canvas.width / 2, VisualizationState.canvas.height / 2);
+    }
+}
+
+function pauseVisualization() {
+    VisualizationState.isPaused = !VisualizationState.isPaused;
+}
+
+function resetVisualization() {
+    VisualizationState.isRunning = false;
+    VisualizationState.isPaused = false;
+    clearVisualizationOverlays();
+    clearCanvas();
+}
+
+function setSpeed(speed) {
+    const normalized = Number(speed);
+    if (Number.isNaN(normalized)) {
+        return;
+    }
+    VisualizationState.speed = 1000 - Math.min(900, Math.max(100, normalized));
+}
+
+function getVisualizationState() {
+    return {
+        isRunning: VisualizationState.isRunning,
+        isPaused: VisualizationState.isPaused,
+        speed: VisualizationState.speed
+    };
+}
+
+// Export functions for global access
+window.VisualizationEngine = {
+    start: startVisualization,
+    pause: pauseVisualization,
+    reset: resetVisualization,
+    setSpeed: setSpeed,
+    getState: getVisualizationState
+};

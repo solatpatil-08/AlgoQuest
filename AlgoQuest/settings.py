@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -13,7 +14,13 @@ SECRET_KEY = 'django-insecure-REDACTED-ROTATE-THIS-KEY'
 
 DEBUG = True
 
-ALLOWED_HOSTS = []
+raw_allowed_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '')
+if raw_allowed_hosts:
+    ALLOWED_HOSTS = [host.strip() for host in raw_allowed_hosts.split(',') if host.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver']
+else:
+    ALLOWED_HOSTS = []
 
 CHANNELS_AVAILABLE = importlib.util.find_spec("channels") is not None
 
@@ -113,7 +120,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 

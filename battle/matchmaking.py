@@ -3,7 +3,7 @@ from django.utils import timezone
 from .models import BattleMatch
 
 
-def find_or_create_match(user):
+def find_or_create_match(user, topic_preference=None):
     profile = user.profile
     candidates = BattleMatch.objects.filter(
         status=BattleMatch.Status.WAITING,

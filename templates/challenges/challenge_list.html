@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
 <div class="fade-in-up">
@@ -10,45 +11,283 @@
         </div>
     </div>
 
-    <!-- Challenge Grid -->
-    <div class="row g-4 stagger-children">
-        {% for challenge in challenges %}
-            <div class="col-md-6 col-lg-4">
-                <div class="challenge-card card border-0">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <span class="badge badge-primary" tabindex="0">{{ challenge.get_challenge_type_display }}</span>
-                            {% if challenge.get_difficulty_display == 'Easy' %}
-                                <span class="badge badge-easy">Easy</span>
-                            {% elif challenge.get_difficulty_display == 'Medium' %}
-                                <span class="badge badge-medium">Medium</span>
-                            {% elif challenge.get_difficulty_display == 'Hard' %}
-                                <span class="badge badge-hard">Hard</span>
-                            {% else %}
-                                <span class="badge badge-primary">{{ challenge.get_difficulty_display }}</span>
-                            {% endif %}
-                        </div>
-                        <h2 class="h5 fw-semibold mb-2">{{ challenge.title }}</h2>
-                        <p class="text-muted mb-3" style="font-size: 0.9rem;">{{ challenge.description|truncatewords:18 }}</p>
-                        <div class="d-flex align-items-center justify-content-between mt-auto">
-                            <span class="d-flex align-items-center gap-1" style="color: var(--aq-accent); font-weight: 600; font-size: 0.875rem;">
-                                <i class="bi bi-star-fill"></i> {{ challenge.xp_reward }} XP
-                            </span>
-                            <a href="{% url 'challenge-detail' challenge.slug %}" class="btn btn-outline-primary btn-sm px-3">
-                                Open <i class="bi bi-arrow-right ms-1"></i>
-                            </a>
+    <!-- User Progress Section (Authenticated Only) -->
+    {% if user.is_authenticated and user_progress %}
+        <div class="card border-0 mb-4 fade-in-up">
+            <div class="card-body">
+                <h2 class="h5 mb-3"><i class="bi bi-graph-up me-2" style="color: var(--aq-primary);"></i>Your Progress</h2>
+                
+                <!-- Overall Progress Bar -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold">Overall</span>
+                        <span class="text-muted">{{ user_progress.total_solved }} / {{ user_progress.total_challenges }} solved</span>
+                    </div>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ user_progress.completion_pct }}%; font-weight: 600; color: white;"
+                             aria-valuenow="{{ user_progress.completion_pct }}" aria-valuemin="0" aria-valuemax="100">
+                            {{ user_progress.completion_pct }}%
                         </div>
                     </div>
                 </div>
+
+                <!-- Progress by Topic (Top 6) -->
+                {% if user_progress.by_topic %}
+                    <div class="mb-4">
+                        <h6 class="mb-2">By Topic</h6>
+                        <div class="row g-2">
+                            {% for topic_id, topic_stats in user_progress.by_topic.items|slice:":6" %}
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="progress-item p-2 rounded" style="background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.2);">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <small class="fw-semibold">{{ topic_stats.label }}</small>
+                                            <small class="text-muted">{{ topic_stats.solved }}/{{ topic_stats.total }}</small>
+                                        </div>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar" role="progressbar"
+                                                 style="width: {{ topic_stats.pct }}%;"
+                                                 aria-valuenow="{{ topic_stats.pct }}" aria-valuemin="0" aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Progress by Difficulty -->
+                {% if user_progress.by_difficulty %}
+                    <div>
+                        <h6 class="mb-2">By Difficulty</h6>
+                        <div class="row g-2">
+                            {% for difficulty, stats in user_progress.by_difficulty.items %}
+                                <div class="col-md-4">
+                                    <div class="progress-item p-2 rounded" style="background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.2);">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <small class="fw-semibold">{{ stats.label }}</small>
+                                            <small class="text-muted">{{ stats.solved }}/{{ stats.total }}</small>
+                                        </div>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar" role="progressbar"
+                                                 style="width: {{ stats.pct }}%;"
+                                                 aria-valuenow="{{ stats.pct }}" aria-valuemin="0" aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
             </div>
-        {% empty %}
-            <div class="col-12">
-                <div class="empty-state">
-                    <div class="empty-icon"><i class="bi bi-puzzle"></i></div>
-                    <p>No challenges available yet. Check back soon!</p>
+        </div>
+    {% endif %}
+
+    <!-- Category Quick Filter -->
+    <div class="mb-4">
+        <div
+            class="quick-filter-bar d-flex gap-2 align-items-center"
+            id="quickFilterControls"
+            data-selected-category="{{ selected_category|default:'all' }}"
+            role="group"
+            aria-label="Quick category filters"
+        >
+            <span class="text-muted fw-semibold quick-filter-label">Quick Filter:</span>
+            <div class="quick-filter-search">
+                <label class="visually-hidden" for="quickFilterSearchInput">Search Algorithm</label>
+                <input
+                    type="text"
+                    id="quickFilterSearchInput"
+                    class="quick-filter-search-input"
+                    placeholder="Search Algorithm"
+                    value="{{ search_query|default:'' }}"
+                    autocomplete="off"
+                    aria-label="Search Algorithm"
+                >
+                <button type="button" id="quickFilterClear" class="quick-filter-clear-btn" aria-label="Clear filter">Clear</button>
+            </div>
+            {% for category in category_options %}
+                <button type="button" class="category-filter-btn" data-category="{{ category.value }}">
+                    {% if category.value == 'dsa_core' %}
+                        <i class="bi bi-puzzle me-1"></i>
+                    {% elif category.value == 'sorting_searching' %}
+                        <i class="bi bi-arrow-down-up me-1"></i>
+                    {% elif category.value == 'trees_graphs' %}
+                        <i class="bi bi-diagram-3 me-1"></i>
+                    {% elif category.value == 'advanced_dsa' %}
+                        <i class="bi bi-lightning-charge me-1"></i>
+                    {% elif category.value == 'ai_ml' %}
+                        <i class="bi bi-cpu me-1"></i>
+                    {% elif category.value == 'sorting' %}
+                        <i class="bi bi-arrow-down-up me-1"></i>
+                    {% elif category.value == 'searching' %}
+                        <i class="bi bi-search me-1"></i>
+                    {% elif category.value == 'graph' %}
+                        <i class="bi bi-diagram-3 me-1"></i>
+                    {% elif category.value == 'dynamic_programming' %}
+                        <i class="bi bi-grid-3x3-gap me-1"></i>
+                    {% elif category.value == 'greedy' %}
+                        <i class="bi bi-lightning-charge me-1"></i>
+                    {% elif category.value == 'backtracking' %}
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>
+                    {% elif category.value == 'recursion' %}
+                        <i class="bi bi-arrow-repeat me-1"></i>
+                    {% elif category.value == 'string' %}
+                        <i class="bi bi-fonts me-1"></i>
+                    {% elif category.value == 'math' %}
+                        <i class="bi bi-calculator me-1"></i>
+                    {% elif category.value == 'bit_manipulation' %}
+                        <i class="bi bi-cpu-fill me-1"></i>
+                    {% elif category.value == 'array' %}
+                        <i class="bi bi-list-ul me-1"></i>
+                    {% elif category.value == 'hashing' %}
+                        <i class="bi bi-hash me-1"></i>
+                    {% elif category.value == 'tree' %}
+                        <i class="bi bi-diagram-2 me-1"></i>
+                    {% else %}
+                        <i class="bi bi-puzzle me-1"></i>
+                    {% endif %}
+                    {{ category.label }}
+                </button>
+            {% endfor %}
+            <span id="quickFilterNoMatch" class="quick-filter-no-match d-none">No category found.</span>
+        </div>
+    </div>
+
+    <!-- Grouped Challenges by Topic (New) and Category (Legacy) -->
+    
+    <!-- Topic-Based Challenges -->
+    {% for group in grouped_by_topic %}
+        <div class="category-section mb-5" data-category="{{ group.effective_category }}">
+            <!-- Topic Header -->
+            <div class="category-header mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    {% if group.grouper_obj.visualization_type == 'graph' %}
+                        <i class="bi bi-diagram-3 category-icon"></i>
+                    {% elif group.grouper_obj.visualization_type == 'tree' %}
+                        <i class="bi bi-diagram-2 category-icon"></i>
+                    {% elif group.grouper_obj.visualization_type == 'matrix' or group.grouper_obj.visualization_type == 'grid' %}
+                        <i class="bi bi-grid-3x3 category-icon"></i>
+                    {% elif group.grouper_obj.visualization_type == 'array' %}
+                        <i class="bi bi-list category-icon"></i>
+                    {% else %}
+                        <i class="bi bi-square category-icon"></i>
+                    {% endif %}
+                    <h2 class="h5 mb-0 fw-bold">{{ group.label }}</h2>
+                    <span class="badge badge-primary ms-2">{{ group.list|length }}</span>
                 </div>
             </div>
-        {% endfor %}
-    </div>
+
+            <!-- Challenge Grid -->
+            <div class="row g-4 stagger-children">
+                {% for challenge in group.list %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="challenge-card card border-0">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                                    <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
+                                    {% if challenge.topic %}
+                                        <span class="badge badge-accent">{{ challenge.topic.category }}</span>
+                                    {% endif %}
+                                    <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
+                                    <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #B45309;">
+                                        <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
+                                    </span>
+                                </div>
+                                <h3 class="h6 mb-2 fw-bold">{{ challenge.title }}</h3>
+                                <p class="text-muted small mb-3">{{ challenge.description|truncatewords:15 }}</p>
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <a href="{% url 'challenge-detail' challenge.slug %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-code-square me-1"></i>Solve
+                                    </a>
+                                    {% if request.user.is_authenticated %}
+                                        <span class="badge badge-secondary">
+                                            {% if challenge.id in solved_ids %}
+                                                <i class="bi bi-check-circle-fill text-success"></i> Solved
+                                            {% elif challenge.id in unlocked_ids %}
+                                                <i class="bi bi-unlock"></i> Unlocked
+                                            {% else %}
+                                                <i class="bi bi-lock"></i> Locked
+                                            {% endif %}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+    
+    <!-- Legacy Challenges by Algorithm Category -->
+    {% for group in grouped_by_category %}
+        <div class="category-section mb-5" data-category="{{ group.effective_category }}">
+            <!-- Category Header -->
+            <div class="category-header mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi {{ group.header_icon }} category-icon"></i>
+                    <h2 class="h5 mb-0 fw-bold">{{ group.header_label }}</h2>
+                    <span class="badge badge-primary ms-2">{{ group.list|length }}</span>
+                </div>
+            </div>
+
+            <!-- Challenge Grid -->
+            <div class="row g-4 stagger-children">
+                {% for challenge in group.list %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="challenge-card card border-0">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                                    <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
+                                    {% if challenge.algorithm_category_display %}
+                                        <span class="badge badge-accent">{{ challenge.algorithm_category_display }}</span>
+                                    {% endif %}
+                                    {% if challenge.get_difficulty_display == 'Easy' %}
+                                        <span class="badge badge-easy">Easy</span>
+                                    {% elif challenge.get_difficulty_display == 'Medium' %}
+                                        <span class="badge badge-medium">Medium</span>
+                                    {% elif challenge.get_difficulty_display == 'Hard' %}
+                                        <span class="badge badge-hard">Hard</span>
+                                    {% else %}
+                                        <span class="badge badge-primary">{{ challenge.get_difficulty_display }}</span>
+                                    {% endif %}
+                                </div>
+                                <h2 class="h5 fw-semibold mb-2">{{ challenge.title }}</h2>
+                                {% if challenge.get_algorithm_type_display %}
+                                    <p class="mb-2" style="font-size: 0.8125rem; color: var(--aq-primary-dark); font-weight: 600;">
+                                        <i class="bi bi-cpu me-1"></i>{{ challenge.get_algorithm_type_display }}
+                                    </p>
+                                {% endif %}
+                                <p class="text-muted mb-3" style="font-size: 0.9rem;">{{ challenge.description|truncatewords:18 }}</p>
+                                <div class="d-flex align-items-center justify-content-between mt-auto">
+                                    <span class="d-flex align-items-center gap-1" style="color: var(--aq-accent); font-weight: 600; font-size: 0.875rem;">
+                                        <i class="bi bi-star-fill"></i> {{ challenge.xp_reward }} XP
+                                    </span>
+                                    <a href="{% url 'challenge-detail' challenge.slug %}" class="btn btn-outline-primary btn-sm px-3">
+                                        Open <i class="bi bi-arrow-right ms-1"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+
+    {% if not grouped_by_topic and not grouped_by_category %}
+        <div class="empty-state">
+            <div class="empty-icon"><i class="bi bi-puzzle"></i></div>
+            <p>No challenges available yet. Check back soon!</p>
+        </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<link href="{% static 'css/challenge-list.css' %}" rel="stylesheet">
+<script src="{% static 'js/challenge-list.js' %}"></script>
 {% endblock %}

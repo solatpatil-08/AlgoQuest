@@ -1,11 +1,11 @@
 /* ============================================
-   MAIN.CSS — AlgoQuest Design System v3.0
-   Professional EdTech SaaS — Production Ready
+   MAIN.CSS - AlgoQuest Design System v3.0
+   Professional EdTech SaaS - Production Ready
    Consolidated: Variables + Base + Layout
    ============================================ */
 
 /* ============================================
-   CSS VARIABLES — Design Tokens
+   CSS VARIABLES - Design Tokens
    ============================================ */
 
 :root {
@@ -127,6 +127,15 @@ a {
 a:hover, a:focus {
     color: var(--aq-primary-dark);
     text-decoration: none;
+}
+
+a:focus-visible {
+    outline: 2px solid var(--aq-primary);
+    outline-offset: 2px;
+    border-radius: var(--aq-radius-sm);
+}
+
+a:focus:not(:focus-visible) {
     outline: none;
 }
 
@@ -136,7 +145,7 @@ a:hover, a:focus {
 }
 
 /* ============================================
-   NAVBAR — Professional Gradient
+   NAVBAR - Professional Gradient
    ============================================ */
 
 .navbar-aq {
@@ -247,6 +256,54 @@ main.main-content {
     min-height: calc(100vh - 140px);
     padding-top: 2rem;
     padding-bottom: 3rem;
+}
+
+body.has-page-exit-control main.main-content {
+    padding-bottom: 5rem;
+}
+
+/* ============================================
+   GLOBAL BACK / EXIT CONTROL
+   ============================================ */
+
+.page-exit-control {
+    position: fixed;
+    left: 1rem;
+    bottom: 1rem;
+    z-index: 1040;
+}
+
+.page-exit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: var(--aq-radius-full);
+    border: 1px solid var(--aq-border);
+    background: rgba(15, 23, 42, 0.92);
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.7rem 1rem;
+    box-shadow: var(--aq-shadow-md);
+    transition: transform var(--aq-transition-fast), box-shadow var(--aq-transition-fast), background-color var(--aq-transition-fast);
+}
+
+.page-exit-btn i {
+    font-size: 1rem;
+}
+
+.page-exit-btn:hover {
+    color: #FFFFFF;
+    background: #1E293B;
+    box-shadow: var(--aq-shadow-lg);
+    transform: translateY(-1px);
+}
+
+.page-exit-btn:focus-visible {
+    color: #FFFFFF;
+    outline: none;
+    box-shadow: var(--aq-focus-ring), var(--aq-shadow-lg);
 }
 
 /* ============================================
@@ -368,6 +425,16 @@ main.main-content {
     .container {
         padding-left: 1rem;
         padding-right: 1rem;
+    }
+
+    .page-exit-control {
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 0.75rem;
+    }
+
+    .page-exit-btn {
+        padding: 0.65rem 1rem;
     }
 }
 

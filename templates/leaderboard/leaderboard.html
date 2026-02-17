@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block content %}
 <div class="fade-in-up">
@@ -21,7 +21,7 @@
                     </div>
                     <ol class="list-group list-group-numbered list-group-flush">
                         {% for entry in global_board %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}" tabindex="0">
+                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
                                 <div class="d-flex align-items-center gap-2">
                                     {% if forloop.counter == 1 %}
                                         <i class="bi bi-trophy-fill" style="color: #D97706; font-size: 1.1rem;"></i>
@@ -61,7 +61,7 @@
                     </div>
                     <ol class="list-group list-group-numbered list-group-flush">
                         {% for entry in weekly_board %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}" tabindex="0">
+                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
                                 <div class="d-flex align-items-center gap-2">
                                     {% if forloop.counter == 1 %}
                                         <i class="bi bi-trophy-fill" style="color: #D97706; font-size: 1.1rem;"></i>
@@ -91,3 +91,4 @@
     </div>
 </div>
 {% endblock %}
+

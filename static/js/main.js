@@ -1,5 +1,5 @@
 /* ============================================
-   MAIN.JS — AlgoQuest Global Scripts v2.0
+   MAIN.JS - AlgoQuest Global Scripts v2.1
    Toast, alerts, smooth scroll, active nav
    ============================================ */
 
@@ -10,8 +10,8 @@ document.addEventListener('DOMContentLoaded', function () {
         new bootstrap.Toast(el).show();
     });
 
-    /* ---- Auto-dismiss alerts after 5s ---- */
-    document.querySelectorAll('.alert:not(.alert-permanent)').forEach(function (alert) {
+    /* ---- Auto-dismiss alerts marked explicitly ---- */
+    document.querySelectorAll('.alert.alert-auto-dismiss').forEach(function (alert) {
         setTimeout(function () {
             alert.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
             alert.style.opacity = '0';
@@ -23,10 +23,22 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ---- Smooth scroll for anchor links ---- */
     document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
         anchor.addEventListener('click', function (e) {
-            var target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                e.preventDefault();
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            var href = this.getAttribute('href');
+            
+            // Ignore href="#" (used for dropdowns, modals, etc.)
+            if (!href || href === '#') {
+                return;
+            }
+            
+            // Guard against invalid selectors
+            try {
+                var target = document.querySelector(href);
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } catch (err) {
+                // Invalid selector, silently ignore.
             }
         });
     });
@@ -80,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ---- Disable double submit on all forms ---- */
     document.querySelectorAll('form').forEach(function (form) {
         var submitted = false;
-        form.addEventListener('submit', function () {
+        form.addEventListener('submit', function (event) {
             if (submitted) {
                 event.preventDefault();
                 return;

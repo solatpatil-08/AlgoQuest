@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Challenge Locked - AlgoQuest{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <h4 class="alert-heading">Challenge Locked 🔒</h4>
+        <p>This challenge is not yet available. You must complete the previous challenges in this topic to unlock it.</p>
+        
+        {% if challenge.topic %}
+            <p>
+                <strong>Topic:</strong> {{ challenge.topic.label }}<br>
+                <strong>Challenge:</strong> {{ challenge.title }}
+            </p>
+        {% endif %}
+        
+        <hr>
+        <p class="mb-0">
+            <a href="{% url 'challenges-list' %}" class="btn btn-primary btn-sm">Back to Challenges</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

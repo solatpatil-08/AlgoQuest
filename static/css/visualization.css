@@ -1,0 +1,189 @@
+/* ============================================
+   VISUALIZATION.CSS â€” AlgoQuest Visualization Styles
+   ============================================ */
+
+#visualizationOutput {
+    position: relative;
+    min-height: 500px;
+    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+    border: 2px solid var(--aq-border);
+    border-radius: var(--aq-radius-xl);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.visualization-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.25rem;
+    background: var(--aq-card);
+    border: 1px solid var(--aq-border);
+    border-radius: var(--aq-radius-xl);
+    margin-bottom: 1.5rem;
+    box-shadow: var(--aq-shadow-xs);
+}
+
+.visualization-controls .control-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.visualization-controls label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--aq-text);
+    margin: 0;
+}
+
+.visualization-controls input[type="range"] {
+    width: 150px;
+    height: 6px;
+    background: var(--aq-surface);
+    border-radius: var(--aq-radius-full);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.visualization-controls input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(135deg, var(--aq-primary), var(--aq-accent));
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+    transition: transform 0.2s ease;
+}
+
+.visualization-controls input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.visualization-controls input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(135deg, var(--aq-primary), var(--aq-accent));
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.viz-btn {
+    padding: 0.6rem 1.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: var(--aq-radius-md);
+    border: none;
+    cursor: pointer;
+    transition: all var(--aq-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.viz-btn-start {
+    background: linear-gradient(135deg, var(--aq-primary), #3B82F6);
+    color: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.viz-btn-start:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
+}
+
+.viz-btn-pause {
+    background: linear-gradient(135deg, var(--aq-warning), #F59E0B);
+    color: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+
+.viz-btn-pause:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35);
+}
+
+.viz-btn-reset {
+    background: transparent;
+    border: 2px solid var(--aq-border);
+    color: var(--aq-text);
+}
+
+.viz-btn-reset:hover {
+    background: var(--aq-surface);
+    border-color: var(--aq-primary);
+    color: var(--aq-primary);
+}
+
+.viz-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.speed-indicator {
+    font-size: 0.8125rem;
+    color: var(--aq-text-secondary);
+    font-weight: 600;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* Pseudo-code panel */
+.pseudocode-panel {
+    background: linear-gradient(135deg, #1E293B, #0F172A);
+    color: #E2E8F0;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.875rem;
+    line-height: 1.8;
+    padding: 1.5rem;
+    border-radius: var(--aq-radius-md);
+    margin-top: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pseudocode-panel .line {
+    padding: 0.25rem 0.5rem;
+    transition: background 0.3s ease;
+}
+
+.pseudocode-panel .line.active {
+    background: rgba(16, 185, 129, 0.2);
+    border-left: 3px solid #10B981;
+    padding-left: 0.75rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767.98px) {
+    .visualization-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .visualization-controls .control-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .visualization-controls input[type="range"] {
+        width: 100%;
+    }
+    
+    .viz-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    #visualizationOutput {
+        min-height: 400px;
+        padding: 1rem;
+    }
+}

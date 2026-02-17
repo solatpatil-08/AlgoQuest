@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.views import LogoutView
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include, path
 
 from users.views import (
@@ -31,3 +33,6 @@ urlpatterns = [
     path('api/users/', include('users.api_urls')),
     path('api/analytics/', include('analytics.api_urls')),
 ]
+
+if settings.DEBUG:
+    urlpatterns += staticfiles_urlpatterns()

@@ -10,7 +10,10 @@
             <div class="card border-0 mb-4">
                 <div class="card-body">
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <span class="badge badge-primary" tabindex="0">{{ challenge.get_challenge_type_display }}</span>
+                        <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
+                        {% if challenge.algorithm_category_display %}
+                            <span class="badge badge-accent">{{ challenge.algorithm_category_display }}</span>
+                        {% endif %}
                         <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
                         <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #B45309;">
                             <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
@@ -20,6 +23,11 @@
                     <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
                         <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
                     </div>
+                    {% if challenge.starter_code %}
+                        <p class="mt-3 mb-0 text-muted" style="font-size: 0.875rem;">
+                            <i class="bi bi-info-circle me-1"></i>{{ challenge.starter_code }}
+                        </p>
+                    {% endif %}
                 </div>
             </div>
 
@@ -27,13 +35,41 @@
             <div class="card border-0 mb-4">
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-3">
-                        <h2 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Interactive Visualization</h2>
-                        <span class="badge badge-primary">{{ challenge.algorithm_type|upper|default:"ALGORITHM" }}</span>
+                        <h2 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>{% if challenge.topic and challenge.topic.visualization_type == "graph" %}Interactive{% else %}Conceptual{% endif %} Visualization</h2>
+                        <span class="badge badge-primary">{{ challenge.topic.label|default:challenge.get_algorithm_type_display }}</span>
                     </div>
-                    <div id="visualizationOutput" style="min-height: 500px;"></div>
-                    <button class="btn btn-primary btn-sm mb-3 px-4" id="runVisualizationBtn" data-algorithm="{{ challenge.algorithm_type }}" style="display: none;">
-                        <i class="bi bi-play-fill me-1"></i>Initialize Visualization
-                    </button>
+                    
+                    <!-- Visualization Controls (Graph only) -->
+                    {% if challenge.topic and challenge.topic.visualization_type == "graph" %}
+                        <div class="visualization-controls">
+                            <div class="control-group">
+                                <button class="viz-btn viz-btn-start" id="startBtn">
+                                    <i class="bi bi-play-fill"></i> Start
+                                </button>
+                                <button class="viz-btn viz-btn-pause" id="pauseBtn" disabled>
+                                    <i class="bi bi-pause-fill"></i> Pause
+                                </button>
+                                <button class="viz-btn viz-btn-reset" id="resetBtn">
+                                    <i class="bi bi-arrow-clockwise"></i> Reset
+                                </button>
+                            </div>
+                            
+                            <div class="control-group ms-auto">
+                                <label for="speedControl">
+                                    <i class="bi bi-speedometer2 me-1"></i> Speed:
+                                </label>
+                                <input type="range" id="speedControl" min="100" max="900" value="500" step="100">
+                            <span class="speed-indicator" id="speedIndicator">Normal</span>
+                        </div>
+                    </div>
+                    {% else %}
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-lightbulb me-1"></i>Conceptual visualization shows the structure and concepts for this algorithm.
+                        </p>
+                    {% endif %}
+                    
+                    <!-- Visualization Output Container -->
+                    <div id="visualizationOutput"></div>
                 </div>
             </div>
 
@@ -66,7 +102,7 @@
                     <h2 class="h6 mb-3"><i class="bi bi-clock-history me-2" style="color: var(--aq-warning);"></i>Your Recent Attempts</h2>
                     <ul class="list-group list-group-flush">
                         {% for attempt in user_attempts %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center" tabindex="0">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <span style="font-size: 0.875rem;">
                                     <i class="bi bi-calendar3 me-1" style="color: var(--aq-text-secondary);"></i>
                                     {{ attempt.created_at|date:"M d, H:i" }}
@@ -87,8 +123,26 @@
 {% endblock %}
 
 {% block scripts %}
+<link href="{% static 'css/visualization.css' %}" rel="stylesheet">
 <script src="{% static 'js/visualization.js' %}"></script>
+<script src="{% static 'js/visualization-conceptual.js' %}"></script>
 <script>
+    // Check if this is a graph or conceptual visualization
+    const challengeTopic = "{{ challenge.topic.stable_id|default:'' }}";
+    const visualizationType = "{{ challenge.topic.visualization_type|default:'conceptual' }}";
+    
+    // Initialize visualization based on type
+    document.addEventListener('DOMContentLoaded', function() {
+        const vizOutput = document.getElementById('visualizationOutput');
+        
+        if (visualizationType !== 'graph') {
+            // Load conceptual visualization
+            if (challengeTopic && ConceptualVisualizations) {
+                showConceptualVisualization(challengeTopic, 'visualizationOutput');
+            }
+        }
+    });
+    
     const attemptForm = document.getElementById("attemptForm");
     const attemptResult = document.getElementById("attemptResult");
     const submitBtn = document.getElementById("submitAnswerBtn");
@@ -111,15 +165,48 @@
                     headers: {"X-Requested-With": "XMLHttpRequest"}
                 });
                 const data = await response.json();
-                attemptResult.innerHTML = `<div class="alert alert-${data.is_correct ? "success" : "warning"} fade-in">
+                
+                // Determine alert style based on correctness
+                const alertClass = data.is_correct ? 'success' : 'warning';
+                const iconClass = data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill';
+                
+                // Build message content
+                let messageContent = `<strong>${data.message}</strong>`;
+                if (data.score !== undefined) {
+                    messageContent += ` &middot; Score: <strong>${data.score}</strong>`;
+                }
+                if (data.xp_gained !== undefined) {
+                    messageContent += ` &middot; XP: <strong>${data.xp_gained}</strong>`;
+                }
+                if (data.current_level !== undefined) {
+                    messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
+                }
+                
+                attemptResult.innerHTML = `<div class="alert alert-${alertClass} fade-in">
                     <div class="d-flex align-items-center gap-2">
-                        <i class="bi bi-${data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill'} fs-5"></i>
-                        <div>
-                            <strong>Score: ${data.score}</strong> &middot; XP gained: <strong>${data.xp_gained}</strong> &middot;
-                            Level: <strong>${data.current_level}</strong>
-                        </div>
+                        <i class="bi bi-${iconClass} fs-5"></i>
+                        <div>${messageContent}</div>
                     </div>
                 </div>`;
+                
+                // Auto-redirect if there's a next challenge and the answer was correct
+                if (data.is_correct && data.next_challenge_url) {
+                    // Wait 2 seconds then redirect
+                    setTimeout(function() {
+                        window.location.href = data.next_challenge_url;
+                    }, 2000);
+                }
+            } catch (err) {
+                attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
+                    <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
+                </div>`;
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Submit';
+                }
+            }
+        });
             } catch (err) {
                 attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
                     <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
@@ -132,6 +219,131 @@
             }
         });
     }
+
+    // ============================================
+    // VISUALIZATION CONTROLS
+    // ============================================
+    
+    const algorithmType = "{{ challenge.algorithm_type }}";
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedControl = document.getElementById('speedControl');
+    const speedIndicator = document.getElementById('speedIndicator');
+    let visualizationStatePoller = null;
+
+    function getVisualizationState() {
+        if (!window.VisualizationEngine || !window.VisualizationEngine.getState) {
+            return { isRunning: false, isPaused: false };
+        }
+        return window.VisualizationEngine.getState();
+    }
+
+    function syncVisualizationButtons() {
+        const state = getVisualizationState();
+        if (startBtn) {
+            startBtn.disabled = state.isRunning;
+        }
+        if (pauseBtn) {
+            pauseBtn.disabled = !state.isRunning;
+            pauseBtn.innerHTML = state.isPaused
+                ? '<i class="bi bi-play-fill"></i> Resume'
+                : '<i class="bi bi-pause-fill"></i> Pause';
+        }
+    }
+
+    function stopVisualizationStatePolling() {
+        if (visualizationStatePoller) {
+            clearInterval(visualizationStatePoller);
+            visualizationStatePoller = null;
+        }
+    }
+
+    function startVisualizationStatePolling() {
+        stopVisualizationStatePolling();
+        visualizationStatePoller = setInterval(() => {
+            syncVisualizationButtons();
+            if (!getVisualizationState().isRunning) {
+                stopVisualizationStatePolling();
+            }
+        }, 150);
+    }
+
+    function updateSpeedIndicator(value) {
+        if (!speedIndicator) return;
+        if (value <= 300) {
+            speedIndicator.textContent = 'Slow';
+        } else if (value <= 600) {
+            speedIndicator.textContent = 'Normal';
+        } else {
+            speedIndicator.textContent = 'Fast';
+        }
+    }
+
+    if (startBtn) {
+        startBtn.addEventListener('click', function () {
+            if (!window.VisualizationEngine) {
+                return;
+            }
+            window.VisualizationEngine.start(algorithmType);
+            syncVisualizationButtons();
+            startVisualizationStatePolling();
+        });
+    }
+
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', function () {
+            if (window.VisualizationEngine) {
+                window.VisualizationEngine.pause();
+                syncVisualizationButtons();
+            }
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            if (window.VisualizationEngine) {
+                window.VisualizationEngine.reset();
+            }
+            stopVisualizationStatePolling();
+            syncVisualizationButtons();
+        });
+    }
+
+    if (speedControl) {
+        speedControl.addEventListener('input', function () {
+            const speed = parseInt(this.value, 10);
+            if (window.VisualizationEngine) {
+                window.VisualizationEngine.setSpeed(speed);
+            }
+            updateSpeedIndicator(speed);
+        });
+    }
+    if (speedControl && window.VisualizationEngine) {
+        const initialSpeed = parseInt(speedControl.value, 10);
+        window.VisualizationEngine.setSpeed(initialSpeed);
+        updateSpeedIndicator(initialSpeed);
+    }
+    syncVisualizationButtons();
+    
+    // Auto-initialize visualization on page load (for graph viz only)
+    document.addEventListener('DOMContentLoaded', function() {
+        // Only show initial message for graph visualizations
+        if (visualizationType === 'graph') {
+            const vizOutput = document.getElementById('visualizationOutput');
+            if (vizOutput && algorithmType) {
+                vizOutput.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;">
+                        <i class="bi bi-play-circle" style="font-size:4rem;color:var(--aq-primary);margin-bottom:1rem;"></i>
+                        <h3 style="color:var(--aq-text);margin-bottom:0.5rem;">Interactive Algorithm Visualization</h3>
+                        <p style="color:var(--aq-text-secondary);max-width:500px;">
+                            Click <strong>Start</strong> to see the <strong>${algorithmType.replace(/_/g, ' ').toUpperCase()}</strong> algorithm in action!
+                            Watch step-by-step animations and understand how it works visually.
+                        </p>
+                    </div>
+                `;
+            }
+        }
+    });
 </script>
 {% endblock %}
-

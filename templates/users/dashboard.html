@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block content %}
 <div class="fade-in-up">
@@ -105,7 +105,7 @@
                     {% if profile.badges %}
                         <div class="d-flex flex-wrap gap-2">
                             {% for badge in profile.badges %}
-                                <span class="badge badge-level" tabindex="0">{{ badge }}</span>
+                                <span class="badge badge-level">{{ badge }}</span>
                             {% endfor %}
                         </div>
                     {% else %}
@@ -143,7 +143,7 @@
                         {% for challenge in recommendations %}
                             <div class="col-md-6">
                                 <a href="{% url 'challenge-detail' challenge.slug %}" class="text-decoration-none d-block h-100">
-                                    <div class="recommendation-card" tabindex="0">
+                                    <div class="recommendation-card">
                                         <h3 class="h6 mb-1">{{ challenge.title }}</h3>
                                         <small class="text-muted">
                                             <span class="badge badge-primary me-1" style="font-size: 0.7rem;">{{ challenge.get_difficulty_display }}</span>
@@ -168,7 +168,7 @@
                     <h2 class="h5 mb-3"><i class="bi bi-clock-history me-2" style="color: var(--aq-warning);"></i>Recent Attempts</h2>
                     <ul class="list-group list-group-flush">
                         {% for attempt in recent_attempts %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center" tabindex="0">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-check2-circle me-2" style="color: var(--aq-accent);"></i>{{ attempt.challenge.title }}</span>
                                 <span class="badge badge-xp">{{ attempt.score }} pts</span>
                             </li>
@@ -203,4 +203,5 @@
     </div>
 </div>
 {% endblock %}
+
 

@@ -1,31 +1,31 @@
-const visualData = {
+﻿const visualData = {
     bfs: [
-        "▶ Start at node A",
-        "  → Visit neighbors: B, C",
-        "  → Visit D, E from B",
-        "  → Visit F from C",
-        "✓ Traversal complete: A → B → C → D → E → F"
+        "> Start at node A",
+        "  -> Visit neighbors: B, C",
+        "  -> Visit D, E from B",
+        "  -> Visit F from C",
+        "[OK] Traversal complete: A -> B -> C -> D -> E -> F"
     ],
     dfs: [
-        "▶ Start at node A",
-        "  → Go deep: A → B → D",
-        "  ← Backtrack to B, visit E",
-        "  ← Backtrack to A, visit C → F",
-        "✓ Traversal complete: A → B → D → E → C → F"
+        "> Start at node A",
+        "  -> Go deep: A -> B -> D",
+        "  <- Backtrack to B, visit E",
+        "  <- Backtrack to A, visit C -> F",
+        "[OK] Traversal complete: A -> B -> D -> E -> C -> F"
     ],
     astar: [
-        "▶ Initialize open set with Start",
-        "  → Select node with lowest f(n)",
-        "  → Expand neighbors and update costs",
-        "  → Prioritize heuristically closest path",
-        "✓ Goal reached with shortest estimated path"
+        "> Initialize open set with Start",
+        "  -> Select node with lowest f(n)",
+        "  -> Expand neighbors and update costs",
+        "  -> Prioritize heuristically closest path",
+        "[OK] Goal reached with shortest estimated path"
     ],
     minimax: [
-        "▶ Generate game tree depth 2",
-        "  → Evaluate terminal scores",
-        "  → Min layer chooses minimum scores",
-        "  → Max layer chooses maximum score",
-        "✓ Best move selected by root max player"
+        "> Generate game tree depth 2",
+        "  -> Evaluate terminal scores",
+        "  -> Min layer chooses minimum scores",
+        "  -> Max layer chooses maximum score",
+        "[OK] Best move selected by root max player"
     ]
 };
 

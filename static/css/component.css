@@ -1,5 +1,5 @@
 /* ============================================
-   COMPONENTS.CSS — AlgoQuest UI Components v2.0
+   COMPONENTS.CSS - AlgoQuest UI Components v2.0
    ============================================ */
 
 /* ============================================
@@ -84,7 +84,7 @@
     box-shadow: none;
 }
 
-.btn:focus {
+.btn:focus-visible {
     box-shadow: var(--aq-focus-ring);
     outline: none;
 }
@@ -398,7 +398,7 @@
     cursor: default;
 }
 
-.list-group-item:focus {
+.list-group-item:focus-visible {
     outline: 2px solid var(--aq-primary);
     outline-offset: -2px;
 }
