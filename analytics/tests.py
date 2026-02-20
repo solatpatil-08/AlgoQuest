@@ -48,6 +48,49 @@ class AnalyticsRecommendationTests(TestCase):
         self.assertIn(bfs_new, recommendations)
         self.assertEqual(recommendations[0].algorithm_type, Challenge.AlgorithmType.BFS)
 
+    def test_recommend_next_challenges_fallback_orders_difficulty_easy_medium_hard(self):
+        user = User.objects.create_user(username='fallback-order', password='StrongPass123!')
+
+        Challenge.objects.create(
+            title='Hard First Alphabetically',
+            challenge_type=Challenge.ChallengeType.QUIZ,
+            algorithm_type='',
+            difficulty=Challenge.Difficulty.HARD,
+            description='desc',
+            prompt='prompt',
+            expected_answer='a',
+        )
+        Challenge.objects.create(
+            title='Medium Second Alphabetically',
+            challenge_type=Challenge.ChallengeType.QUIZ,
+            algorithm_type='',
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='b',
+        )
+        Challenge.objects.create(
+            title='Easy Third Alphabetically',
+            challenge_type=Challenge.ChallengeType.QUIZ,
+            algorithm_type='',
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='c',
+        )
+
+        recommendations = list(recommend_next_challenges(user, limit=3))
+        returned_difficulties = [challenge.difficulty for challenge in recommendations]
+
+        self.assertEqual(
+            returned_difficulties,
+            [
+                Challenge.Difficulty.EASY,
+                Challenge.Difficulty.MEDIUM,
+                Challenge.Difficulty.HARD,
+            ],
+        )
+
 
 class AnalyticsViewsAndApiTests(TestCase):
     def setUp(self):

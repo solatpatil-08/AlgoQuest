@@ -85,7 +85,7 @@
     width: 4rem;
     height: 4rem;
     border-radius: var(--aq-radius-full);
-    background: linear-gradient(135deg, var(--aq-primary), #6366F1);
+    background: linear-gradient(135deg, var(--aq-primary), var(--aq-indigo-ink));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -94,6 +94,37 @@
     color: #FFFFFF;
     flex-shrink: 0;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* ---- Profile identity sections ---- */
+.coding-summary,
+.profile-section {
+    background: linear-gradient(180deg, var(--aq-primary-soft-bg), var(--aq-indigo-soft-bg));
+    border: 1px solid var(--aq-border);
+    border-radius: var(--aq-radius-md);
+}
+
+.meta-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    border: 1px solid var(--aq-border);
+    border-radius: var(--aq-radius-md);
+    padding: 0.5rem 0.75rem;
+    background: var(--aq-card);
+}
+
+.meta-chip-label {
+    font-size: 0.75rem;
+    color: var(--aq-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.meta-chip-value {
+    font-size: 0.875rem;
+    color: var(--aq-text);
+    font-weight: 600;
 }
 
 /* ---- Difficulty dots ---- */
@@ -224,12 +255,38 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(241, 245, 249, 0.8);
+    background: var(--aq-overlay-bg);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9999;
     backdrop-filter: blur(4px);
+}
+
+/* ---- Utility chips for inline-heavy templates ---- */
+.aq-soft-danger {
+    background: var(--aq-danger-soft-bg);
+    color: var(--aq-danger);
+}
+
+.aq-soft-warning {
+    background: var(--aq-warning-soft-bg);
+    color: var(--aq-warning-ink);
+}
+
+.aq-soft-success {
+    background: var(--aq-success-soft-bg);
+    color: var(--aq-accent);
+}
+
+.aq-soft-purple {
+    background: var(--aq-purple-soft-bg);
+    color: var(--aq-purple-ink);
+}
+
+.aq-soft-indigo {
+    background: var(--aq-indigo-soft-bg);
+    color: var(--aq-indigo-ink);
 }
 
 .loading-spinner {

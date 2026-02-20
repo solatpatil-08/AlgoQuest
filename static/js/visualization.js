@@ -14,6 +14,136 @@ const VisualizationState = {
     ctx: null
 };
 
+const ChallengeVisualizationContext = {
+    payload: {}
+};
+
+function setChallengeContext(payload) {
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        ChallengeVisualizationContext.payload = payload;
+        return;
+    }
+    ChallengeVisualizationContext.payload = {};
+}
+
+function getChallengePayload() {
+    return ChallengeVisualizationContext.payload || {};
+}
+
+function payloadArray(key, fallback) {
+    const payload = getChallengePayload();
+    const candidate = payload[key];
+    if (Array.isArray(candidate) && candidate.length > 0) {
+        return candidate.slice();
+    }
+    return fallback.slice();
+}
+
+function payloadNumber(key, fallback) {
+    const payload = getChallengePayload();
+    const value = Number(payload[key]);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function buildNodeLayout(nodeIds) {
+    const canvas = VisualizationState.canvas;
+    const count = nodeIds.length || 1;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.max(120, Math.min(canvas.width, canvas.height) / 2 - 70);
+    return nodeIds.map((id, idx) => {
+        const angle = (2 * Math.PI * idx) / count - Math.PI / 2;
+        return {
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle),
+            label: String(id),
+            id: id
+        };
+    });
+}
+
+function graphConfigFromPayload(defaultConfig) {
+    const payload = getChallengePayload();
+    const rawEdges = Array.isArray(payload.edges) ? payload.edges : [];
+    if (!rawEdges.length) {
+        return defaultConfig;
+    }
+    const discovered = new Set();
+    rawEdges.forEach((edge) => {
+        if (Array.isArray(edge) && edge.length >= 2) {
+            discovered.add(edge[0]);
+            discovered.add(edge[1]);
+        }
+    });
+    const rawNodes = Array.isArray(payload.nodes) && payload.nodes.length ? payload.nodes : Array.from(discovered.values());
+    const nodeIds = rawNodes.slice().sort((a, b) => Number(a) - Number(b));
+    const idToIndex = new Map(nodeIds.map((id, idx) => [id, idx]));
+    const edges = [];
+    rawEdges.forEach((edge) => {
+        if (!Array.isArray(edge) || edge.length < 2) {
+            return;
+        }
+        const from = idToIndex.get(edge[0]);
+        const to = idToIndex.get(edge[1]);
+        if (from !== undefined && to !== undefined) {
+            edges.push([from, to]);
+        }
+    });
+    if (!edges.length || !nodeIds.length) {
+        return defaultConfig;
+    }
+    const start = idToIndex.has(payload.start) ? idToIndex.get(payload.start) : 0;
+    return {
+        nodes: buildNodeLayout(nodeIds),
+        edges: edges,
+        start: start
+    };
+}
+
+function weightedGraphConfigFromPayload(defaultConfig) {
+    const payload = getChallengePayload();
+    const weightedEdges = Array.isArray(payload.weighted_edges) ? payload.weighted_edges : [];
+    if (!weightedEdges.length) {
+        return defaultConfig;
+    }
+    const nodeSet = new Set();
+    weightedEdges.forEach((edge) => {
+        if (Array.isArray(edge) && edge.length >= 3) {
+            nodeSet.add(edge[0]);
+            nodeSet.add(edge[1]);
+        }
+    });
+    const nodeIds = Array.from(nodeSet.values()).sort((a, b) => Number(a) - Number(b));
+    const idToIndex = new Map(nodeIds.map((id, idx) => [id, idx]));
+    const edges = [];
+    weightedEdges.forEach((edge) => {
+        if (!Array.isArray(edge) || edge.length < 3) {
+            return;
+        }
+        const from = idToIndex.get(edge[0]);
+        const to = idToIndex.get(edge[1]);
+        if (from === undefined || to === undefined) {
+            return;
+        }
+        edges.push({
+            from: from,
+            to: to,
+            weight: Number(edge[2])
+        });
+    });
+    if (!edges.length || !nodeIds.length) {
+        return defaultConfig;
+    }
+    const source = idToIndex.has(payload.source) ? idToIndex.get(payload.source) : 0;
+    const target = idToIndex.has(payload.target) ? idToIndex.get(payload.target) : nodeIds.length - 1;
+    return {
+        nodes: buildNodeLayout(nodeIds),
+        edges: edges,
+        source: source,
+        target: target
+    };
+}
+
 // Utility: Delay function for animations
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -50,8 +180,8 @@ function applyOverlayResponsiveStyles(panel) {
     const desktopMaxWidth = panel.dataset.desktopMaxWidth || "300px";
     const isMobile = window.innerWidth < 768;
     panel.style.cssText = isMobile
-        ? "position:absolute;bottom:10px;left:10px;right:10px;background:#FFF;padding:12px;border:2px solid #2563EB;border-radius:8px;max-width:calc(100% - 20px);"
-        : "position:absolute;top:10px;right:10px;background:#FFF;padding:15px;border:2px solid #2563EB;border-radius:8px;max-width:" + desktopMaxWidth + ";";
+        ? "position:absolute;bottom:10px;left:10px;right:10px;background:var(--aq-viz-box-bg);padding:12px;border:2px solid var(--aq-primary);border-radius:8px;max-width:calc(100% - 20px);"
+        : "position:absolute;top:10px;right:10px;background:var(--aq-viz-box-bg);padding:15px;border:2px solid var(--aq-primary);border-radius:8px;max-width:" + desktopMaxWidth + ";";
 }
 
 function handleCanvasResize() {
@@ -88,7 +218,7 @@ function initCanvas(containerId = 'visualizationOutput') {
     
     canvas.style.border = '2px solid var(--aq-border)';
     canvas.style.borderRadius = 'var(--aq-radius-md)';
-    canvas.style.background = '#FFFFFF';
+    canvas.style.background = 'var(--aq-viz-box-bg)';
     container.appendChild(canvas);
     
     VisualizationState.canvas = canvas;
@@ -389,7 +519,7 @@ function drawBinaryTree(root, highlightNode = null) {
 
 async function runBubbleSort() {
     initCanvas();
-    const arr = [64, 34, 25, 12, 22, 11, 90, 88, 45, 50];
+    const arr = payloadArray('data', [64, 34, 25, 12, 22, 11, 90, 88, 45, 50]);
     
     VisualizationState.isRunning = true;
     
@@ -417,7 +547,7 @@ async function runBubbleSort() {
 
 async function runSelectionSort() {
     initCanvas();
-    const arr = [64, 25, 12, 22, 11, 90, 45, 50, 34, 88];
+    const arr = payloadArray('data', [64, 25, 12, 22, 11, 90, 45, 50, 34, 88]);
     
     VisualizationState.isRunning = true;
     
@@ -449,7 +579,7 @@ async function runSelectionSort() {
 
 async function runInsertionSort() {
     initCanvas();
-    const arr = [12, 11, 13, 5, 6, 7, 45, 23, 34, 67];
+    const arr = payloadArray('data', [12, 11, 13, 5, 6, 7, 45, 23, 34, 67]);
     
     VisualizationState.isRunning = true;
     
@@ -479,7 +609,7 @@ async function runInsertionSort() {
 
 async function runMergeSort() {
     initCanvas();
-    const arr = [38, 27, 43, 3, 9, 82, 10, 45, 23, 67];
+    const arr = payloadArray('data', [38, 27, 43, 3, 9, 82, 10, 45, 23, 67]);
     
     VisualizationState.isRunning = true;
     
@@ -535,7 +665,7 @@ async function runMergeSort() {
 
 async function runQuickSort() {
     initCanvas();
-    const arr = [10, 80, 30, 90, 40, 50, 70, 20, 60, 15];
+    const arr = payloadArray('data', [10, 80, 30, 90, 40, 50, 70, 20, 60, 15]);
     
     VisualizationState.isRunning = true;
     
@@ -580,7 +710,7 @@ async function runQuickSort() {
 
 async function runHeapSort() {
     initCanvas();
-    const arr = [12, 11, 13, 5, 6, 7, 45, 23, 34, 67];
+    const arr = payloadArray('data', [12, 11, 13, 5, 6, 7, 45, 23, 34, 67]);
     
     VisualizationState.isRunning = true;
     
@@ -638,8 +768,9 @@ async function runHeapSort() {
 
 async function runLinearSearch() {
     initCanvas();
-    const arr = [10, 23, 45, 70, 11, 15, 36, 48, 92, 81];
-    const target = 36;
+    const arr = payloadArray('data', [10, 23, 45, 70, 11, 15, 36, 48, 92, 81]);
+    const defaultTarget = arr.length ? arr[Math.floor(arr.length / 2)] : 36;
+    const target = payloadNumber('target', defaultTarget);
     
     clearCanvas();
     drawArray(arr);
@@ -686,8 +817,10 @@ async function runLinearSearch() {
 
 async function runBinarySearch() {
     initCanvas();
-    const arr = [11, 15, 23, 36, 45, 48, 70, 81, 92, 100];
-    const target = 48;
+    const baseArr = payloadArray('data', [11, 15, 23, 36, 45, 48, 70, 81, 92, 100]);
+    const arr = baseArr.slice().sort((a, b) => a - b);
+    const defaultTarget = arr.length ? arr[Math.floor(arr.length / 2)] : 48;
+    const target = payloadNumber('target', defaultTarget);
     
     clearCanvas();
     drawArray(arr);
@@ -749,9 +882,7 @@ async function runBinarySearch() {
 
 async function runBFS() {
     initCanvas();
-    
-    // Create sample graph
-    const nodes = [
+    const fallbackNodes = [
         { x: 200, y: 100, label: '0' },
         { x: 100, y: 200, label: '1' },
         { x: 300, y: 200, label: '2' },
@@ -759,14 +890,31 @@ async function runBFS() {
         { x: 300, y: 350, label: '4' },
         { x: 500, y: 250, label: '5' }
     ];
-    
-    const edges = [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]];
-    const adjacencyList = { 0: [1, 2], 1: [0, 3], 2: [0, 4, 5], 3: [1], 4: [2], 5: [2] };
+    const fallbackConfig = {
+        nodes: fallbackNodes,
+        edges: [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]],
+        start: 0
+    };
+    const config = graphConfigFromPayload(fallbackConfig);
+    const nodes = config.nodes;
+    const edges = config.edges;
+    const startNode = config.start;
+    const adjacencyList = {};
+    for (let i = 0; i < nodes.length; i++) {
+        adjacencyList[i] = [];
+    }
+    edges.forEach(([from, to]) => {
+        adjacencyList[from].push(to);
+        adjacencyList[to].push(from);
+    });
+    for (const key of Object.keys(adjacencyList)) {
+        adjacencyList[key].sort((a, b) => Number(nodes[a].label) - Number(nodes[b].label));
+    }
     
     VisualizationState.isRunning = true;
     
     const visited = [];
-    const queue = [0];
+    const queue = [startNode];
     
     // Draw initial state
     drawGraph(nodes, edges, visited, null);
@@ -777,16 +925,17 @@ async function runBFS() {
     queueCanvas.dataset.vizOverlay = 'true';
     queueCanvas.dataset.desktopMaxWidth = '300px';
     applyOverlayResponsiveStyles(queueCanvas);
-    queueCanvas.innerHTML = '<strong style="color:#2563EB;font-size:0.875rem;">BFS Queue (FIFO)</strong><div id="queueViz" style="margin-top:10px;font-size:0.875rem;"></div>';
+    queueCanvas.innerHTML = '<strong style="color:var(--aq-primary);font-size:0.875rem;">BFS Queue (FIFO)</strong><div id="queueViz" style="margin-top:10px;font-size:0.875rem;"></div>';
     canvas.parentElement.appendChild(queueCanvas);
     
     function updateQueueViz() {
         const queueViz = document.getElementById('queueViz');
         if (queueViz) {
             queueViz.innerHTML = queue.map((node, idx) => {
-                const color = idx === 0 ? '#10B981' : '#E0E7FF';
-                return `<span style="display:inline-block;padding:6px 10px;margin:2px;background:${color};border:2px solid #2563EB;border-radius:4px;font-weight:bold;font-size:0.8125rem;">${node}</span>`;
-            }).join(' -> ') || '<span style="color:#64748B;">Empty</span>';
+                const color = idx === 0 ? 'var(--aq-accent)' : 'var(--aq-primary-light)';
+                const textColor = idx === 0 ? 'var(--aq-viz-box-bg)' : 'var(--aq-viz-box-text)';
+                return `<span style="display:inline-block;padding:6px 10px;margin:2px;background:${color};color:${textColor};border:2px solid var(--aq-primary);border-radius:4px;font-weight:bold;font-size:0.8125rem;">${node}</span>`;
+            }).join(' -> ') || '<span style="color:var(--aq-viz-box-muted);">Empty</span>';
         }
     }
     
@@ -822,9 +971,7 @@ async function runBFS() {
 
 async function runDFS() {
     initCanvas();
-    
-    // Create sample graph
-    const nodes = [
+    const fallbackNodes = [
         { x: 200, y: 100, label: '0' },
         { x: 100, y: 200, label: '1' },
         { x: 300, y: 200, label: '2' },
@@ -832,14 +979,31 @@ async function runDFS() {
         { x: 300, y: 350, label: '4' },
         { x: 500, y: 250, label: '5' }
     ];
-    
-    const edges = [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]];
-    const adjacencyList = { 0: [1, 2], 1: [0, 3], 2: [0, 4, 5], 3: [1], 4: [2], 5: [2] };
+    const fallbackConfig = {
+        nodes: fallbackNodes,
+        edges: [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]],
+        start: 0
+    };
+    const config = graphConfigFromPayload(fallbackConfig);
+    const nodes = config.nodes;
+    const edges = config.edges;
+    const startNode = config.start;
+    const adjacencyList = {};
+    for (let i = 0; i < nodes.length; i++) {
+        adjacencyList[i] = [];
+    }
+    edges.forEach(([from, to]) => {
+        adjacencyList[from].push(to);
+        adjacencyList[to].push(from);
+    });
+    for (const key of Object.keys(adjacencyList)) {
+        adjacencyList[key].sort((a, b) => Number(nodes[a].label) - Number(nodes[b].label));
+    }
     
     VisualizationState.isRunning = true;
     
     const visited = [];
-    const stack = [0];
+    const stack = [startNode];
     
     // Draw initial state
     drawGraph(nodes, edges, visited, null);
@@ -850,19 +1014,20 @@ async function runDFS() {
     stackCanvas.dataset.vizOverlay = 'true';
     stackCanvas.dataset.desktopMaxWidth = '220px';
     applyOverlayResponsiveStyles(stackCanvas);
-    stackCanvas.innerHTML = '<strong style="color:#2563EB;font-size:0.875rem;">DFS Stack (LIFO)</strong><div id="stackViz" style="margin-top:10px;font-size:0.875rem;"></div>';
+    stackCanvas.innerHTML = '<strong style="color:var(--aq-primary);font-size:0.875rem;">DFS Stack (LIFO)</strong><div id="stackViz" style="margin-top:10px;font-size:0.875rem;"></div>';
     canvas.parentElement.appendChild(stackCanvas);
     
     function updateStackViz() {
         const stackViz = document.getElementById('stackViz');
         if (stackViz) {
             stackViz.innerHTML = stack.slice().reverse().map((node, idx) => {
-                const color = idx === 0 ? '#F59E0B' : '#E0E7FF';
-                return `<div style="padding:6px 10px;margin:2px;background:${color};border:2px solid #2563EB;border-radius:4px;font-weight:bold;text-align:center;font-size:0.8125rem;">${node}</div>`;
-            }).join('') || '<span style="color:#64748B;">Empty</span>';
+                const color = idx === 0 ? 'var(--aq-warning)' : 'var(--aq-primary-light)';
+                const textColor = idx === 0 ? 'var(--aq-viz-box-bg)' : 'var(--aq-viz-box-text)';
+                return `<div style="padding:6px 10px;margin:2px;background:${color};color:${textColor};border:2px solid var(--aq-primary);border-radius:4px;font-weight:bold;text-align:center;font-size:0.8125rem;">${node}</div>`;
+            }).join('') || '<span style="color:var(--aq-viz-box-muted);">Empty</span>';
             
             if (stack.length > 0) {
-                stackViz.innerHTML += '<div style="color:#EF4444;font-weight:bold;margin-top:5px;text-align:center;font-size:0.75rem;">^ TOP</div>';
+                stackViz.innerHTML += '<div style="color:var(--aq-danger);font-weight:bold;margin-top:5px;text-align:center;font-size:0.75rem;">^ TOP</div>';
             }
         }
     }
@@ -1061,29 +1226,36 @@ async function runBSTDemo() {
 
 async function runDijkstra() {
     initCanvas();
-    
-    const nodes = [
-        { x: 100, y: 250, label: 'A' },
-        { x: 250, y: 150, label: 'B' },
-        { x: 250, y: 350, label: 'C' },
-        { x: 400, y: 150, label: 'D' },
-        { x: 400, y: 350, label: 'E' },
-        { x: 550, y: 250, label: 'F' }
-    ];
-    
-    const edges = [
-        { from: 0, to: 1, weight: 4 },
-        { from: 0, to: 2, weight: 2 },
-        { from: 1, to: 3, weight: 5 },
-        { from: 2, to: 4, weight: 3 },
-        { from: 3, to: 5, weight: 1 },
-        { from: 4, to: 5, weight: 6 }
-    ];
+    const fallbackConfig = {
+        nodes: [
+            { x: 100, y: 250, label: 'A' },
+            { x: 250, y: 150, label: 'B' },
+            { x: 250, y: 350, label: 'C' },
+            { x: 400, y: 150, label: 'D' },
+            { x: 400, y: 350, label: 'E' },
+            { x: 550, y: 250, label: 'F' }
+        ],
+        edges: [
+            { from: 0, to: 1, weight: 4 },
+            { from: 0, to: 2, weight: 2 },
+            { from: 1, to: 3, weight: 5 },
+            { from: 2, to: 4, weight: 3 },
+            { from: 3, to: 5, weight: 1 },
+            { from: 4, to: 5, weight: 6 }
+        ],
+        source: 0,
+        target: 5
+    };
+    const config = weightedGraphConfigFromPayload(fallbackConfig);
+    const nodes = config.nodes;
+    const edges = config.edges;
+    const source = config.source;
+    const target = config.target;
     
     VisualizationState.isRunning = true;
     
     const distances = Array(nodes.length).fill(Infinity);
-    distances[0] = 0;
+    distances[source] = 0;
     const visited = [];
     const previous = Array(nodes.length).fill(null);
     
@@ -1170,13 +1342,20 @@ async function runDijkstra() {
         
         await delay(VisualizationState.speed);
         
-        // Update distances to neighbors
+        // Update distances to neighbors (undirected for challenge payloads)
         edges.forEach(edge => {
             if (edge.from === minNode) {
                 const newDist = distances[minNode] + edge.weight;
                 if (newDist < distances[edge.to]) {
                     distances[edge.to] = newDist;
                     previous[edge.to] = minNode;
+                }
+            }
+            if (edge.to === minNode) {
+                const newDist = distances[minNode] + edge.weight;
+                if (newDist < distances[edge.from]) {
+                    distances[edge.from] = newDist;
+                    previous[edge.from] = minNode;
                 }
             }
         });
@@ -1189,7 +1368,8 @@ async function runDijkstra() {
     ctx.fillStyle = '#10B981';
     ctx.font = 'bold 18px Inter';
     ctx.textAlign = 'center';
-    ctx.fillText('Shortest paths found!', VisualizationState.canvas.width / 2, 30);
+    const targetDistance = distances[target] === Infinity ? 'INF' : distances[target];
+    ctx.fillText(`Shortest distance to ${nodes[target].label}: ${targetDistance}`, VisualizationState.canvas.width / 2, 30);
     
     VisualizationState.isRunning = false;
 }
@@ -1197,6 +1377,108 @@ async function runDijkstra() {
 // ============================================
 // CONTROL FUNCTIONS
 // ============================================
+
+function drawWeightedGraphSnapshot(nodes, edges, source = null) {
+    clearCanvas();
+    const ctx = VisualizationState.ctx;
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.lineWidth = 2;
+    ctx.font = '12px Inter';
+    ctx.fillStyle = '#64748B';
+
+    edges.forEach(edge => {
+        const from = nodes[edge.from];
+        const to = nodes[edge.to];
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2;
+        ctx.fillText(edge.weight, midX, midY);
+    });
+
+    nodes.forEach((node, index) => {
+        const isSource = source === index;
+        ctx.fillStyle = isSource ? '#F59E0B' : '#E0E7FF';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 30, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.label, node.x, node.y);
+    });
+}
+
+function renderPayloadPreview(algorithmType) {
+    clearVisualizationOverlays();
+    initCanvas();
+    const payload = getChallengePayload();
+    const ctx = VisualizationState.ctx;
+    const mode = payload.mode;
+
+    if (mode === 'graph') {
+        if (Array.isArray(payload.weighted_edges) && payload.weighted_edges.length) {
+            const config = weightedGraphConfigFromPayload(null);
+            if (config) {
+                drawWeightedGraphSnapshot(config.nodes, config.edges, config.source);
+                return;
+            }
+        }
+        if (Array.isArray(payload.edges) && payload.edges.length) {
+            const config = graphConfigFromPayload(null);
+            if (config) {
+                const visited = [];
+                const current = Number.isFinite(config.start) ? config.start : null;
+                drawGraph(config.nodes, config.edges, visited, current);
+                return;
+            }
+        }
+    }
+
+    if (mode === 'array') {
+        const arr = payloadArray('data', []);
+        const words = Array.isArray(payload.words) ? payload.words : [];
+        if (arr.length) {
+            drawArray(arr);
+            if (Object.prototype.hasOwnProperty.call(payload, 'target')) {
+                ctx.fillStyle = '#64748B';
+                ctx.font = 'bold 16px Inter';
+                ctx.textAlign = 'left';
+                ctx.fillText(`Target: ${payload.target}`, 50, 50);
+            }
+            return;
+        }
+        if (words.length) {
+            clearCanvas();
+            ctx.fillStyle = '#2563EB';
+            ctx.font = 'bold 18px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText('String Inputs', 50, 50);
+            ctx.fillStyle = '#0F172A';
+            ctx.font = '15px Inter';
+            words.slice(0, 6).forEach((word, idx) => {
+                ctx.fillText(`${idx + 1}. ${word}`, 50, 90 + idx * 28);
+            });
+            return;
+        }
+    }
+
+    clearCanvas();
+    ctx.fillStyle = '#64748B';
+    ctx.font = 'bold 18px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+        `Click Start to visualize ${String(algorithmType || '').replace(/_/g, ' ').toUpperCase()}`,
+        VisualizationState.canvas.width / 2,
+        VisualizationState.canvas.height / 2
+    );
+}
 
 function startVisualization(algorithmType) {
     VisualizationState.isRunning = false;
@@ -1226,13 +1508,8 @@ function startVisualization(algorithmType) {
     if (runFunction) {
         runFunction();
     } else {
-        console.warn(`No visualization available for: ${algorithmType}`);
-        initCanvas();
-        const ctx = VisualizationState.ctx;
-        ctx.fillStyle = '#64748B';
-        ctx.font = 'bold 18px Inter';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Visualization for "${algorithmType}" coming soon!`, VisualizationState.canvas.width / 2, VisualizationState.canvas.height / 2);
+        console.warn(`No animation mapped for: ${algorithmType}`);
+        renderPayloadPreview(algorithmType);
     }
 }
 
@@ -1244,7 +1521,7 @@ function resetVisualization() {
     VisualizationState.isRunning = false;
     VisualizationState.isPaused = false;
     clearVisualizationOverlays();
-    clearCanvas();
+    renderPayloadPreview('');
 }
 
 function setSpeed(speed) {
@@ -1269,5 +1546,7 @@ window.VisualizationEngine = {
     pause: pauseVisualization,
     reset: resetVisualization,
     setSpeed: setSpeed,
-    getState: getVisualizationState
+    getState: getVisualizationState,
+    setChallengeContext: setChallengeContext,
+    renderPreview: renderPayloadPreview
 };

@@ -4,6 +4,10 @@
    ============================================ */
 
 document.addEventListener('DOMContentLoaded', function () {
+    function getThemeColor(variableName, fallback) {
+        var value = getComputedStyle(document.documentElement).getPropertyValue(variableName);
+        return value ? value.trim() : fallback;
+    }
 
     /* ---- Password Toggle ---- */
     document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
@@ -96,10 +100,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (/[^A-Za-z0-9]/.test(val)) score++;
 
             var pct = Math.min((score / 5) * 100, 100);
-            var color = '#EF4444';
-            if (score >= 4) color = '#10B981';
-            else if (score >= 3) color = '#F59E0B';
-            else if (score >= 2) color = '#FB923C';
+            var color = getThemeColor('--aq-danger', '#EF4444');
+            if (score >= 4) color = getThemeColor('--aq-accent', '#10B981');
+            else if (score >= 3) color = getThemeColor('--aq-warning', '#F59E0B');
+            else if (score >= 2) color = getThemeColor('--aq-warning-ink', '#FB923C');
 
             fill.style.width = pct + '%';
             fill.style.background = color;

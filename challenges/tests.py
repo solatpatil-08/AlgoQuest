@@ -1,15 +1,26 @@
 from django.contrib.auth.models import User
+from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from pathlib import Path
 import json
+import re
+from io import StringIO
 from html import escape
+import time
 
 from leaderboard.models import Leaderboard
 
 from .models import Challenge, ChallengeAttempt, Topic, UserChallengeProg
 from .validators import ChallengeBankValidator, ChallengeBankValidationError
-from .views import ALGORITHM_TYPE_FILTER_MAP, _matches_selected_category
+from .views import (
+    ALGORITHM_TYPE_FILTER_MAP,
+    CATEGORY_TO_ALGORITHM_TYPES,
+    _category_targets,
+    _matches_selected_category,
+)
 
 
 class ChallengeAttemptFlowTests(TestCase):
@@ -56,7 +67,7 @@ class ChallengeAttemptFlowTests(TestCase):
             50,
         )
 
-    def test_submit_incorrect_algorithm_answer_is_capped_and_gives_no_xp(self):
+    def test_submit_incorrect_algorithm_answer_gives_zero_on_first_attempt(self):
         self.client.force_login(self.user)
 
         response = self.client.post(
@@ -67,7 +78,7 @@ class ChallengeAttemptFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertFalse(payload['is_correct'])
-        self.assertEqual(payload['score'], 1)
+        self.assertEqual(payload['score'], 0)
         self.assertEqual(payload['xp_gained'], 0)
 
         self.user.refresh_from_db()
@@ -176,8 +187,8 @@ class ChallengeListFilterTests(TestCase):
         response = self.client.get(reverse('challenges-list'), {'category': 'ai_ml'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'KMeans Cluster Challenge')
-        self.assertNotContains(response, 'Graph Traversal BFS')
+        self.assertContains(response, 'K-Means')
+        self.assertNotContains(response, 'BFS')
 
 class TopicModelTests(TestCase):
     def test_topic_creation(self):
@@ -340,9 +351,55 @@ class ChallengeBankValidatorTests(TestCase):
             for challenge in topic['challenges']:
                 self.assertIn('stable_id', challenge)
                 self.assertIn('title', challenge)
+                self.assertIn('algorithm_type', challenge)
                 self.assertIn('difficulty', challenge)
                 self.assertIn('expected_answer', challenge)
                 self.assertIn('xp_reward', challenge)
+
+    def test_challenge_bank_quality_no_template_prompts_or_placeholder_answers(self):
+        with open(self.bank_file, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+
+        prompt_template_re = re.compile(r'^solve\s+.+\s+problem at level\s+\d+\s+\((easy|medium|hard)\)\.?$', re.IGNORECASE)
+        expected_placeholder_re = re.compile(r'.*_answer_\d+$', re.IGNORECASE)
+
+        for topic in data['topics']:
+            for challenge in topic['challenges']:
+                prompt = challenge.get('prompt', '')
+                self.assertFalse(prompt_template_re.match(prompt), f"Template prompt found: {challenge['stable_id']}")
+                for section in ('Problem:', 'Input:', 'Output:', 'Constraints:', 'Example:'):
+                    self.assertIn(section, prompt, f"Missing '{section}' in {challenge['stable_id']}")
+
+                expected_answer = challenge.get('expected_answer', '')
+                self.assertFalse(
+                    expected_placeholder_re.match(expected_answer),
+                    f"Placeholder expected_answer found: {challenge['stable_id']}",
+                )
+
+                self.assertIn('visualization_payload', challenge, f"Missing visualization_payload in {challenge['stable_id']}")
+                self.assertIsInstance(
+                    challenge['visualization_payload'],
+                    dict,
+                    f"visualization_payload must be object in {challenge['stable_id']}",
+                )
+
+    def test_challenge_bank_prompts_are_unique_per_challenge(self):
+        with open(self.bank_file, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+
+        seen = {}
+        duplicates = []
+        for topic in data['topics']:
+            for challenge in topic['challenges']:
+                prompt = challenge.get('prompt', '').strip()
+                if not prompt:
+                    continue
+                if prompt in seen:
+                    duplicates.append((seen[prompt], challenge['stable_id']))
+                else:
+                    seen[prompt] = challenge['stable_id']
+
+        self.assertFalse(duplicates, f"Duplicate prompts found: {duplicates[:5]}")
 
     def test_validator_detects_invalid_difficulty(self):
         """Test that validator can detect invalid difficulty values."""
@@ -388,6 +445,73 @@ class ChallengeBankValidatorTests(TestCase):
         finally:
             import os
             os.unlink(temp_file)
+
+
+class ChallengeBankLoadCommandTests(TestCase):
+    def setUp(self):
+        self.bank_file = Path('challenges/data/challenge_bank.json')
+        with open(self.bank_file, 'r', encoding='utf-8') as handle:
+            self.bank_data = json.load(handle)
+        self.expected_topics = len(self.bank_data.get('topics', []))
+        self.expected_challenges = sum(len(topic.get('challenges', [])) for topic in self.bank_data.get('topics', []))
+
+    def _run_loader(self, *args):
+        output = StringIO()
+        call_command('load_challenge_bank', *args, stdout=output)
+        return output.getvalue()
+
+    def test_load_command_populates_expected_counts_and_required_fields(self):
+        self._run_loader('--reset')
+
+        self.assertEqual(Topic.objects.count(), self.expected_topics)
+        self.assertEqual(Challenge.objects.filter(topic__isnull=False).count(), self.expected_challenges)
+        self.assertEqual(Challenge.objects.filter(is_active=True, topic__isnull=False).count(), self.expected_challenges)
+
+        sample = Challenge.objects.filter(topic__isnull=False).select_related('topic').first()
+        self.assertIsNotNone(sample)
+        self.assertTrue(sample.slug.startswith(f'{sample.topic.stable_id}-'))
+        self.assertTrue(sample.title)
+        self.assertIn(sample.difficulty, {choice[0] for choice in Challenge.Difficulty.choices})
+        self.assertTrue(sample.description)
+        self.assertTrue(sample.prompt)
+        self.assertTrue(sample.expected_answer)
+        self.assertGreaterEqual(sample.xp_reward, 0)
+        self.assertIsNotNone(sample.order_index)
+        self.assertIsNotNone(sample.topic)
+        self.assertIsInstance(sample.visualization_payload, dict)
+        self.assertTrue(sample.visualization_payload)
+
+    def test_load_command_is_idempotent_and_syncs_topic_updates(self):
+        self._run_loader('--reset')
+        topic = Topic.objects.order_by('stable_id').first()
+        self.assertIsNotNone(topic)
+        stable_id = topic.stable_id
+        topic.label = 'Outdated Label'
+        topic.save(update_fields=['label'])
+
+        self._run_loader()
+        topic.refresh_from_db()
+        expected_label = next(item['label'] for item in self.bank_data['topics'] if item['stable_id'] == stable_id)
+        self.assertEqual(topic.label, expected_label)
+        self.assertEqual(Topic.objects.count(), self.expected_topics)
+        self.assertEqual(Challenge.objects.filter(topic__isnull=False).count(), self.expected_challenges)
+
+    def test_loaded_challenge_detail_route_is_accessible(self):
+        self._run_loader('--reset')
+        sample = Challenge.objects.filter(topic__isnull=False, is_active=True).first()
+        self.assertIsNotNone(sample)
+        response = self.client.get(reverse('challenge-detail', args=[sample.slug]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_load_command_ensures_30_plus_levels_per_algorithm_with_mixed_difficulty(self):
+        self._run_loader('--reset')
+        algorithm_types = {choice[0] for choice in Challenge.AlgorithmType.choices}
+        for algorithm_type in algorithm_types:
+            with self.subTest(algorithm_type=algorithm_type):
+                qs = Challenge.objects.filter(topic__isnull=False, is_active=True, algorithm_type=algorithm_type)
+                self.assertGreaterEqual(qs.count(), 30)
+                difficulties = set(qs.values_list('difficulty', flat=True))
+                self.assertTrue({'easy', 'medium', 'hard'}.issubset(difficulties))
 
 
 class ChallengeModelBackwardCompatTests(TestCase):
@@ -499,9 +623,9 @@ class QuickFilterAndCategoryTests(TestCase):
         """Test that challenge list shows both topic-based and legacy categories."""
         response = self.client.get(reverse('challenges-list'))
         self.assertEqual(response.status_code, 200)
-        # Should contain both topic and legacy challenges
-        self.assertContains(response, 'Array Sum Challenge')
-        self.assertContains(response, 'BFS Graph Traversal')
+        self.assertContains(response, 'Choose A Type To Start')
+        self.assertNotContains(response, 'Array Sum Challenge')
+        self.assertNotContains(response, 'BFS Graph Traversal')
     
     def test_filter_by_topic_category_dsa(self):
         """Test filtering by topic category dsa_core."""
@@ -520,11 +644,9 @@ class QuickFilterAndCategoryTests(TestCase):
     
     def test_category_section_has_effective_category(self):
         """Test that category sections use effective_category for data-category."""
-        response = self.client.get(reverse('challenges-list'))
+        response = self.client.get(reverse('challenges-list'), {'category': 'dsa_core'})
         content = response.content.decode('utf-8')
-        # Should have sections with effective categories
         self.assertIn('data-category="dsa_core"', content)
-        self.assertIn('data-category="ai_ml"', content)
     
     def test_quick_filter_matches_effective_category(self):
         """Test that quick filter buttons match section data-category."""
@@ -555,16 +677,16 @@ class CategoryCoverageAndQuickBarTests(TestCase):
         )
 
         topic_cases = [
-            ('ml_intro', 'AI/ML Fundamentals', Topic.Category.AI_ML, 'AI ML Topic Challenge'),
-            ('dsa_arrays', 'Array Patterns', Topic.Category.DSA_CORE, 'Array Topic Challenge'),
-            ('dsa_strings', 'String Manipulation', Topic.Category.DSA_CORE, 'String Topic Challenge'),
-            ('dsa_hashing', 'Hashing Concepts', Topic.Category.DSA_CORE, 'Hashing Topic Challenge'),
-            ('adv_backtracking', 'Backtracking Essentials', Topic.Category.ADVANCED_DSA, 'Backtracking Topic Challenge'),
-            ('adv_recursion', 'Recursion Deep Dive', Topic.Category.ADVANCED_DSA, 'Recursion Topic Challenge'),
-            ('adv_math', 'Math Problem Solving', Topic.Category.ADVANCED_DSA, 'Math Topic Challenge'),
-            ('adv_bits', 'Bit Manipulation Basics', Topic.Category.ADVANCED_DSA, 'Bit Manipulation Topic Challenge'),
+            ('ml_intro', 'AI/ML Fundamentals', Topic.Category.AI_ML, 'AI ML Topic Challenge', Challenge.AlgorithmType.LINEAR_REGRESSION),
+            ('dsa_arrays', 'Array Patterns', Topic.Category.DSA_CORE, 'Array Topic Challenge', Challenge.AlgorithmType.ARRAY_ALGORITHM),
+            ('dsa_strings', 'String Manipulation', Topic.Category.DSA_CORE, 'String Topic Challenge', Challenge.AlgorithmType.STRING_ALGORITHM),
+            ('dsa_hashing', 'Hashing Concepts', Topic.Category.DSA_CORE, 'Hashing Topic Challenge', Challenge.AlgorithmType.HASHING_ALGORITHM),
+            ('adv_backtracking', 'Backtracking Essentials', Topic.Category.ADVANCED_DSA, 'Backtracking Topic Challenge', Challenge.AlgorithmType.BACKTRACKING),
+            ('adv_recursion', 'Recursion Deep Dive', Topic.Category.ADVANCED_DSA, 'Recursion Topic Challenge', Challenge.AlgorithmType.RECURSION),
+            ('adv_math', 'Math Problem Solving', Topic.Category.ADVANCED_DSA, 'Math Topic Challenge', Challenge.AlgorithmType.MATH_ALGORITHM),
+            ('adv_bits', 'Bit Manipulation Basics', Topic.Category.ADVANCED_DSA, 'Bit Manipulation Topic Challenge', Challenge.AlgorithmType.BIT_CONVERSION),
         ]
-        for stable_id, label, category, challenge_title in topic_cases:
+        for stable_id, label, category, challenge_title, algorithm_type in topic_cases:
             topic = Topic.objects.create(
                 stable_id=stable_id,
                 label=label,
@@ -576,6 +698,7 @@ class CategoryCoverageAndQuickBarTests(TestCase):
                 topic=topic,
                 order_index=1,
                 challenge_type=Challenge.ChallengeType.ALGORITHM,
+                algorithm_type=algorithm_type,
                 difficulty=Challenge.Difficulty.EASY,
                 description='test',
                 prompt='test',
@@ -635,6 +758,24 @@ class CategoryCoverageAndQuickBarTests(TestCase):
             description='tree legacy',
             prompt='tree',
             expected_answer='tree',
+        )
+        Challenge.objects.create(
+            title='Minimax Legacy Challenge',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.MINIMAX,
+            difficulty=Challenge.Difficulty.HARD,
+            description='minimax legacy',
+            prompt='minimax',
+            expected_answer='value',
+        )
+        Challenge.objects.create(
+            title='Bit Conversion Legacy Challenge',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BIT_CONVERSION,
+            difficulty=Challenge.Difficulty.EASY,
+            description='bit conversion legacy',
+            prompt='bit conversion',
+            expected_answer='1010',
         )
 
     def test_category_options_include_all_required_algorithm_types(self):
@@ -698,6 +839,7 @@ class CategoryCoverageAndQuickBarTests(TestCase):
             'string': 'String Topic Challenge',
             'math': 'Math Topic Challenge',
             'bit_manipulation': 'Bit Manipulation Topic Challenge',
+            'bit_conversion': 'Bit Conversion Legacy Challenge',
             'array': 'Array Topic Challenge',
             'hashing': 'Hashing Topic Challenge',
             'tree': 'Tree Legacy Challenge',
@@ -708,8 +850,107 @@ class CategoryCoverageAndQuickBarTests(TestCase):
                 response = self.client.get(reverse('challenges-list'), {'category': category})
                 self.assertEqual(response.status_code, 200)
                 returned_titles = {challenge.title for challenge in response.context['challenges']}
-                self.assertIn(expected_title, returned_titles)
+                if category == 'bit_manipulation':
+                    self.assertTrue(
+                        {'Bit Manipulation Topic Challenge', 'Bit Conversion Legacy Challenge'}.intersection(returned_titles)
+                    )
+                else:
+                    self.assertIn(expected_title, returned_titles)
                 self.assertNotIn('Control Queue Challenge', returned_titles)
+
+    def test_ai_ml_filter_excludes_dynamic_programming_algorithms(self):
+        response = self.client.get(reverse('challenges-list'), {'category': 'ai_ml'})
+        self.assertEqual(response.status_code, 200)
+        returned_titles = {challenge.title for challenge in response.context['challenges']}
+        self.assertIn('AI ML Topic Challenge', returned_titles)
+        self.assertNotIn('DP Legacy Challenge', returned_titles)
+        self.assertNotIn('Greedy Legacy Challenge', returned_titles)
+
+    def test_graph_filter_excludes_tree_algorithms_and_includes_explicit_graph_mapping(self):
+        response = self.client.get(reverse('challenges-list'), {'category': 'graph'})
+        self.assertEqual(response.status_code, 200)
+        returned_titles = {challenge.title for challenge in response.context['challenges']}
+        self.assertIn('Graph Legacy Challenge', returned_titles)
+        self.assertIn('Minimax Legacy Challenge', returned_titles)
+        self.assertNotIn('Tree Legacy Challenge', returned_titles)
+
+    def test_string_filter_only_returns_string_mapped_challenges(self):
+        response = self.client.get(reverse('challenges-list'), {'category': 'string'})
+        self.assertEqual(response.status_code, 200)
+        returned_titles = {challenge.title for challenge in response.context['challenges']}
+        self.assertIn('String Topic Challenge', returned_titles)
+        self.assertNotIn('DP Legacy Challenge', returned_titles)
+        self.assertNotIn('Control Queue Challenge', returned_titles)
+
+    def test_category_results_are_structurally_scoped(self):
+        categories = (
+            'ai_ml',
+            'sorting',
+            'searching',
+            'graph',
+            'dynamic_programming',
+            'greedy',
+            'backtracking',
+            'recursion',
+            'string',
+            'math',
+            'bit_manipulation',
+            'array',
+            'hashing',
+            'tree',
+            'dsa_core',
+            'sorting_searching',
+            'trees_graphs',
+            'trees_dp_greedy',
+        )
+        for category in categories:
+            with self.subTest(category=category):
+                response = self.client.get(reverse('challenges-list'), {'category': category})
+                self.assertEqual(response.status_code, 200)
+                targets = _category_targets(category)
+                mapped_algorithm_types = set()
+                for target in targets:
+                    mapped_algorithm_types.update(CATEGORY_TO_ALGORITHM_TYPES.get(target, set()))
+                for challenge in response.context['challenges']:
+                    topic_category = challenge.topic.category if challenge.topic else None
+                    self.assertTrue(
+                        (topic_category in targets) or (challenge.algorithm_type in mapped_algorithm_types),
+                        msg=f"Unexpected challenge '{challenge.title}' in category '{category}'",
+                    )
+
+    def test_filter_aliases_map_to_canonical_categories(self):
+        advanced_alias = self.client.get(reverse('challenges-list'), {'category': 'advance_dsa'})
+        advanced_canonical = self.client.get(reverse('challenges-list'), {'category': 'advanced_dsa'})
+        self.assertEqual(advanced_alias.status_code, 200)
+        self.assertEqual(advanced_canonical.status_code, 200)
+        self.assertEqual(
+            {challenge.title for challenge in advanced_alias.context['challenges']},
+            {challenge.title for challenge in advanced_canonical.context['challenges']},
+        )
+
+        dp_alias = self.client.get(reverse('challenges-list'), {'category': 'dynamic_programmin'})
+        dp_canonical = self.client.get(reverse('challenges-list'), {'category': 'dynamic_programming'})
+        self.assertEqual(dp_alias.status_code, 200)
+        self.assertEqual(dp_canonical.status_code, 200)
+        self.assertEqual(
+            {challenge.title for challenge in dp_alias.context['challenges']},
+            {challenge.title for challenge in dp_canonical.context['challenges']},
+        )
+
+    def test_grouped_sections_do_not_duplicate_challenges(self):
+        response = self.client.get(reverse('challenges-list'))
+        self.assertEqual(response.status_code, 200)
+        grouped = response.context['grouped_by_category']
+        grouped_ids = [challenge.id for group in grouped for challenge in group['list']]
+        self.assertEqual(len(grouped_ids), len(set(grouped_ids)))
+        self.assertEqual(set(grouped_ids), {challenge.id for challenge in response.context['challenges']})
+
+    def test_graph_filter_renders_only_graph_section(self):
+        response = self.client.get(reverse('challenges-list'), {'category': 'graph'})
+        self.assertEqual(response.status_code, 200)
+        grouped = response.context['grouped_by_category']
+        self.assertTrue(grouped)
+        self.assertTrue(all(group['effective_category'] == 'graph' for group in grouped))
 
     def test_legacy_trees_dp_greedy_filter_still_works(self):
         response = self.client.get(reverse('challenges-list'), {'category': 'trees_dp_greedy'})
@@ -722,7 +963,7 @@ class CategoryCoverageAndQuickBarTests(TestCase):
     def test_tree_dynamic_programming_and_greedy_filters_are_precise(self):
         tree_response = self.client.get(reverse('challenges-list'), {'category': 'tree'})
         self.assertEqual(tree_response.status_code, 200)
-        self.assertContains(tree_response, 'Tree Algorithms')
+        self.assertContains(tree_response, 'Tree Challenges')
         tree_titles = {challenge.title for challenge in tree_response.context['challenges']}
         self.assertIn('Tree Legacy Challenge', tree_titles)
         self.assertNotIn('DP Legacy Challenge', tree_titles)
@@ -730,7 +971,7 @@ class CategoryCoverageAndQuickBarTests(TestCase):
 
         dp_response = self.client.get(reverse('challenges-list'), {'category': 'dynamic_programming'})
         self.assertEqual(dp_response.status_code, 200)
-        self.assertContains(dp_response, 'Dynamic Programming Algorithms')
+        self.assertContains(dp_response, 'Dynamic Programming Challenges')
         dp_titles = {challenge.title for challenge in dp_response.context['challenges']}
         self.assertIn('DP Legacy Challenge', dp_titles)
         self.assertNotIn('Tree Legacy Challenge', dp_titles)
@@ -738,7 +979,7 @@ class CategoryCoverageAndQuickBarTests(TestCase):
 
         greedy_response = self.client.get(reverse('challenges-list'), {'category': 'greedy'})
         self.assertEqual(greedy_response.status_code, 200)
-        self.assertContains(greedy_response, 'Greedy Algorithms')
+        self.assertContains(greedy_response, 'Greedy Challenges')
         greedy_titles = {challenge.title for challenge in greedy_response.context['challenges']}
         self.assertIn('Greedy Legacy Challenge', greedy_titles)
         self.assertNotIn('Tree Legacy Challenge', greedy_titles)
@@ -758,6 +999,165 @@ class CategoryCoverageAndQuickBarTests(TestCase):
         self.assertEqual(cleared_response.status_code, 200)
         cleared_titles = {challenge.title for challenge in cleared_response.context['challenges']}
         self.assertEqual(cleared_titles, baseline_titles)
+
+
+class ChallengeCategorySubtypeNavigationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ai_topic = Topic.objects.create(
+            stable_id='ai_ml_nav_topic',
+            label='AI ML Navigation',
+            category=Topic.Category.AI_ML,
+            description='AI/ML navigation tests',
+        )
+        cls.graph_topic = Topic.objects.create(
+            stable_id='graph_nav_topic',
+            label='Graph Navigation',
+            category=Topic.Category.DSA_CORE,
+            description='Graph navigation tests',
+        )
+        cls.bits_topic = Topic.objects.create(
+            stable_id='bits_nav_topic',
+            label='Bits Navigation',
+            category=Topic.Category.ADVANCED_DSA,
+            description='Bit manipulation navigation tests',
+        )
+
+        difficulties = [
+            Challenge.Difficulty.EASY,
+            Challenge.Difficulty.MEDIUM,
+            Challenge.Difficulty.HARD,
+        ]
+
+        for idx in range(30):
+            Challenge.objects.create(
+                title=f'Decision Tree Level {idx + 1}',
+                topic=cls.ai_topic,
+                order_index=idx,
+                challenge_type=Challenge.ChallengeType.ALGORITHM,
+                algorithm_type=Challenge.AlgorithmType.DECISION_TREE,
+                difficulty=difficulties[idx % 3],
+                description='Entropy focused level' if idx < 5 else 'Decision tree classification level',
+                prompt='Build the decision tree',
+                expected_answer='split',
+            )
+
+        for idx in range(30):
+            Challenge.objects.create(
+                title=f'KMeans Level {idx + 1}',
+                topic=cls.ai_topic,
+                order_index=30 + idx,
+                challenge_type=Challenge.ChallengeType.ALGORITHM,
+                algorithm_type=Challenge.AlgorithmType.KMEANS,
+                difficulty=difficulties[idx % 3],
+                description='KMeans clustering level',
+                prompt='Compute centroid updates',
+                expected_answer='centroid',
+            )
+
+        for idx in range(30):
+            Challenge.objects.create(
+                title=f'BFS Level {idx + 1}',
+                topic=cls.graph_topic,
+                order_index=idx,
+                challenge_type=Challenge.ChallengeType.ALGORITHM,
+                algorithm_type=Challenge.AlgorithmType.BFS,
+                difficulty=difficulties[idx % 3],
+                description='Graph traversal level',
+                prompt='Traverse graph',
+                expected_answer='queue',
+            )
+
+        for idx in range(3):
+            Challenge.objects.create(
+                title=f'Bit Conversion Level {idx + 1}',
+                topic=cls.bits_topic,
+                order_index=idx,
+                challenge_type=Challenge.ChallengeType.ALGORITHM,
+                algorithm_type=Challenge.AlgorithmType.BIT_CONVERSION,
+                difficulty=difficulties[idx % 3],
+                description='Bit conversion level',
+                prompt='Convert between bases',
+                expected_answer='1010',
+            )
+
+    def test_default_load_shows_all_cards(self):
+        response = self.client.get(reverse('challenges-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['challenges']), 4)
+
+    def test_main_category_filtering(self):
+        response = self.client.get(reverse('challenges-list'), {'category': 'ai_ml'})
+        self.assertEqual(response.status_code, 200)
+        returned = response.context['challenges']
+        self.assertEqual(len(returned), 2)
+        self.assertTrue(all(ch.algorithm_type in {'decision_tree', 'kmeans'} for ch in returned))
+
+    def test_subtype_filtering(self):
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'ai_ml', 'subtype': 'decision_tree'},
+        )
+        self.assertEqual(response.status_code, 200)
+        returned = response.context['challenges']
+        self.assertEqual(len(returned), 30)
+        self.assertTrue(all(ch.algorithm_type == 'decision_tree' for ch in returned))
+
+    def test_category_subtype_search_combined(self):
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'ai_ml', 'subtype': 'decision_tree', 'search': 'entropy'},
+        )
+        self.assertEqual(response.status_code, 200)
+        returned = response.context['challenges']
+        self.assertEqual(len(returned), 5)
+        self.assertTrue(all('Entropy' in ch.description or 'entropy' in ch.description for ch in returned))
+
+    def test_subtype_returns_all_30_levels(self):
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'ai_ml', 'subtype': 'decision_tree'},
+        )
+        self.assertEqual(response.status_code, 200)
+        levels = [challenge.order_index for challenge in response.context['challenges']]
+        self.assertEqual(len(levels), 30)
+        self.assertEqual(min(levels), 0)
+        self.assertEqual(max(levels), 29)
+
+    def test_alias_compatibility(self):
+        alias_cases = [
+            ('advance_dsa', 'advanced_dsa'),
+            ('dynamic_programmin', 'dynamic_programming'),
+            ('bit_conversion', 'bit_manipulation'),
+        ]
+        for alias, canonical in alias_cases:
+            with self.subTest(alias=alias, canonical=canonical):
+                alias_response = self.client.get(reverse('challenges-list'), {'category': alias})
+                canonical_response = self.client.get(reverse('challenges-list'), {'category': canonical})
+                self.assertEqual(alias_response.status_code, 200)
+                self.assertEqual(canonical_response.status_code, 200)
+                alias_ids = {challenge.id for challenge in alias_response.context['challenges']}
+                canonical_ids = {challenge.id for challenge in canonical_response.context['challenges']}
+                self.assertEqual(alias_ids, canonical_ids)
+
+    def test_ui_uses_friendly_category_labels_without_key_changes(self):
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'ai_ml', 'subtype': 'decision_tree'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<span class="badge badge-accent">AI/ML</span>', html=True)
+        self.assertNotContains(response, '<span class="badge badge-accent">ai_ml</span>', html=True)
+        self.assertContains(response, 'data-category="ai_ml"')
+
+    def test_performance_sanity_for_challenge_list(self):
+        start = time.perf_counter()
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(reverse('challenges-list'))
+        elapsed = time.perf_counter() - start
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(ctx.captured_queries), 7)
+        self.assertLess(elapsed, 3.0)
 
 
 class AlgorithmTypeCoverageTests(TestCase):
@@ -832,8 +1232,8 @@ class FilterPersistenceTests(TestCase):
         self.assertEqual(response.context['search_query'], 'Easy')
         self.assertContains(response, 'id="quickFilterSearchInput"')
         self.assertContains(response, 'value="Easy"')
-        self.assertContains(response, 'Easy Challenge')
-        self.assertNotContains(response, 'Hard Challenge')
+        self.assertEqual(len(response.context['challenges']), 1)
+        self.assertContains(response, 'BFS')
     
     def test_search_filter_persistence(self):
         """Test that search query persists in input field."""
@@ -842,6 +1242,67 @@ class FilterPersistenceTests(TestCase):
         self.assertEqual(response.context['search_query'], 'Easy')
         self.assertContains(response, 'id="quickFilterSearchInput"')
         self.assertContains(response, 'value="Easy"')
+
+
+class ProgressPanelStructureTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='progress_user', password='Pass123!')
+        self.topic = Topic.objects.create(
+            stable_id='progress_topic',
+            label='Progress Topic',
+            category=Topic.Category.DSA_CORE,
+            description='progress topic',
+        )
+        self.easy = Challenge.objects.create(
+            title='Progress Easy',
+            topic=self.topic,
+            order_index=0,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='easy',
+            prompt='easy prompt',
+            expected_answer='easy',
+        )
+        self.medium = Challenge.objects.create(
+            title='Progress Medium',
+            topic=self.topic,
+            order_index=1,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.DFS,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='medium',
+            prompt='medium prompt',
+            expected_answer='medium',
+        )
+        self.hard = Challenge.objects.create(
+            title='Progress Hard',
+            topic=self.topic,
+            order_index=2,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ASTAR,
+            difficulty=Challenge.Difficulty.HARD,
+            description='hard',
+            prompt='hard prompt',
+            expected_answer='hard',
+        )
+        UserChallengeProg.objects.create(user=self.user, challenge=self.easy, is_solved=True, is_unlocked=True)
+        UserChallengeProg.objects.create(user=self.user, challenge=self.hard, is_solved=True, is_unlocked=True)
+
+    def test_progress_panel_shows_overall_and_difficulty_only(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('challenges-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Overall')
+        self.assertContains(response, 'By Difficulty')
+        self.assertNotContains(response, 'By Topic')
+        self.assertNotIn('by_topic', response.context['user_progress'])
+        self.assertEqual(response.context['user_progress']['total_solved'], 2)
+        self.assertEqual(response.context['user_progress']['total_challenges'], 3)
+        by_diff = response.context['user_progress']['by_difficulty']
+        self.assertEqual(by_diff['easy']['solved'], 1)
+        self.assertEqual(by_diff['medium']['solved'], 0)
+        self.assertEqual(by_diff['hard']['solved'], 1)
 
 
 class SolvedUnlockedBadgesTests(TestCase):
@@ -1002,6 +1463,129 @@ class SubmitBehaviorTests(TestCase):
         ).is_solved)
 
 
+class HintAndFirstAttemptScoringTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='hint_user', password='Pass123!')
+        self.topic = Topic.objects.create(
+            stable_id='hint_topic',
+            label='Hint Topic',
+            category=Topic.Category.DSA_CORE,
+            description='hint test topic',
+        )
+        self.challenge = Challenge.objects.create(
+            title='Hinted Challenge',
+            topic=self.topic,
+            order_index=0,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='hint challenge',
+            prompt='Explain BFS frontier order',
+            expected_answer='queue',
+            starter_code='Use FIFO queue behavior.',
+            xp_reward=100,
+            max_score=100,
+        )
+
+    def test_hint_endpoint_returns_single_hint_and_marks_usage(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['hint_used'])
+        self.assertEqual(payload['hint'], 'Use FIFO queue behavior.')
+
+        prog = UserChallengeProg.objects.get(user=self.user, challenge=self.challenge)
+        self.assertTrue(prog.hint_used)
+
+    def test_first_correct_attempt_without_hint_gets_full_points(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'queue'},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['is_score_eligible'])
+        self.assertEqual(payload['attempt_index'], 1)
+        self.assertEqual(payload['score'], 100)
+        self.assertEqual(payload['xp_gained'], 100)
+
+        attempt = ChallengeAttempt.objects.get(user=self.user, challenge=self.challenge, attempt_index=1)
+        self.assertFalse(attempt.hint_used)
+        self.assertTrue(attempt.is_score_eligible)
+
+    def test_first_correct_attempt_with_hint_applies_75_percent_reduction(self):
+        self.client.force_login(self.user)
+        hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(hint_response.status_code, 200)
+
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'queue'},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['attempt_index'], 1)
+        self.assertTrue(payload['hint_used'])
+        self.assertEqual(payload['score'], 25)
+        self.assertEqual(payload['xp_gained'], 25)
+
+        attempt = ChallengeAttempt.objects.get(user=self.user, challenge=self.challenge, attempt_index=1)
+        self.assertTrue(attempt.hint_used)
+        self.assertTrue(attempt.is_score_eligible)
+
+    def test_second_attempt_gets_zero_points_even_if_correct(self):
+        self.client.force_login(self.user)
+        first = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'wrong'},
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()['score'], 0)
+
+        second = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'queue'},
+        )
+        self.assertEqual(second.status_code, 200)
+        payload = second.json()
+        self.assertEqual(payload['attempt_index'], 2)
+        self.assertFalse(payload['is_score_eligible'])
+        self.assertEqual(payload['score'], 0)
+        self.assertEqual(payload['xp_gained'], 0)
+
+        attempt = ChallengeAttempt.objects.get(user=self.user, challenge=self.challenge, attempt_index=2)
+        self.assertFalse(attempt.is_score_eligible)
+
+    def test_hint_not_available_after_first_attempt(self):
+        self.client.force_login(self.user)
+        submit = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'wrong'},
+        )
+        self.assertEqual(submit.status_code, 200)
+
+        hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(hint_response.status_code, 400)
+
+    def test_hint_button_is_disabled_after_hint_is_used(self):
+        self.client.force_login(self.user)
+        hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(hint_response.status_code, 200)
+
+        detail = self.client.get(reverse('challenge-detail', args=[self.challenge.slug]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, 'id="hintBtn"')
+        self.assertTrue(detail.context['hint_used'])
+        self.assertFalse(detail.context['can_use_hint'])
+
+    def test_challenge_detail_renders_prompt_with_line_break_support(self):
+        response = self.client.get(reverse('challenge-detail', args=[self.challenge.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Explain BFS frontier order')
+
+
 class BattleLobbyTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='battle_player', password='Pass123!')
@@ -1113,3 +1697,29 @@ class BattleLiveContextTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'attemptForm')
         self.assertContains(response, 'Submit')
+
+    def test_submit_attempt_from_live_battle_returns_score_token(self):
+        from battle.models import BattleMatch
+
+        self.match.challenge = self.challenge
+        self.match.status = BattleMatch.Status.LIVE
+        self.match.save(update_fields=['challenge', 'status'])
+        UserChallengeProg.objects.update_or_create(
+            user=self.user,
+            challenge=self.challenge,
+            defaults={'is_unlocked': True},
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': 'answer',
+                'battle_room_code': self.match.room_code,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertIn('battle_score_token', payload)

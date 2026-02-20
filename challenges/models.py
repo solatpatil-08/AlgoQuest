@@ -72,6 +72,13 @@ class Challenge(models.Model):
         DECISION_TREE = 'decision_tree', 'Decision Tree'
         NAIVE_BAYES = 'naive_bayes', 'Naive Bayes'
         NEURAL_NETWORK = 'neural_network', 'Neural Network'
+        BACKTRACKING = 'backtracking', 'Backtracking'
+        RECURSION = 'recursion', 'Recursion'
+        STRING_ALGORITHM = 'string_algorithm', 'String Algorithm'
+        MATH_ALGORITHM = 'math_algorithm', 'Math Algorithm'
+        BIT_CONVERSION = 'bit_conversion', 'Bit Conversion'
+        ARRAY_ALGORITHM = 'array_algorithm', 'Array Algorithm'
+        HASHING_ALGORITHM = 'hashing_algorithm', 'Hashing Algorithm'
 
     class Difficulty(models.TextChoices):
         EASY = 'easy', 'Easy'
@@ -127,6 +134,13 @@ class Challenge(models.Model):
         AlgorithmType.DECISION_TREE: 'ai_ml',
         AlgorithmType.NAIVE_BAYES: 'ai_ml',
         AlgorithmType.NEURAL_NETWORK: 'ai_ml',
+        AlgorithmType.BACKTRACKING: 'backtracking',
+        AlgorithmType.RECURSION: 'recursion',
+        AlgorithmType.STRING_ALGORITHM: 'string',
+        AlgorithmType.MATH_ALGORITHM: 'math',
+        AlgorithmType.BIT_CONVERSION: 'bit_manipulation',
+        AlgorithmType.ARRAY_ALGORITHM: 'array',
+        AlgorithmType.HASHING_ALGORITHM: 'hashing',
     }
 
     ALGORITHM_CATEGORY_LABELS = {
@@ -135,6 +149,13 @@ class Challenge(models.Model):
         'searching': 'Searching',
         'trees_dp_greedy': 'Trees/DP/Greedy',
         'ai_ml': 'AI/ML',
+        'backtracking': 'Backtracking',
+        'recursion': 'Recursion',
+        'string': 'String',
+        'math': 'Math',
+        'bit_manipulation': 'Bit Manipulation',
+        'array': 'Array',
+        'hashing': 'Hashing',
     }
 
     def save(self, *args, **kwargs):
@@ -170,6 +191,10 @@ class Challenge(models.Model):
 class ChallengeAttempt(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='challenge_attempts')
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='attempts')
+    attempt_index = models.PositiveIntegerField(default=1)
+    hint_used = models.BooleanField(default=False)
+    is_score_eligible = models.BooleanField(default=True)
+    battle_score_applied = models.BooleanField(default=False)
     score = models.PositiveIntegerField(default=0)
     is_correct = models.BooleanField(default=False)
     submitted_answer = models.TextField(blank=True)
@@ -189,6 +214,7 @@ class UserChallengeProg(models.Model):
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='user_progress')
     is_solved = models.BooleanField(default=False)
     is_unlocked = models.BooleanField(default=False)
+    hint_used = models.BooleanField(default=False)
     solved_at = models.DateTimeField(null=True, blank=True)
     best_score = models.PositiveIntegerField(default=0)
     attempt_count = models.PositiveIntegerField(default=0)
@@ -201,4 +227,3 @@ class UserChallengeProg(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.challenge.title} (solved={self.is_solved}, unlocked={self.is_unlocked})"
-

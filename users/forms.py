@@ -4,6 +4,8 @@ from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, Set
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 
+from .models import UserProfile
+
 
 class SignUpForm(UserCreationForm):
     email = forms.EmailField(required=True)
@@ -68,3 +70,72 @@ class UserSettingsForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ('email', 'first_name', 'last_name')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].widget.attrs.update({'class': 'form-control', 'placeholder': 'name@example.com'})
+        self.fields['first_name'].widget.attrs.update({'class': 'form-control', 'placeholder': 'First name'})
+        self.fields['last_name'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Last name'})
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '').strip().lower()
+        if not email:
+            return email
+
+        email_exists = (
+            User.objects.filter(email__iexact=email)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        )
+        if email_exists:
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
+
+class UserProfileForm(forms.ModelForm):
+    class Meta:
+        model = UserProfile
+        fields = (
+            'bio',
+            'coding_interests',
+            'preferred_language',
+            'experience_level',
+        )
+        widgets = {
+            'bio': forms.Textarea(
+                attrs={
+                    'class': 'form-control',
+                    'rows': 4,
+                    'maxlength': 300,
+                    'placeholder': 'Write a short coding bio (max 300 characters).',
+                }
+            ),
+            'coding_interests': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'e.g., Graphs, Dynamic Programming, Trees',
+                    'maxlength': 200,
+                }
+            ),
+            'preferred_language': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'e.g., Python, Java, C++',
+                    'maxlength': 40,
+                }
+            ),
+            'experience_level': forms.Select(
+                attrs={
+                    'class': 'form-control',
+                }
+            ),
+        }
+
+    def clean_bio(self):
+        return self.cleaned_data.get('bio', '').strip()
+
+    def clean_coding_interests(self):
+        return self.cleaned_data.get('coding_interests', '').strip()
+
+    def clean_preferred_language(self):
+        return self.cleaned_data.get('preferred_language', '').strip()

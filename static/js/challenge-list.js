@@ -4,32 +4,22 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    var filterForm = document.getElementById('filterForm');
-    var categorySelect = document.getElementById('categoryFilter');
     var filterButtons = controls.querySelectorAll('.category-filter-btn');
     var searchInput = document.getElementById('quickFilterSearchInput');
     var clearButton = document.getElementById('quickFilterClear');
-    var noMatch = document.getElementById('quickFilterNoMatch');
     var selectedCategory = controls.dataset.selectedCategory || 'all';
 
-    function normalizeCategory(value) {
+    function normalizeValue(value) {
         return value && value !== 'all' ? value : 'all';
     }
 
-    function visibleButtons() {
-        return Array.prototype.slice.call(filterButtons).filter(function (button) {
-            return !button.classList.contains('d-none');
-        });
+    function updateLocation(mutator) {
+        var url = new URL(window.location.href);
+        mutator(url.searchParams);
+        window.location.href = url.toString();
     }
 
-    function normalizeText(value) {
-        return (value || '')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim();
-    }
-
-    function setActiveButton(category) {
+    function setActiveCategoryButton(category) {
         filterButtons.forEach(function (button) {
             var buttonCategory = button.getAttribute('data-category');
             var isActive = category !== 'all' && buttonCategory === category;
@@ -39,67 +29,44 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function submitCategoryFilter(category) {
-        if (filterForm && categorySelect) {
-            categorySelect.value = category;
-            if (typeof filterForm.requestSubmit === 'function') {
-                filterForm.requestSubmit();
+        updateLocation(function (params) {
+            if (category === 'all') {
+                params.delete('category');
+                params.delete('subtype');
             } else {
-                filterForm.submit();
-            }
-            return;
-        }
-
-        var url = new URL(window.location.href);
-        if (category === 'all') {
-            url.searchParams.delete('category');
-        } else {
-            url.searchParams.set('category', category);
-        }
-        window.location.href = url.toString();
-    }
-
-    function filterQuickButtons(query) {
-        var normalizedQuery = normalizeText(query);
-        var hasVisible = false;
-
-        filterButtons.forEach(function (button) {
-            var label = normalizeText(button.textContent || '');
-            var matches = !normalizedQuery || label.indexOf(normalizedQuery) !== -1;
-            button.classList.toggle('d-none', !matches);
-            if (matches) {
-                hasVisible = true;
+                params.set('category', category);
+                params.delete('subtype');
             }
         });
+    }
 
-        if (noMatch) {
-            noMatch.classList.toggle('d-none', hasVisible);
-        }
+    function submitSearchFilter() {
+        var value = searchInput ? searchInput.value.trim() : '';
+        updateLocation(function (params) {
+            if (value) {
+                params.set('search', value);
+            } else {
+                params.delete('search');
+            }
+        });
     }
 
     filterButtons.forEach(function (button) {
         button.addEventListener('click', function () {
-            selectedCategory = normalizeCategory(button.getAttribute('data-category'));
-            setActiveButton(selectedCategory);
+            selectedCategory = normalizeValue(button.getAttribute('data-category'));
+            setActiveCategoryButton(selectedCategory);
             submitCategoryFilter(selectedCategory);
         });
     });
 
     if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            filterQuickButtons(searchInput.value);
-        });
-
         searchInput.addEventListener('keydown', function (event) {
             if (event.key !== 'Enter') {
                 return;
             }
 
             event.preventDefault();
-            var buttons = visibleButtons();
-            if (!buttons.length) {
-                return;
-            }
-            buttons[0].click();
+            submitSearchFilter();
         });
     }
 
@@ -108,17 +75,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (searchInput) {
                 searchInput.value = '';
             }
-            filterQuickButtons('');
-            selectedCategory = 'all';
-            setActiveButton(selectedCategory);
-            submitCategoryFilter('all');
+            submitSearchFilter();
         });
     }
 
-    selectedCategory = normalizeCategory(selectedCategory);
+    selectedCategory = normalizeValue(selectedCategory);
     if (!controls.querySelector('.category-filter-btn[data-category="' + selectedCategory + '"]')) {
         selectedCategory = 'all';
     }
-    setActiveButton(selectedCategory);
-    filterQuickButtons('');
+    setActiveCategoryButton(selectedCategory);
 });

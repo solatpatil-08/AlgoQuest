@@ -61,7 +61,7 @@
         <div class="col-6 col-lg-3">
             <div class="stat-card">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #F59E0B;">
+                    <div class="stat-icon" style="background: var(--aq-warning-soft-bg); color: var(--aq-warning);">
                         <i class="bi bi-trophy"></i>
                     </div>
                     <div>
@@ -85,12 +85,16 @@
             <div class="xp-progress-container mt-3">
                 <div class="progress progress-lg progress-animated">
                     <div class="progress-bar" role="progressbar"
-                         style="width: {{ xp_percentage|default:'45' }}%;"
-                         aria-valuenow="{{ profile.xp }}"
+                         style="width: {{ xp_percentage }}%;"
+                         aria-valuenow="{{ xp_in_level }}"
                          aria-valuemin="0"
-                         aria-valuemax="100">
-                        {{ profile.xp }} XP
+                         aria-valuemax="{{ xp_level_band }}"
+                         aria-valuetext="{{ xp_in_level }} of {{ xp_level_band }} XP in current level">
+                        {{ xp_in_level }}/{{ xp_level_band }} XP
                     </div>
+                </div>
+                <div class="d-flex justify-content-end mt-2">
+                    <small class="text-muted">{{ xp_to_next_level }} XP to next level</small>
                 </div>
             </div>
         </div>
@@ -126,6 +130,29 @@
                             <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
                                 <span>{{ entry.user.username }}</span>
                                 <strong class="badge badge-xp">{{ entry.score }}</strong>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-globe me-1"></i>No global entries yet.
+                            </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            </div>
+
+            <div class="card border-0 mt-4 fade-in-up">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><i class="bi bi-calendar-week me-2" style="color: var(--aq-warning);"></i>Top Weekly Players</h2>
+                    <p class="text-muted mb-3" style="font-size: 0.8rem;">Week of {{ weekly_start|date:"M d, Y" }}</p>
+                    <ol class="list-group list-group-numbered list-group-flush">
+                        {% for entry in weekly_rankings %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
+                                <span>{{ entry.user.username }}</span>
+                                <strong class="badge badge-xp">{{ entry.score }}</strong>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-calendar-week me-1"></i>No weekly entries yet.
                             </li>
                         {% endfor %}
                     </ol>
@@ -169,8 +196,17 @@
                     <ul class="list-group list-group-flush">
                         {% for attempt in recent_attempts %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <span><i class="bi bi-check2-circle me-2" style="color: var(--aq-accent);"></i>{{ attempt.challenge.title }}</span>
-                                <span class="badge badge-xp">{{ attempt.score }} pts</span>
+                                <span>
+                                    {% if attempt.is_correct %}
+                                        <i class="bi bi-check2-circle me-2 text-success"></i>
+                                    {% elif attempt.score %}
+                                        <i class="bi bi-dash-circle me-2" style="color: var(--aq-warning);"></i>
+                                    {% else %}
+                                        <i class="bi bi-x-circle me-2 text-danger"></i>
+                                    {% endif %}
+                                    {{ attempt.challenge.title }}
+                                </span>
+                                <span class="badge {% if attempt.is_correct %}badge-xp{% elif attempt.score %}badge-warning{% else %}badge-danger{% endif %}">{{ attempt.score }} pts</span>
                             </li>
                         {% empty %}
                             <li class="list-group-item text-muted text-center py-3">
@@ -184,7 +220,7 @@
             <!-- Recent Rewards -->
             <div class="card border-0 mb-4 fade-in-up">
                 <div class="card-body">
-                    <h2 class="h5 mb-3"><i class="bi bi-gift me-2" style="color: #8B5CF6;"></i>Recent Rewards</h2>
+                    <h2 class="h5 mb-3"><i class="bi bi-gift me-2" style="color: var(--aq-purple-ink);"></i>Recent Rewards</h2>
                     <ul class="list-group list-group-flush">
                         {% for reward in rewards %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">

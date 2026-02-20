@@ -1,38 +1,81 @@
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, render
+from django.db import transaction
+from django.db.models import Count, Q
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .matchmaking import find_or_create_match
+from challenges.models import Challenge, Topic
+
+from .matchmaking import find_or_create_match, resolve_topic_preference, select_challenge_for_match
 from .models import BattleMatch
 from .serializers import BattleMatchSerializer
+
+def _assign_match_challenge_if_needed(match):
+    if match.challenge_id is not None or match.status != BattleMatch.Status.LIVE:
+        return match
+
+    with transaction.atomic():
+        locked_match = (
+            BattleMatch.objects.select_for_update()
+            .select_related('preferred_topic', 'challenge', 'player_one', 'player_two')
+            .get(id=match.id)
+        )
+        if locked_match.challenge_id is None and locked_match.status == BattleMatch.Status.LIVE:
+            locked_match.challenge = select_challenge_for_match(topic=locked_match.preferred_topic)
+            locked_match.save(update_fields=['challenge'])
+        return locked_match
 
 
 @login_required
 def battle_lobby_view(request):
-    from challenges.models import Topic, Challenge
-    
     active_matches = BattleMatch.objects.filter(
         status__in=[BattleMatch.Status.WAITING, BattleMatch.Status.LIVE]
     ).select_related('player_one', 'player_two')[:10]
-    
-    # Get all active topics with difficulty distribution and challenge counts
-    topics = Topic.objects.filter(is_active=True).prefetch_related('challenges')
-    topic_data = []
-    for topic in topics:
-        challenges = topic.challenges.filter(is_active=True)
-        difficulty_dist = {
-            'easy': challenges.filter(difficulty='easy').count(),
-            'medium': challenges.filter(difficulty='medium').count(),
-            'hard': challenges.filter(difficulty='hard').count(),
-        }
-        topic_data.append({
+
+    topics = Topic.objects.filter(is_active=True).annotate(
+        challenge_count=Count('challenges', filter=Q(challenges__is_active=True), distinct=True),
+        easy_count=Count(
+            'challenges',
+            filter=Q(
+                challenges__is_active=True,
+                challenges__difficulty=Challenge.Difficulty.EASY,
+            ),
+            distinct=True,
+        ),
+        medium_count=Count(
+            'challenges',
+            filter=Q(
+                challenges__is_active=True,
+                challenges__difficulty=Challenge.Difficulty.MEDIUM,
+            ),
+            distinct=True,
+        ),
+        hard_count=Count(
+            'challenges',
+            filter=Q(
+                challenges__is_active=True,
+                challenges__difficulty=Challenge.Difficulty.HARD,
+            ),
+            distinct=True,
+        ),
+    )
+
+    topic_data = [
+        {
             'topic': topic,
-            'challenge_count': challenges.count(),
-            'difficulty_distribution': difficulty_dist,
-        })
-    
+            'challenge_count': topic.challenge_count,
+            'difficulty_distribution': {
+                'easy': topic.easy_count,
+                'medium': topic.medium_count,
+                'hard': topic.hard_count,
+            },
+        }
+        for topic in topics
+    ]
+
     return render(request, 'battle/lobby.html', {
         'active_matches': active_matches,
         'topic_data': topic_data,
@@ -41,57 +84,18 @@ def battle_lobby_view(request):
 
 @login_required
 def battle_live_view(request, room_code):
-    match = get_object_or_404(BattleMatch, room_code=room_code)
-    
-    # Select a challenge if not already assigned
-    # Prefer topic from session if available, otherwise pick any valid challenge
-    from challenges.models import Challenge, Topic
-    
-    session = getattr(request, 'session', None)
-    topic_preference = session.get('battle_topic_preference') if session is not None else None
-    challenge = None
-    
-    try:
-        # Get user's solved challenges
-        user_solved = set(
-            request.user.challenge_attempts.filter(
-                is_correct=True
-            ).values_list('challenge_id', flat=True)
-        )
-        
-        # Build query filters
-        base_filter = {
-            'is_active': True,
-            'challenge_type': Challenge.ChallengeType.ALGORITHM
-        }
-        
-        # Try to get a challenge from the preferred topic first
-        if topic_preference:
-            try:
-                topic = Topic.objects.get(stable_id=topic_preference, is_active=True)
-                challenge = topic.challenges.filter(
-                    **base_filter
-                ).exclude(id__in=user_solved).first()
-            except Topic.DoesNotExist:
-                pass
-        
-        # Fallback: get any unsolved algorithm challenge
-        if not challenge:
-            challenge = Challenge.objects.filter(
-                **base_filter
-            ).exclude(id__in=user_solved).first()
-        
-        # Final fallback: get any active algorithm challenge
-        if not challenge:
-            challenge = Challenge.objects.filter(
-                **base_filter
-            ).first()
-    except:
-        challenge = None
-    
-    # Get user's recent attempts on this challenge if available
+    match = get_object_or_404(
+        BattleMatch.objects.select_related('player_one', 'player_two', 'challenge', 'preferred_topic'),
+        room_code=room_code,
+    )
+    if not match.is_participant(request.user):
+        return HttpResponseForbidden("Only battle participants can access this room.")
+
+    match = _assign_match_challenge_if_needed(match)
+    challenge = match.challenge
+
     user_attempts = []
-    if challenge and request.user.is_authenticated:
+    if challenge:
         user_attempts = challenge.attempts.filter(
             user=request.user
         ).order_by('-created_at')[:5]
@@ -114,9 +118,9 @@ class BattleMatchApiView(APIView):
 
     def post(self, request):
         topic_preference = request.data.get('topic_preference')
+        topic = resolve_topic_preference(topic_preference)
         match, waiting = find_or_create_match(request.user, topic_preference=topic_preference)
-        # Store topic preference in session for the live battle view
-        request.session['battle_topic_preference'] = topic_preference
+        request.session['battle_topic_preference'] = topic.stable_id if topic else None
         data = BattleMatchSerializer(match).data
         data['is_waiting'] = waiting
         return Response(data, status=status.HTTP_200_OK)

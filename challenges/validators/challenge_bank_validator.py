@@ -1,5 +1,6 @@
 """Schema validation and integrity checks for challenge_bank.json"""
 import json
+import re
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
@@ -14,15 +15,63 @@ class ChallengeBankValidator:
 
     REQUIRED_TOP_LEVEL_KEYS = {'schema_version', 'topics'}
     REQUIRED_TOPIC_KEYS = {'stable_id', 'label', 'category', 'description', 'icon_class', 'visualization_type', 'challenges'}
-    REQUIRED_CHALLENGE_KEYS = {'stable_id', 'title', 'difficulty', 'order_index', 'description', 'prompt', 'expected_answer', 'starter_code', 'tags', 'xp_reward', 'is_active'}
+    REQUIRED_CHALLENGE_KEYS = {
+        'stable_id',
+        'title',
+        'algorithm_type',
+        'difficulty',
+        'order_index',
+        'description',
+        'prompt',
+        'expected_answer',
+        'starter_code',
+        'visualization_payload',
+        'tags',
+        'xp_reward',
+        'is_active',
+    }
 
     VALID_CATEGORIES = {
         'dsa_core', 'sorting_searching', 'trees_graphs', 'advanced_dsa', 'ai_ml'
     }
     VALID_DIFFICULTIES = {'easy', 'medium', 'hard'}
+    VALID_ALGORITHM_TYPES = {
+        'bfs',
+        'dfs',
+        'astar',
+        'minimax',
+        'bubble_sort',
+        'selection_sort',
+        'insertion_sort',
+        'merge_sort',
+        'quick_sort',
+        'heap_sort',
+        'linear_search',
+        'binary_search',
+        'dijkstra',
+        'bst',
+        'knapsack',
+        'lcs',
+        'activity_selection',
+        'linear_regression',
+        'logistic_regression',
+        'kmeans',
+        'knn',
+        'decision_tree',
+        'naive_bayes',
+        'neural_network',
+        'backtracking',
+        'recursion',
+        'string_algorithm',
+        'math_algorithm',
+        'bit_conversion',
+        'array_algorithm',
+        'hashing_algorithm',
+    }
     VALID_VISUALIZATIONS = {
         'array', 'graph', 'tree', 'grid', 'matrix', 'conceptual', 'none'
     }
+    PLACEHOLDER_EXPECTED_PATTERN = re.compile(r'.*_answer_\d+$', re.IGNORECASE)
 
     @classmethod
     def validate_file(cls, file_path: str) -> Tuple[bool, List[str]]:
@@ -192,6 +241,11 @@ class ChallengeBankValidator:
         difficulty = challenge.get('difficulty', '')
         if difficulty not in cls.VALID_DIFFICULTIES:
             errors.append(f"{prefix}: difficulty '{difficulty}' not in {cls.VALID_DIFFICULTIES}")
+
+        # Validate algorithm_type
+        algorithm_type = challenge.get('algorithm_type', '')
+        if algorithm_type not in cls.VALID_ALGORITHM_TYPES:
+            errors.append(f"{prefix}: algorithm_type '{algorithm_type}' not in supported algorithm types")
         
         # Validate order_index
         order_idx = challenge.get('order_index')
@@ -212,7 +266,23 @@ class ChallengeBankValidator:
         title = challenge.get('title', '')
         if not title or not isinstance(title, str):
             errors.append(f"{prefix}: title must be non-empty string")
-        
+
+        prompt = challenge.get('prompt', '')
+        if not isinstance(prompt, str) or not prompt.strip():
+            errors.append(f"{prefix}: prompt must be non-empty string")
+        else:
+            lowered_prompt = prompt.lower()
+            for section in ('problem:', 'input:', 'output:', 'constraints:', 'example:'):
+                if section not in lowered_prompt:
+                    errors.append(f"{prefix}: prompt must include '{section}' section")
+
+        expected_answer = challenge.get('expected_answer', '')
+        if isinstance(expected_answer, str) and cls.PLACEHOLDER_EXPECTED_PATTERN.match(expected_answer.strip()):
+            errors.append(f"{prefix}: expected_answer appears to be a placeholder token")
+
+        if 'visualization_payload' in challenge and not isinstance(challenge.get('visualization_payload'), dict):
+            errors.append(f"{prefix}: visualization_payload must be a JSON object when provided")
+
         return errors
 
     @staticmethod

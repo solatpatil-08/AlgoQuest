@@ -1,23 +1,67 @@
-from django.contrib.auth.models import User
-from django.test import TestCase
+import json
 
+from asgiref.sync import async_to_sync
+from django.contrib.auth.models import User
+from django.db import connection
+from django.test import TestCase, TransactionTestCase
+from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
+
+from challenges.models import Challenge, ChallengeAttempt, Topic
 from leaderboard.models import Leaderboard, Reward
 from leaderboard.services import finalize_battle_rewards
 
+from .consumers import BattleConsumer
 from .matchmaking import find_or_create_match
 from .models import BattleMatch
+from .score_tokens import build_score_token
 
 
 class MatchmakingTests(TestCase):
+    def setUp(self):
+        self.topic_arrays = Topic.objects.create(
+            stable_id='arrays',
+            label='Arrays',
+            category=Topic.Category.DSA_CORE,
+            description='Arrays',
+        )
+        self.topic_graphs = Topic.objects.create(
+            stable_id='graphs',
+            label='Graphs',
+            category=Topic.Category.DSA_CORE,
+            description='Graphs',
+        )
+        self.array_challenge = Challenge.objects.create(
+            title='Array Battle',
+            topic=self.topic_arrays,
+            order_index=0,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Array challenge',
+            prompt='Array prompt',
+            expected_answer='a',
+        )
+        self.graph_challenge = Challenge.objects.create(
+            title='Graph Battle',
+            topic=self.topic_graphs,
+            order_index=0,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Graph challenge',
+            prompt='Graph prompt',
+            expected_answer='g',
+        )
+
     def test_find_or_create_creates_waiting_match_when_no_candidate(self):
         user = User.objects.create_user(username='p1', password='StrongPass123!')
 
-        match, waiting = find_or_create_match(user)
+        match, waiting = find_or_create_match(user, topic_preference='arrays')
 
         self.assertTrue(waiting)
         self.assertEqual(match.player_one, user)
         self.assertEqual(match.status, BattleMatch.Status.WAITING)
         self.assertIsNone(match.player_two)
+        self.assertEqual(match.preferred_topic, self.topic_arrays)
 
     def test_find_or_create_joins_compatible_waiting_match(self):
         user_one = User.objects.create_user(username='p1', password='StrongPass123!')
@@ -30,9 +74,13 @@ class MatchmakingTests(TestCase):
         user_two.profile.xp = 760
         user_two.profile.save(update_fields=['level', 'xp', 'updated_at'])
 
-        waiting_match = BattleMatch.objects.create(player_one=user_one, status=BattleMatch.Status.WAITING)
+        waiting_match = BattleMatch.objects.create(
+            player_one=user_one,
+            preferred_topic=self.topic_arrays,
+            status=BattleMatch.Status.WAITING,
+        )
 
-        match, waiting = find_or_create_match(user_two)
+        match, waiting = find_or_create_match(user_two, topic_preference='graphs')
         waiting_match.refresh_from_db()
 
         self.assertFalse(waiting)
@@ -40,26 +88,308 @@ class MatchmakingTests(TestCase):
         self.assertEqual(waiting_match.player_two, user_two)
         self.assertEqual(waiting_match.status, BattleMatch.Status.LIVE)
         self.assertIsNotNone(waiting_match.started_at)
+        self.assertEqual(waiting_match.preferred_topic, self.topic_arrays)
+        self.assertEqual(waiting_match.challenge, self.array_challenge)
+
+    def test_matchmaking_topic_preference_honored(self):
+        creator = User.objects.create_user(username='creator', password='StrongPass123!')
+        joiner = User.objects.create_user(username='joiner', password='StrongPass123!')
+
+        first_match, first_waiting = find_or_create_match(creator, topic_preference='graphs')
+        joined_match, second_waiting = find_or_create_match(joiner, topic_preference='arrays')
+
+        first_match.refresh_from_db()
+        joined_match.refresh_from_db()
+
+        self.assertTrue(first_waiting)
+        self.assertFalse(second_waiting)
+        self.assertEqual(first_match.id, joined_match.id)
+        self.assertEqual(joined_match.preferred_topic, self.topic_graphs)
+        self.assertEqual(joined_match.challenge, self.graph_challenge)
 
 
-class BattleApiTests(TestCase):
+class BattleApiAndAccessTests(TestCase):
+    def setUp(self):
+        self.first = User.objects.create_user(username='first', password='StrongPass123!')
+        self.second = User.objects.create_user(username='second', password='StrongPass123!')
+        self.third = User.objects.create_user(username='third', password='StrongPass123!')
+        self.topic = Topic.objects.create(
+            stable_id='battle_topic',
+            label='Battle Topic',
+            category=Topic.Category.DSA_CORE,
+            description='Battle topic',
+        )
+        self.challenge = Challenge.objects.create(
+            title='Battle Challenge',
+            topic=self.topic,
+            order_index=0,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Challenge',
+            prompt='Prompt',
+            expected_answer='ok',
+        )
+
     def test_battle_api_requires_authentication(self):
         response = self.client.get('/api/battle/')
         self.assertEqual(response.status_code, 403)
 
     def test_battle_api_post_returns_waiting_for_first_user_and_live_for_second(self):
-        first = User.objects.create_user(username='first', password='StrongPass123!')
-        second = User.objects.create_user(username='second', password='StrongPass123!')
-
-        self.client.force_login(first)
-        first_response = self.client.post('/api/battle/')
+        self.client.force_login(self.first)
+        first_response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({'topic_preference': self.topic.stable_id}),
+            content_type='application/json',
+        )
         self.assertEqual(first_response.status_code, 200)
         self.assertTrue(first_response.json()['is_waiting'])
 
-        self.client.force_login(second)
-        second_response = self.client.post('/api/battle/')
+        self.client.force_login(self.second)
+        second_response = self.client.post('/api/battle/', content_type='application/json')
         self.assertEqual(second_response.status_code, 200)
         self.assertFalse(second_response.json()['is_waiting'])
+
+        room_code = second_response.json()['room_code']
+        match = BattleMatch.objects.get(room_code=room_code)
+        self.assertEqual(match.status, BattleMatch.Status.LIVE)
+        self.assertEqual(match.challenge, self.challenge)
+
+    def test_unauthorized_live_room_access_denied(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+        )
+        self.client.force_login(self.third)
+        response = self.client.get(reverse('battle-live', args=[match.room_code]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_participant_access_allowed(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+        )
+        self.client.force_login(self.first)
+        response = self.client.get(reverse('battle-live', args=[match.room_code]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['challenge'].id, self.challenge.id)
+
+    def test_same_challenge_for_both_players_in_same_room(self):
+        self.client.force_login(self.first)
+        first_response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({'topic_preference': self.topic.stable_id}),
+            content_type='application/json',
+        )
+        room_code = first_response.json()['room_code']
+
+        self.client.force_login(self.second)
+        self.client.post('/api/battle/', content_type='application/json')
+        match = BattleMatch.objects.get(room_code=room_code)
+
+        self.client.force_login(self.first)
+        first_live = self.client.get(reverse('battle-live', args=[room_code]))
+        self.client.force_login(self.second)
+        second_live = self.client.get(reverse('battle-live', args=[room_code]))
+
+        self.assertEqual(first_live.status_code, 200)
+        self.assertEqual(second_live.status_code, 200)
+        self.assertEqual(first_live.context['challenge'].id, match.challenge_id)
+        self.assertEqual(second_live.context['challenge'].id, match.challenge_id)
+
+    def test_stale_topic_preference_falls_back_cleanly(self):
+        self.client.force_login(self.first)
+        first_response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({'topic_preference': 'missing-topic'}),
+            content_type='application/json',
+        )
+        room_code = first_response.json()['room_code']
+
+        self.client.force_login(self.second)
+        self.client.post('/api/battle/', content_type='application/json')
+        match = BattleMatch.objects.get(room_code=room_code)
+
+        self.assertIsNone(match.preferred_topic)
+        self.assertIsNotNone(match.challenge)
+
+    def test_lobby_template_contains_single_matchmake_flow(self):
+        self.client.force_login(self.first)
+        response = self.client.get(reverse('battle-lobby'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="matchmakeBtn"')
+        self.assertContains(response, 'id="matchStatus"')
+        self.assertContains(response, 'startMatchmaking')
+        self.assertNotContains(response, 'if (button)')
+        self.assertNotContains(response, 'statusEl.innerHTML')
+
+    def test_battle_lobby_query_count_sanity(self):
+        self.client.force_login(self.first)
+        Topic.objects.create(
+            stable_id='battle_topic_2',
+            label='Battle Topic 2',
+            category=Topic.Category.DSA_CORE,
+            description='Battle topic 2',
+        )
+        with CaptureQueriesContext(connection) as context:
+            response = self.client.get(reverse('battle-lobby'))
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(context), 8)
+
+
+class BattleConsumerSecurityTests(TransactionTestCase):
+    def setUp(self):
+        self.player_one = User.objects.create_user(username='ws_one', password='StrongPass123!')
+        self.player_two = User.objects.create_user(username='ws_two', password='StrongPass123!')
+        self.observer = User.objects.create_user(username='ws_observer', password='StrongPass123!')
+        self.topic = Topic.objects.create(
+            stable_id='ws_topic',
+            label='WS Topic',
+            category=Topic.Category.DSA_CORE,
+            description='WS topic',
+        )
+        self.challenge = Challenge.objects.create(
+            title='WS Challenge',
+            topic=self.topic,
+            order_index=0,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='WS challenge',
+            prompt='WS prompt',
+            expected_answer='ws',
+        )
+        self.match = BattleMatch.objects.create(
+            player_one=self.player_one,
+            player_two=self.player_two,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+            xp_stake=80,
+        )
+
+    def _consumer_for(self, user):
+        consumer = BattleConsumer()
+        consumer.scope = {'user': user}
+        consumer.room_code = self.match.room_code
+        return consumer
+
+    def test_non_participant_websocket_denied(self):
+        consumer = self._consumer_for(self.observer)
+        authorized, payload = async_to_sync(consumer._initial_state_for_participant)()
+        self.assertFalse(authorized)
+        self.assertEqual(payload, {})
+
+    def test_score_updates_rejected_for_non_participants_and_finished_matches(self):
+        non_participant_consumer = self._consumer_for(self.observer)
+        participant_consumer = self._consumer_for(self.player_one)
+
+        non_participant_result = async_to_sync(non_participant_consumer._apply_score)(
+            {'event': 'score_update', 'score_token': 'invalid-token'}
+        )
+        self.assertFalse(non_participant_result['ok'])
+        self.assertIn('participants', non_participant_result['error'])
+
+        self.match.status = BattleMatch.Status.FINISHED
+        self.match.save(update_fields=['status'])
+        finished_result = async_to_sync(participant_consumer._apply_score)(
+            {'event': 'score_update', 'score_token': 'invalid-token'}
+        )
+        self.assertFalse(finished_result['ok'])
+        self.assertIn('live battle', finished_result['error'].lower())
+
+    def test_score_update_requires_valid_single_use_token(self):
+        attempt = ChallengeAttempt.objects.create(
+            user=self.player_one,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_score_eligible=True,
+            is_correct=True,
+            score=100,
+            submitted_answer='ws',
+        )
+        token = build_score_token(
+            room_code=self.match.room_code,
+            attempt_id=attempt.id,
+            user_id=self.player_one.id,
+        )
+
+        consumer = self._consumer_for(self.player_one)
+
+        first_result = async_to_sync(consumer._apply_score)(
+            {'event': 'score_update', 'score_token': token}
+        )
+        second_result = async_to_sync(consumer._apply_score)(
+            {'event': 'score_update', 'score_token': token}
+        )
+
+        self.assertTrue(first_result['ok'])
+        self.assertFalse(second_result['ok'])
+        self.assertIn('already used', second_result['error'])
+
+        self.match.refresh_from_db()
+        attempt.refresh_from_db()
+        self.assertEqual(self.match.player_one_score, 1)
+        self.assertTrue(attempt.battle_score_applied)
+
+    def test_score_update_rejects_token_from_different_user(self):
+        attempt = ChallengeAttempt.objects.create(
+            user=self.player_one,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_score_eligible=True,
+            is_correct=True,
+            score=100,
+            submitted_answer='ws',
+        )
+        token = build_score_token(
+            room_code=self.match.room_code,
+            attempt_id=attempt.id,
+            user_id=self.player_one.id,
+        )
+
+        consumer = self._consumer_for(self.player_two)
+        result = async_to_sync(consumer._apply_score)(
+            {'event': 'score_update', 'score_token': token}
+        )
+
+        self.assertFalse(result['ok'])
+        self.assertIn('does not belong to this user', result['error'])
+
+    def test_invalid_payload_is_handled_without_crash(self):
+        consumer = self._consumer_for(self.player_one)
+        messages = []
+
+        async def fake_send_error(message):
+            messages.append(message)
+
+        consumer._send_error = fake_send_error
+        async_to_sync(consumer.receive)(text_data='{bad-json')
+        self.assertTrue(messages)
+        self.assertIn('Invalid JSON', messages[0])
+
+    def test_finalize_is_idempotent_and_rewards_not_duplicated(self):
+        self.match.player_one_score = 5
+        self.match.player_two_score = 1
+        self.match.save(update_fields=['player_one_score', 'player_two_score'])
+
+        consumer = self._consumer_for(self.player_one)
+        first_result = async_to_sync(consumer._finalize_match)()
+        second_result = async_to_sync(consumer._finalize_match)()
+        self.assertTrue(first_result['ok'])
+        self.assertTrue(second_result['ok'])
+
+        self.match.refresh_from_db()
+        self.player_one.refresh_from_db()
+        self.assertEqual(self.match.status, BattleMatch.Status.FINISHED)
+        self.assertEqual(self.match.winner, self.player_one)
+        self.assertEqual(self.player_one.profile.xp, self.match.xp_stake)
+        self.assertEqual(Reward.objects.filter(user=self.player_one, name='Battle Winner').count(), 1)
+        self.assertEqual(
+            Leaderboard.objects.get(user=self.player_one, scope=Leaderboard.Scope.GLOBAL).score,
+            self.match.xp_stake,
+        )
 
 
 class BattleRewardsTests(TestCase):

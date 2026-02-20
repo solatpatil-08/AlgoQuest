@@ -13,7 +13,7 @@
                         </div>
                         <div>
                             <h2 class="h4 mb-1">Profile &amp; Settings</h2>
-                            <p class="text-muted mb-0">Manage your account details</p>
+                            <p class="text-muted mb-0">Manage your account and coding identity</p>
                         </div>
                     </div>
 
@@ -42,12 +42,60 @@
                     <!-- Divider -->
                     <hr class="divider-gradient">
 
+                    <div class="coding-summary p-3 p-md-4 mb-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h3 class="h6 mb-0">Coding Identity</h3>
+                            <span class="badge text-bg-light border">Local Profile</span>
+                        </div>
+                        <p class="text-muted mb-3">
+                            {% if profile.bio %}
+                                {{ profile.bio }}
+                            {% else %}
+                                Add a short bio and coding preferences to complete your profile.
+                            {% endif %}
+                        </p>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <div class="meta-chip">
+                                    <span class="meta-chip-label">Experience</span>
+                                    <span class="meta-chip-value">{{ profile.get_experience_level_display|default:"Not set" }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="meta-chip">
+                                    <span class="meta-chip-label">Language</span>
+                                    <span class="meta-chip-value">{{ profile.preferred_language|default:"Not set" }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="meta-chip">
+                                    <span class="meta-chip-label">Badges</span>
+                                    <span class="meta-chip-value">{% if profile.badges %}{{ profile.badges|length }}{% else %}0{% endif %}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <span class="text-muted small">Interests:</span>
+                            <span class="small fw-medium">{{ profile.coding_interests|default:"Not set" }}</span>
+                        </div>
+                    </div>
+
                     <!-- Form -->
                     <form method="post" class="mt-4">
                         {% csrf_token %}
-                        <div class="mb-3">
+                        <div class="profile-section p-3 p-md-4 mb-3">
+                            <h3 class="h6 mb-3">Account Details</h3>
                             {{ form.as_p }}
                         </div>
+
+                        <div class="profile-section p-3 p-md-4 mb-3">
+                            <h3 class="h6 mb-3">Coding Profile Setup</h3>
+                            {{ profile_form.as_p }}
+                            <p class="text-muted small mb-0">
+                                Keep this section focused on your local coding identity and preferences.
+                            </p>
+                        </div>
+
                         <button type="submit" class="btn btn-primary px-4 py-2">
                             <i class="bi bi-check-lg me-1"></i>Save Changes
                         </button>

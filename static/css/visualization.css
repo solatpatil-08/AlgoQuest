@@ -5,7 +5,7 @@
 #visualizationOutput {
     position: relative;
     min-height: 500px;
-    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+    background: linear-gradient(135deg, var(--aq-viz-panel-bg) 0%, var(--aq-surface) 100%);
     border: 2px solid var(--aq-border);
     border-radius: var(--aq-radius-xl);
     padding: 1.5rem;
@@ -56,7 +56,7 @@
     background: linear-gradient(135deg, var(--aq-primary), var(--aq-accent));
     border-radius: 50%;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+    box-shadow: var(--aq-shadow-blue);
     transition: transform 0.2s ease;
 }
 
@@ -71,7 +71,7 @@
     border-radius: 50%;
     cursor: pointer;
     border: none;
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+    box-shadow: var(--aq-shadow-blue);
 }
 
 .viz-btn {
@@ -88,25 +88,25 @@
 }
 
 .viz-btn-start {
-    background: linear-gradient(135deg, var(--aq-primary), #3B82F6);
+    background: linear-gradient(135deg, var(--aq-primary), var(--aq-secondary));
     color: #FFFFFF;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    box-shadow: var(--aq-shadow-blue);
 }
 
 .viz-btn-start:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
+    box-shadow: var(--aq-shadow-md);
 }
 
 .viz-btn-pause {
-    background: linear-gradient(135deg, var(--aq-warning), #F59E0B);
+    background: linear-gradient(135deg, var(--aq-warning), var(--aq-warning-ink));
     color: #FFFFFF;
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+    box-shadow: var(--aq-shadow-sm);
 }
 
 .viz-btn-pause:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35);
+    box-shadow: var(--aq-shadow-md);
 }
 
 .viz-btn-reset {
@@ -137,15 +137,15 @@
 
 /* Pseudo-code panel */
 .pseudocode-panel {
-    background: linear-gradient(135deg, #1E293B, #0F172A);
-    color: #E2E8F0;
+    background: linear-gradient(135deg, var(--aq-navbar-solid), var(--aq-bg));
+    color: var(--aq-text);
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 0.875rem;
     line-height: 1.8;
     padding: 1.5rem;
     border-radius: var(--aq-radius-md);
     margin-top: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--aq-border);
     max-height: 400px;
     overflow-y: auto;
 }
@@ -156,8 +156,8 @@
 }
 
 .pseudocode-panel .line.active {
-    background: rgba(16, 185, 129, 0.2);
-    border-left: 3px solid #10B981;
+    background: var(--aq-success-soft-bg);
+    border-left: 3px solid var(--aq-accent);
     padding-left: 0.75rem;
 }
 

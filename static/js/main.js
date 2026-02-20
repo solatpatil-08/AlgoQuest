@@ -4,6 +4,83 @@
    ============================================ */
 
 document.addEventListener('DOMContentLoaded', function () {
+    var THEME_STORAGE_KEY = 'aq-theme';
+    var root = document.documentElement;
+    var systemThemeQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function getStoredTheme() {
+        try {
+            return window.localStorage.getItem(THEME_STORAGE_KEY);
+        } catch (err) {
+            return null;
+        }
+    }
+
+    function getSystemTheme() {
+        return systemThemeQuery && systemThemeQuery.matches ? 'dark' : 'light';
+    }
+
+    function syncThemeToggleUI(theme) {
+        document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+            var icon = button.querySelector('[data-theme-icon]');
+            var label = button.querySelector('[data-theme-label]');
+            var nextTheme = theme === 'dark' ? 'light' : 'dark';
+
+            button.setAttribute('aria-label', 'Switch to ' + nextTheme + ' mode');
+            button.setAttribute('title', 'Switch to ' + nextTheme + ' mode');
+
+            if (icon) {
+                icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+            }
+            if (label) {
+                label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+            }
+        });
+    }
+
+    function applyTheme(theme, persistChoice) {
+        var normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+        root.setAttribute('data-theme', normalizedTheme);
+        root.setAttribute('data-bs-theme', normalizedTheme);
+        root.style.colorScheme = normalizedTheme;
+        syncThemeToggleUI(normalizedTheme);
+
+        if (persistChoice) {
+            try {
+                window.localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+            } catch (err) {
+                // Ignore storage access errors silently.
+            }
+        }
+
+        if (typeof window.CustomEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('aq:themechange', {
+                detail: { theme: normalizedTheme }
+            }));
+        }
+    }
+
+    var storedTheme = getStoredTheme();
+    var initialTheme = storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : getSystemTheme();
+    applyTheme(initialTheme, false);
+
+    document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+            applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+        });
+    });
+
+    if (!storedTheme && systemThemeQuery) {
+        var systemThemeListener = function (event) {
+            applyTheme(event.matches ? 'dark' : 'light', false);
+        };
+        if (typeof systemThemeQuery.addEventListener === 'function') {
+            systemThemeQuery.addEventListener('change', systemThemeListener);
+        } else if (typeof systemThemeQuery.addListener === 'function') {
+            systemThemeQuery.addListener(systemThemeListener);
+        }
+    }
 
     /* ---- Show all Bootstrap toasts ---- */
     document.querySelectorAll('.toast').forEach(function (el) {
@@ -58,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
         window.addEventListener('scroll', function () {
             if (window.scrollY > 30) {
                 navbar.style.padding = '0.4rem 0';
-                navbar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)';
+                navbar.style.boxShadow = 'var(--aq-navbar-scroll-shadow)';
             } else {
                 navbar.style.padding = '0.65rem 0';
                 navbar.style.boxShadow = '';
@@ -108,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function () {
     backToTop.innerHTML = '<i class="bi bi-chevron-up"></i>';
     backToTop.className = 'btn btn-primary btn-icon';
     backToTop.setAttribute('aria-label', 'Back to top');
-    backToTop.style.cssText = 'position:fixed;bottom:2rem;right:2rem;z-index:1040;opacity:0;pointer-events:none;transition:opacity 0.3s ease,transform 0.3s ease;transform:translateY(10px);width:42px;height:42px;border-radius:50%;box-shadow:0 4px 14px rgba(37,99,235,0.3);';
+    backToTop.style.cssText = 'position:fixed;bottom:2rem;right:2rem;z-index:1040;opacity:0;pointer-events:none;transition:opacity 0.3s ease,transform 0.3s ease;transform:translateY(10px);width:42px;height:42px;border-radius:50%;box-shadow:var(--aq-shadow-blue);';
     document.body.appendChild(backToTop);
 
     backToTop.addEventListener('click', function () {

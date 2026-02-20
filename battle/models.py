@@ -19,6 +19,20 @@ class BattleMatch(models.Model):
         null=True,
         blank=True,
     )
+    preferred_topic = models.ForeignKey(
+        'challenges.Topic',
+        on_delete=models.SET_NULL,
+        related_name='battle_matches',
+        null=True,
+        blank=True,
+    )
+    challenge = models.ForeignKey(
+        'challenges.Challenge',
+        on_delete=models.SET_NULL,
+        related_name='battle_matches',
+        null=True,
+        blank=True,
+    )
     player_one_score = models.IntegerField(default=0)
     player_two_score = models.IntegerField(default=0)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.WAITING)
@@ -43,5 +57,10 @@ class BattleMatch(models.Model):
         if not self.room_code:
             self.room_code = uuid.uuid4().hex[:10]
         super().save(*args, **kwargs)
+
+    def is_participant(self, user):
+        if not user or not user.is_authenticated:
+            return False
+        return user.id in {self.player_one_id, self.player_two_id}
 
 # Create your models here.

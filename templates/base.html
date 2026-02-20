@@ -5,6 +5,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}AlgoQuest{% endblock %} - Master Algorithms</title>
+    <script>
+    (function () {
+        var storageKey = 'aq-theme';
+        var root = document.documentElement;
+        var theme = 'light';
+        try {
+            var stored = window.localStorage.getItem(storageKey);
+            if (stored === 'light' || stored === 'dark') {
+                theme = stored;
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                theme = 'dark';
+            }
+        } catch (err) {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                theme = 'dark';
+            }
+        }
+        root.setAttribute('data-theme', theme);
+        root.setAttribute('data-bs-theme', theme);
+        root.style.colorScheme = theme;
+    })();
+    </script>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -56,6 +78,12 @@
                         <i class="bi bi-trophy me-1"></i>Leaderboard
                     </a>
                 </li>
+                <li class="nav-item">
+                    <button type="button" class="btn theme-toggle-btn ms-lg-2" data-theme-toggle aria-label="Switch to dark mode">
+                        <i class="bi bi-moon-stars-fill" data-theme-icon></i>
+                        <span data-theme-label>Dark</span>
+                    </button>
+                </li>
                 {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link px-3 rounded {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
@@ -66,7 +94,7 @@
                         <a class="nav-link px-3 rounded dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-circle me-1"></i>{{ user.username }}
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg" style="border-radius: var(--aq-radius-md); overflow: hidden;">
+                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg nav-user-menu">
                             <li>
                                 <a class="dropdown-item py-2" href="{% url 'profile-settings' %}">
                                     <i class="bi bi-gear me-2 text-muted"></i>Profile & Settings

@@ -24,11 +24,11 @@
                             <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
                                 <div class="d-flex align-items-center gap-2">
                                     {% if forloop.counter == 1 %}
-                                        <i class="bi bi-trophy-fill" style="color: #D97706; font-size: 1.1rem;"></i>
+                                        <i class="bi bi-trophy-fill" style="color: var(--aq-rank-gold-ink); font-size: 1.1rem;"></i>
                                     {% elif forloop.counter == 2 %}
-                                        <i class="bi bi-trophy-fill" style="color: #64748B; font-size: 1.1rem;"></i>
+                                        <i class="bi bi-trophy-fill" style="color: var(--aq-rank-silver-ink); font-size: 1.1rem;"></i>
                                     {% elif forloop.counter == 3 %}
-                                        <i class="bi bi-trophy-fill" style="color: #EA580C; font-size: 1.1rem;"></i>
+                                        <i class="bi bi-trophy-fill" style="color: var(--aq-rank-bronze-ink); font-size: 1.1rem;"></i>
                                     {% else %}
                                         <span class="text-muted" style="font-size: 0.8rem; min-width: 1.1rem; text-align: center;">#{{ forloop.counter }}</span>
                                     {% endif %}
@@ -54,21 +54,24 @@
             <div class="card border-0 h-100">
                 <div class="card-body">
                     <div class="d-flex align-items-center gap-2 mb-3">
-                        <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #F59E0B;">
+                        <div class="stat-icon" style="background: var(--aq-warning-soft-bg); color: var(--aq-warning);">
                             <i class="bi bi-calendar-week"></i>
                         </div>
-                        <h2 class="h5 mb-0">Weekly Leaderboard</h2>
+                        <div>
+                            <h2 class="h5 mb-0">Weekly Leaderboard</h2>
+                            <p class="text-muted mb-0" style="font-size: 0.8rem;">Week of {{ weekly_start|date:"M d, Y" }}</p>
+                        </div>
                     </div>
                     <ol class="list-group list-group-numbered list-group-flush">
                         {% for entry in weekly_board %}
                             <li class="list-group-item d-flex justify-content-between align-items-center {% if forloop.counter == 1 %}rank-gold{% elif forloop.counter == 2 %}rank-silver{% elif forloop.counter == 3 %}rank-bronze{% endif %}">
                                 <div class="d-flex align-items-center gap-2">
                                     {% if forloop.counter == 1 %}
-                                        <i class="bi bi-trophy-fill" style="color: #D97706; font-size: 1.1rem;"></i>
+                                        <i class="bi bi-trophy-fill" style="color: var(--aq-rank-gold-ink); font-size: 1.1rem;"></i>
                                     {% elif forloop.counter == 2 %}
-                                        <i class="bi bi-trophy-fill" style="color: #64748B; font-size: 1.1rem;"></i>
+                                        <i class="bi bi-trophy-fill" style="color: var(--aq-rank-silver-ink); font-size: 1.1rem;"></i>
                                     {% elif forloop.counter == 3 %}
-                                        <i class="bi bi-trophy-fill" style="color: #EA580C; font-size: 1.1rem;"></i>
+                                        <i class="bi bi-trophy-fill" style="color: var(--aq-rank-bronze-ink); font-size: 1.1rem;"></i>
                                     {% else %}
                                         <span class="text-muted" style="font-size: 0.8rem; min-width: 1.1rem; text-align: center;">#{{ forloop.counter }}</span>
                                     {% endif %}

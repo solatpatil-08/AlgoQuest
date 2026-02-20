@@ -14,7 +14,7 @@
             <div class="card border-0 h-100">
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex align-items-center gap-3 mb-3">
-                        <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--aq-danger);">
+                        <div class="stat-icon" style="background: var(--aq-danger-soft-bg); color: var(--aq-danger);">
                             <i class="bi bi-lightning-charge-fill"></i>
                         </div>
                         <div>
@@ -29,13 +29,13 @@
                             <button id="matchmakeBtn" class="btn btn-primary px-4 py-2">
                                 <i class="bi bi-search me-2"></i>Find Match
                             </button>
-                            <p class="mt-3 text-muted mb-0" id="matchStatus" style="font-size: 0.875rem;"></p>
                         </div>
                     {% else %}
                         <div class="alert alert-info mt-auto mb-0">
                             <i class="bi bi-info-circle me-2"></i><a href="{% url 'login' %}">Login</a> to join battles.
                         </div>
                     {% endif %}
+                    <p class="mt-3 text-muted mb-0" id="matchStatus" style="font-size: 0.875rem;"></p>
                 </div>
             </div>
         </div>
@@ -116,20 +116,20 @@
                                 <div class="mb-3">
                                     <div class="row g-2">
                                         <div class="col-4 text-center">
-                                            <div class="p-2 rounded" style="background: rgba(34, 197, 94, 0.1);">
-                                                <div style="font-weight: 600; color: #22c55e;">{{ item.difficulty_distribution.easy }}</div>
+                                            <div class="p-2 rounded" style="background: var(--aq-success-soft-bg);">
+                                                <div style="font-weight: 600; color: var(--aq-accent);">{{ item.difficulty_distribution.easy }}</div>
                                                 <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Easy</div>
                                             </div>
                                         </div>
                                         <div class="col-4 text-center">
-                                            <div class="p-2 rounded" style="background: rgba(245, 158, 11, 0.1);">
-                                                <div style="font-weight: 600; color: #f59e0b;">{{ item.difficulty_distribution.medium }}</div>
+                                            <div class="p-2 rounded" style="background: var(--aq-warning-soft-bg);">
+                                                <div style="font-weight: 600; color: var(--aq-warning);">{{ item.difficulty_distribution.medium }}</div>
                                                 <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Medium</div>
                                             </div>
                                         </div>
                                         <div class="col-4 text-center">
-                                            <div class="p-2 rounded" style="background: rgba(239, 68, 68, 0.1);">
-                                                <div style="font-weight: 600; color: #ef4444;">{{ item.difficulty_distribution.hard }}</div>
+                                            <div class="p-2 rounded" style="background: var(--aq-danger-soft-bg);">
+                                                <div style="font-weight: 600; color: var(--aq-danger);">{{ item.difficulty_distribution.hard }}</div>
                                                 <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Hard</div>
                                             </div>
                                         </div>
@@ -151,52 +151,132 @@
 
 {% block scripts %}
 <script>
+    const isAuthenticated = {{ user.is_authenticated|yesno:"true,false" }};
+    const matchmakeBtn = document.getElementById('matchmakeBtn');
+    const matchStatus = document.getElementById('matchStatus');
     const topicBattleButtons = document.querySelectorAll('.battle-topic-btn');
-    
-    topicBattleButtons.forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const topicId = this.getAttribute('data-topic-id');
-            
-            // Disable button and show loading
-            this.disabled = true;
-            const originalText = this.innerHTML;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Starting...';
-            
-            // Call matchmaking API with topic preference
-            const matchBtn = document.getElementById('matchmakeBtn');
-            if (matchBtn) {
-                matchBtn.disabled = true;
-            }
-            
-            fetch('/api/battle/', {
+
+    function getCsrfToken() {
+        const tokenInput = document.querySelector("input[name='csrfmiddlewaretoken']");
+        return tokenInput ? tokenInput.value : '';
+    }
+
+    function setStatus(message, type = 'muted') {
+        if (!matchStatus) return;
+        const typeClassMap = {
+            muted: 'text-muted',
+            info: 'text-info',
+            success: 'text-success',
+            error: 'text-danger',
+        };
+        matchStatus.className = `mt-3 mb-0 ${typeClassMap[type] || typeClassMap.muted}`;
+        matchStatus.innerHTML = message;
+    }
+
+    function setLoadingState(button, loading, loadingText, idleHtml) {
+        if (!button) return;
+        if (loading) {
+            button.disabled = true;
+            button.dataset.originalHtml = idleHtml || button.innerHTML;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText}`;
+            return;
+        }
+        button.disabled = false;
+        button.innerHTML = button.dataset.originalHtml || idleHtml || button.innerHTML;
+    }
+
+    async function startMatchmaking(topicId = null, triggerButton = null) {
+        if (!isAuthenticated) {
+            setStatus('<i class="bi bi-shield-lock me-1"></i>Please log in to start matchmaking.', 'error');
+            return;
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Missing CSRF token. Refresh and try again.', 'error');
+            return;
+        }
+
+        const mainButtonIdleHtml = '<i class="bi bi-search me-2"></i>Find Match';
+        setLoadingState(matchmakeBtn, true, 'Searching...', mainButtonIdleHtml);
+        if (triggerButton && triggerButton !== matchmakeBtn) {
+            setLoadingState(triggerButton, true, 'Starting...', triggerButton.innerHTML);
+        }
+        setStatus('<i class="bi bi-hourglass-split me-1"></i>Finding a suitable battle room...', 'info');
+
+        try {
+            const response = await fetch('/api/battle/', {
                 method: 'POST',
                 headers: {
-                    'X-CSRFToken': document.querySelector('input[name="csrfmiddlewaretoken"]').value,
-                    'Content-Type': 'application/json'
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ topic_preference: topicId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Redirect to battle
-                setTimeout(() => window.location.href = `/battle/live/${data.room_code}/`, 800);
-            })
-            .catch(err => {
-                console.error('Error starting battle:', err);
-                this.disabled = false;
-                this.innerHTML = originalText;
-                if (matchBtn) matchBtn.disabled = false;
-                alert('Failed to start battle. Please try again.');
+                body: JSON.stringify(topicId ? { topic_preference: topicId } : {}),
             });
+
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                data = null;
+            }
+
+            if (!response.ok) {
+                const errorMessage = data && (data.detail || data.error)
+                    ? (data.detail || data.error)
+                    : `Matchmaking failed (${response.status}).`;
+                setStatus(`<i class="bi bi-exclamation-triangle me-1"></i>${errorMessage}`, 'error');
+                return;
+            }
+
+            if (!data || !data.room_code) {
+                setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Server response was missing room information.', 'error');
+                return;
+            }
+
+            if (data.is_waiting) {
+                setStatus(`<i class="bi bi-clock me-1"></i>Room <strong>${data.room_code}</strong> created. Waiting for opponent...`, 'info');
+            } else {
+                setStatus('<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...', 'success');
+            }
+            window.setTimeout(() => {
+                window.location.href = `/battle/live/${data.room_code}/`;
+            }, 800);
+        } catch (error) {
+            console.error('Battle matchmaking error:', error);
+            setStatus('<i class="bi bi-wifi-off me-1"></i>Network error while finding a match. Please retry.', 'error');
+        } finally {
+            setLoadingState(matchmakeBtn, false, 'Searching...', mainButtonIdleHtml);
+            if (triggerButton && triggerButton !== matchmakeBtn) {
+                setLoadingState(triggerButton, false, 'Starting...', triggerButton.innerHTML);
+            }
+        }
+    }
+
+    if (matchmakeBtn) {
+        matchmakeBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            startMatchmaking(null, matchmakeBtn);
+        });
+    }
+
+    topicBattleButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const topicId = this.getAttribute('data-topic-id');
+            if (!topicId) {
+                setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Topic id is missing.', 'error');
+                return;
+            }
+            startMatchmaking(topicId, this);
         });
     });
-    
+
     // Hover effect for battle cards
     const battleCards = document.querySelectorAll('.battle-card');
     battleCards.forEach(card => {
         card.addEventListener('mouseenter', function() {
-            this.style.boxShadow = '0 10px 25px rgba(37, 99, 235, 0.15)';
+            this.style.boxShadow = 'var(--aq-shadow-md)';
             this.style.transform = 'translateY(-4px)';
         });
         card.addEventListener('mouseleave', function() {
@@ -204,43 +284,5 @@
             this.style.transform = 'translateY(0)';
         });
     });
-    
-    function getCsrfToken() {
-        const tokenInput = document.querySelector("input[name='csrfmiddlewaretoken']");
-        return tokenInput ? tokenInput.value : "";
-    }
-
-    if (button) {
-        button.addEventListener("click", async () => {
-            // Loading state
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Searching...';
-            statusEl.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Searching for a compatible opponent...';
-
-            try {
-                const response = await fetch("/api/battle/", {
-                    method: "POST",
-                    headers: {
-                        "X-CSRFToken": getCsrfToken(),
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({})
-                });
-                const data = await response.json();
-                if (data.is_waiting) {
-                    statusEl.innerHTML = `<i class="bi bi-clock me-1"></i>Match created (<strong>${data.room_code}</strong>). Waiting for opponent...`;
-                } else {
-                    statusEl.innerHTML = '<i class="bi bi-check-circle me-1" style="color: var(--aq-accent);"></i>Opponent found! Redirecting to live battle...';
-                }
-                setTimeout(() => window.location.href = `/battle/live/${data.room_code}/`, 800);
-            } catch (err) {
-                statusEl.innerHTML = '<i class="bi bi-exclamation-triangle me-1" style="color: var(--aq-danger);"></i>Failed to find match. Please try again.';
-                button.disabled = false;
-                button.innerHTML = '<i class="bi bi-search me-2"></i>Find Match';
-            }
-        });
-    }
 </script>
 {% endblock %}
-
-

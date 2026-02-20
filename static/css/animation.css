@@ -151,8 +151,8 @@ main.main-content {
 
 /* ---- Glow Pulse ---- */
 @keyframes glowPulse {
-    0%, 100% { box-shadow: 0 0 5px rgba(37, 99, 235, 0.2); }
-    50% { box-shadow: 0 0 20px rgba(37, 99, 235, 0.4); }
+    0%, 100% { box-shadow: 0 0 5px var(--aq-primary-soft-bg); }
+    50% { box-shadow: 0 0 20px var(--aq-primary-light); }
 }
 
 .glow-pulse {
@@ -233,7 +233,7 @@ main.main-content {
 }
 
 .text-gradient-animated {
-    background: linear-gradient(270deg, var(--aq-primary), var(--aq-accent), #6366F1, var(--aq-primary));
+    background: linear-gradient(270deg, var(--aq-primary), var(--aq-accent), var(--aq-indigo-ink), var(--aq-primary));
     background-size: 300% 300%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;

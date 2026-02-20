@@ -15,13 +15,13 @@
                             <span class="badge badge-accent">{{ challenge.algorithm_category_display }}</span>
                         {% endif %}
                         <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
-                        <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #B45309;">
+                        <span class="badge" style="background: var(--aq-warning-soft-bg); color: var(--aq-warning-ink);">
                             <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
                         </span>
                     </div>
                     <h1 class="h3 mb-3">{{ challenge.title }}</h1>
                     <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
-                        <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
+                        <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ display_prompt|default:challenge.prompt|linebreaksbr }}</p>
                     </div>
                     {% if challenge.starter_code %}
                         <p class="mt-3 mb-0 text-muted" style="font-size: 0.875rem;">
@@ -85,6 +85,26 @@
                                 <i class="bi bi-check2-circle me-1"></i>Submit
                             </button>
                         </form>
+                        {% if challenge.starter_code %}
+                            <div class="mt-3 d-flex flex-column gap-2">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-warning btn-sm"
+                                        id="hintBtn"
+                                        {% if not can_use_hint %}disabled{% endif %}
+                                    >
+                                        <i class="bi bi-lightbulb me-1"></i>Use Hint
+                                    </button>
+                                    <small class="text-muted">
+                                        Using hint keeps only <strong>25%</strong> of first-attempt points.
+                                    </small>
+                                </div>
+                                <div id="hintBox" class="alert alert-warning mb-0 {% if not hint_used %}d-none{% endif %}">
+                                    <strong>Hint:</strong> <span id="hintText">{{ challenge.starter_code }}</span>
+                                </div>
+                            </div>
+                        {% endif %}
                         <div class="mt-3" id="attemptResult"></div>
                     </div>
                 </div>
@@ -126,10 +146,24 @@
 <link href="{% static 'css/visualization.css' %}" rel="stylesheet">
 <script src="{% static 'js/visualization.js' %}"></script>
 <script src="{% static 'js/visualization-conceptual.js' %}"></script>
+{{ challenge.visualization_payload|json_script:"challengeVisualizationPayload" }}
 <script>
     // Check if this is a graph or conceptual visualization
     const challengeTopic = "{{ challenge.topic.stable_id|default:'' }}";
     const visualizationType = "{{ challenge.topic.visualization_type|default:'conceptual' }}";
+    const algorithmTypeValue = "{{ challenge.algorithm_type }}";
+    const payloadElement = document.getElementById('challengeVisualizationPayload');
+    let challengeVisualizationPayload = {};
+    if (payloadElement) {
+        try {
+            challengeVisualizationPayload = JSON.parse(payloadElement.textContent || '{}');
+        } catch (error) {
+            challengeVisualizationPayload = {};
+        }
+    }
+    if (window.VisualizationEngine && window.VisualizationEngine.setChallengeContext) {
+        window.VisualizationEngine.setChallengeContext(challengeVisualizationPayload);
+    }
     
     // Initialize visualization based on type
     document.addEventListener('DOMContentLoaded', function() {
@@ -137,8 +171,14 @@
         
         if (visualizationType !== 'graph') {
             // Load conceptual visualization
-            if (challengeTopic && ConceptualVisualizations) {
-                showConceptualVisualization(challengeTopic, 'visualizationOutput');
+            if (ConceptualVisualizations) {
+                showConceptualVisualization(
+                    challengeTopic,
+                    'visualizationOutput',
+                    algorithmTypeValue,
+                    visualizationType,
+                    challengeVisualizationPayload
+                );
             }
         }
     });
@@ -146,12 +186,48 @@
     const attemptForm = document.getElementById("attemptForm");
     const attemptResult = document.getElementById("attemptResult");
     const submitBtn = document.getElementById("submitAnswerBtn");
+    const hintBtn = document.getElementById("hintBtn");
+    const hintBox = document.getElementById("hintBox");
+    const hintText = document.getElementById("hintText");
+    const csrfTokenInput = attemptForm ? attemptForm.querySelector('input[name=\"csrfmiddlewaretoken\"]') : null;
+    const csrfToken = csrfTokenInput ? csrfTokenInput.value : "";
+
+    if (hintBtn) {
+        hintBtn.addEventListener("click", async function () {
+            hintBtn.disabled = true;
+            const originalLabel = hintBtn.innerHTML;
+            hintBtn.innerHTML = '<span class=\"spinner-border spinner-border-sm me-1\" role=\"status\" aria-hidden=\"true\"></span>Loading...';
+            try {
+                const response = await fetch("{% url 'challenge-hint' challenge.slug %}", {
+                    method: "POST",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "X-CSRFToken": csrfToken,
+                    },
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Unable to fetch hint.");
+                }
+                if (hintBox && hintText) {
+                    hintText.textContent = data.hint || "";
+                    hintBox.classList.remove("d-none");
+                }
+                hintBtn.innerHTML = '<i class=\"bi bi-check2 me-1\"></i>Hint Used';
+            } catch (err) {
+                attemptResult.innerHTML = `<div class=\"alert alert-danger fade-in\">
+                    <i class=\"bi bi-exclamation-triangle me-2\"></i>${err.message || "An error occurred. Please try again."}
+                </div>`;
+                hintBtn.disabled = false;
+                hintBtn.innerHTML = originalLabel;
+            }
+        });
+    }
 
     if (attemptForm) {
         attemptForm.addEventListener("submit", async function (e) {
             e.preventDefault();
 
-            // Loading state
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
@@ -162,15 +238,16 @@
                 const response = await fetch(attemptForm.action, {
                     method: "POST",
                     body: formData,
-                    headers: {"X-Requested-With": "XMLHttpRequest"}
+                    headers: {"X-Requested-With": "XMLHttpRequest"},
                 });
                 const data = await response.json();
-                
-                // Determine alert style based on correctness
-                const alertClass = data.is_correct ? 'success' : 'warning';
-                const iconClass = data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill';
-                
-                // Build message content
+
+                if (!response.ok) {
+                    throw new Error(data.error || "An error occurred. Please try again.");
+                }
+
+                const alertClass = data.is_correct ? "success" : "warning";
+                const iconClass = data.is_correct ? "check-circle-fill" : "exclamation-triangle-fill";
                 let messageContent = `<strong>${data.message}</strong>`;
                 if (data.score !== undefined) {
                     messageContent += ` &middot; Score: <strong>${data.score}</strong>`;
@@ -181,35 +258,29 @@
                 if (data.current_level !== undefined) {
                     messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
                 }
-                
+                if (data.is_score_eligible === false) {
+                    messageContent += " &middot; <strong>First-attempt scoring already consumed</strong>";
+                }
+
                 attemptResult.innerHTML = `<div class="alert alert-${alertClass} fade-in">
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi bi-${iconClass} fs-5"></i>
                         <div>${messageContent}</div>
                     </div>
                 </div>`;
-                
-                // Auto-redirect if there's a next challenge and the answer was correct
+
+                if (hintBtn) {
+                    hintBtn.disabled = true;
+                }
+
                 if (data.is_correct && data.next_challenge_url) {
-                    // Wait 2 seconds then redirect
                     setTimeout(function() {
                         window.location.href = data.next_challenge_url;
                     }, 2000);
                 }
             } catch (err) {
                 attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
-                    <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
-                </div>`;
-            } finally {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Submit';
-                }
-            }
-        });
-            } catch (err) {
-                attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
-                    <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
+                    <i class="bi bi-exclamation-triangle me-2"></i>${err.message || "An error occurred. Please try again."}
                 </div>`;
             } finally {
                 if (submitBtn) {
@@ -224,7 +295,7 @@
     // VISUALIZATION CONTROLS
     // ============================================
     
-    const algorithmType = "{{ challenge.algorithm_type }}";
+    const algorithmType = algorithmTypeValue;
     const startBtn = document.getElementById('startBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const resetBtn = document.getElementById('resetBtn');
@@ -328,20 +399,9 @@
     
     // Auto-initialize visualization on page load (for graph viz only)
     document.addEventListener('DOMContentLoaded', function() {
-        // Only show initial message for graph visualizations
         if (visualizationType === 'graph') {
-            const vizOutput = document.getElementById('visualizationOutput');
-            if (vizOutput && algorithmType) {
-                vizOutput.innerHTML = `
-                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;">
-                        <i class="bi bi-play-circle" style="font-size:4rem;color:var(--aq-primary);margin-bottom:1rem;"></i>
-                        <h3 style="color:var(--aq-text);margin-bottom:0.5rem;">Interactive Algorithm Visualization</h3>
-                        <p style="color:var(--aq-text-secondary);max-width:500px;">
-                            Click <strong>Start</strong> to see the <strong>${algorithmType.replace(/_/g, ' ').toUpperCase()}</strong> algorithm in action!
-                            Watch step-by-step animations and understand how it works visually.
-                        </p>
-                    </div>
-                `;
+            if (window.VisualizationEngine && window.VisualizationEngine.renderPreview) {
+                window.VisualizationEngine.renderPreview(algorithmType);
             }
         }
     });

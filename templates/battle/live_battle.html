@@ -1,95 +1,139 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load static %}
 
 {% block content %}
 <div class="fade-in-up">
+    <div class="card border-0 mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h1 class="h4 mb-1"><i class="bi bi-lightning-charge-fill me-2 text-gradient"></i>Live Battle Room</h1>
+                    <p class="text-muted mb-0">Room Code: <strong>{{ match.room_code }}</strong></p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span id="battleConnectionBadge" class="badge badge-accent">Connecting...</span>
+                    <button id="endBattleBtn" class="btn btn-outline-danger btn-sm" {% if match.status == 'finished' %}disabled{% endif %}>
+                        <i class="bi bi-stop-circle me-1"></i>End Battle
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-5">
+                    <div class="p-3 rounded border h-100">
+                        <div class="text-muted small">Player One</div>
+                        <div class="fw-semibold" id="playerOneName">{{ match.player_one.username }}</div>
+                        <div class="display-6 mb-0" id="playerOneScore">{{ match.player_one_score }}</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-2 text-center">
+                    <span class="badge badge-primary px-3 py-2">VS</span>
+                </div>
+                <div class="col-12 col-md-5">
+                    <div class="p-3 rounded border h-100">
+                        <div class="text-muted small">Player Two</div>
+                        <div class="fw-semibold" id="playerTwoName">{{ match.player_two.username|default:"Waiting..." }}</div>
+                        <div class="display-6 mb-0" id="playerTwoScore">{{ match.player_two_score }}</div>
+                    </div>
+                </div>
+            </div>
+            <div id="battleStatus" class="mt-3">
+                {% if match.status == 'finished' %}
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-trophy-fill me-2"></i>Battle finished. Winner: <strong>{{ match.winner.username|default:"Draw" }}</strong>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-broadcast me-2"></i>Battle status: <strong>{{ match.status|title }}</strong>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
-        <!-- Main Content -->
         <div class="col-lg-8">
-            <!-- Challenge Info -->
-            <div class="card border-0 mb-4">
-                <div class="card-body">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                        <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
-                        {% if challenge.algorithm_category_display %}
-                            <span class="badge badge-accent">{{ challenge.algorithm_category_display }}</span>
-                        {% endif %}
-                        <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
-                        <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #B45309;">
-                            <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
-                        </span>
-                    </div>
-                    <h1 class="h3 mb-3">{{ challenge.title }}</h1>
-                    <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
-                        <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
-                    </div>
-                    {% if challenge.starter_code %}
-                        <p class="mt-3 mb-0 text-muted" style="font-size: 0.875rem;">
-                            <i class="bi bi-info-circle me-1"></i>{{ challenge.starter_code }}
-                        </p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Interactive Visualization -->
-            <div class="card border-0 mb-4">
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between mb-3">
-                        <h2 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Interactive Visualization</h2>
-                        <span class="badge badge-primary">{{ challenge.get_algorithm_type_display|default:"ALGORITHM" }}</span>
-                    </div>
-                    
-                    <!-- Visualization Controls -->
-                    <div class="visualization-controls">
-                        <div class="control-group">
-                            <button class="viz-btn viz-btn-start" id="startBtn">
-                                <i class="bi bi-play-fill"></i> Start
-                            </button>
-                            <button class="viz-btn viz-btn-pause" id="pauseBtn" disabled>
-                                <i class="bi bi-pause-fill"></i> Pause
-                            </button>
-                            <button class="viz-btn viz-btn-reset" id="resetBtn">
-                                <i class="bi bi-arrow-clockwise"></i> Reset
-                            </button>
-                        </div>
-                        
-                        <div class="control-group ms-auto">
-                            <label for="speedControl">
-                                <i class="bi bi-speedometer2 me-1"></i> Speed:
-                            </label>
-                            <input type="range" id="speedControl" min="100" max="900" value="500" step="100">
-                            <span class="speed-indicator" id="speedIndicator">Normal</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Visualization Output Container -->
-                    <div id="visualizationOutput"></div>
-                </div>
-            </div>
-
-            <!-- Submit Answer -->
-            {% if user.is_authenticated %}
-                <div class="card border-0">
+            {% if challenge %}
+                <div class="card border-0 mb-4">
                     <div class="card-body">
-                        <h2 class="h5 mb-3"><i class="bi bi-send me-2" style="color: var(--aq-accent);"></i>Submit Answer</h2>
-                        <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
-                            {% csrf_token %}
-                            <textarea class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
-                            <button type="submit" class="btn btn-success px-4" id="submitAnswerBtn">
-                                <i class="bi bi-check2-circle me-1"></i>Submit
-                            </button>
-                        </form>
-                        <div class="mt-3" id="attemptResult"></div>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
+                            {% if challenge.algorithm_category_display %}
+                                <span class="badge badge-accent">{{ challenge.algorithm_category_display }}</span>
+                            {% endif %}
+                            <span class="badge badge-accent">{{ challenge.get_difficulty_display }}</span>
+                            <span class="badge" style="background: var(--aq-warning-soft-bg); color: var(--aq-warning-ink);">
+                                <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
+                            </span>
+                        </div>
+                        <h2 class="h4 mb-3">{{ challenge.title }}</h2>
+                        <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
+                            <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
+                        </div>
+                        {% if challenge.starter_code %}
+                            <p class="mt-3 mb-0 text-muted" style="font-size: 0.875rem;">
+                                <i class="bi bi-info-circle me-1"></i>{{ challenge.starter_code }}
+                            </p>
+                        {% endif %}
                     </div>
                 </div>
+
+                <div class="card border-0 mb-4">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h3 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Interactive Visualization</h3>
+                            <span class="badge badge-primary">{{ challenge.get_algorithm_type_display|default:"ALGORITHM" }}</span>
+                        </div>
+
+                        <div class="visualization-controls">
+                            <div class="control-group">
+                                <button class="viz-btn viz-btn-start" id="startBtn">
+                                    <i class="bi bi-play-fill"></i> Start
+                                </button>
+                                <button class="viz-btn viz-btn-pause" id="pauseBtn" disabled>
+                                    <i class="bi bi-pause-fill"></i> Pause
+                                </button>
+                                <button class="viz-btn viz-btn-reset" id="resetBtn">
+                                    <i class="bi bi-arrow-clockwise"></i> Reset
+                                </button>
+                            </div>
+
+                            <div class="control-group ms-auto">
+                                <label for="speedControl">
+                                    <i class="bi bi-speedometer2 me-1"></i> Speed:
+                                </label>
+                                <input type="range" id="speedControl" min="100" max="900" value="500" step="100">
+                                <span class="speed-indicator" id="speedIndicator">Normal</span>
+                            </div>
+                        </div>
+
+                        <div id="visualizationOutput"></div>
+                    </div>
+                </div>
+
+                {% if user.is_authenticated %}
+                    <div class="card border-0">
+                        <div class="card-body">
+                            <h3 class="h5 mb-3"><i class="bi bi-send me-2" style="color: var(--aq-accent);"></i>Submit Answer</h3>
+                            <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="battle_room_code" value="{{ match.room_code }}">
+                                <textarea class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
+                                <button type="submit" class="btn btn-success px-4" id="submitAnswerBtn">
+                                    <i class="bi bi-check2-circle me-1"></i>Submit
+                                </button>
+                            </form>
+                            <div class="mt-3" id="attemptResult"></div>
+                        </div>
+                    </div>
+                {% endif %}
             {% else %}
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>Please <a href="{% url 'login' %}">login</a> to submit attempts.
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>No challenge is currently available for this battle.
                 </div>
             {% endif %}
         </div>
 
-        <!-- Sidebar -->
         <div class="col-lg-4">
             <div class="card border-0">
                 <div class="card-body">
@@ -120,15 +164,22 @@
 <link href="{% static 'css/visualization.css' %}" rel="stylesheet">
 <script src="{% static 'js/visualization.js' %}"></script>
 <script>
-    const attemptForm = document.getElementById("attemptForm");
-    const attemptResult = document.getElementById("attemptResult");
-    const submitBtn = document.getElementById("submitAnswerBtn");
+    window.BATTLE_ROOM_CODE = "{{ match.room_code }}";
+    window.BATTLE_INITIAL_STATE = {
+        status: "{{ match.status }}",
+        winner: "{{ match.winner.username|default:'Draw' }}"
+    };
+</script>
+<script src="{% static 'js/battle-client.js' %}"></script>
+<script>
+    const attemptForm = document.getElementById('attemptForm');
+    const attemptResult = document.getElementById('attemptResult');
+    const submitBtn = document.getElementById('submitAnswerBtn');
 
     if (attemptForm) {
-        attemptForm.addEventListener("submit", async function (e) {
+        attemptForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
-            // Loading state
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
@@ -137,17 +188,14 @@
             const formData = new FormData(attemptForm);
             try {
                 const response = await fetch(attemptForm.action, {
-                    method: "POST",
+                    method: 'POST',
                     body: formData,
-                    headers: {"X-Requested-With": "XMLHttpRequest"}
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
                 });
                 const data = await response.json();
-                
-                // Determine alert style based on correctness
+
                 const alertClass = data.is_correct ? 'success' : 'warning';
                 const iconClass = data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill';
-                
-                // Build message content
                 let messageContent = `<strong>${data.message}</strong>`;
                 if (data.score !== undefined) {
                     messageContent += ` &middot; Score: <strong>${data.score}</strong>`;
@@ -158,14 +206,18 @@
                 if (data.current_level !== undefined) {
                     messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
                 }
-                
+
                 attemptResult.innerHTML = `<div class="alert alert-${alertClass} fade-in">
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi bi-${iconClass} fs-5"></i>
                         <div>${messageContent}</div>
                     </div>
                 </div>`;
-            } catch (err) {
+
+                if (data.is_correct && data.battle_score_token && window.BattleClient && typeof window.BattleClient.sendScoreIncrement === 'function') {
+                    window.BattleClient.sendScoreIncrement(data.battle_score_token);
+                }
+            } catch (error) {
                 attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
                     <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
                 </div>`;
@@ -178,11 +230,7 @@
         });
     }
 
-    // ============================================
-    // VISUALIZATION CONTROLS
-    // ============================================
-    
-    const algorithmType = "{{ challenge.algorithm_type }}";
+    const algorithmType = "{{ challenge.algorithm_type|default:'' }}";
     const startBtn = document.getElementById('startBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const resetBtn = document.getElementById('resetBtn');
@@ -240,9 +288,7 @@
 
     if (startBtn) {
         startBtn.addEventListener('click', function () {
-            if (!window.VisualizationEngine) {
-                return;
-            }
+            if (!window.VisualizationEngine || !algorithmType) return;
             window.VisualizationEngine.start(algorithmType);
             syncVisualizationButtons();
             startVisualizationStatePolling();
@@ -251,10 +297,9 @@
 
     if (pauseBtn) {
         pauseBtn.addEventListener('click', function () {
-            if (window.VisualizationEngine) {
-                window.VisualizationEngine.pause();
-                syncVisualizationButtons();
-            }
+            if (!window.VisualizationEngine) return;
+            window.VisualizationEngine.pause();
+            syncVisualizationButtons();
         });
     }
 
@@ -277,25 +322,23 @@
             updateSpeedIndicator(speed);
         });
     }
+
     if (speedControl && window.VisualizationEngine) {
         const initialSpeed = parseInt(speedControl.value, 10);
         window.VisualizationEngine.setSpeed(initialSpeed);
         updateSpeedIndicator(initialSpeed);
     }
     syncVisualizationButtons();
-    
-    // Auto-initialize visualization on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        // Show initial message
+
+    document.addEventListener('DOMContentLoaded', function () {
         const vizOutput = document.getElementById('visualizationOutput');
         if (vizOutput && algorithmType) {
             vizOutput.innerHTML = `
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;text-align:center;">
                     <i class="bi bi-play-circle" style="font-size:4rem;color:var(--aq-primary);margin-bottom:1rem;"></i>
                     <h3 style="color:var(--aq-text);margin-bottom:0.5rem;">Interactive Algorithm Visualization</h3>
                     <p style="color:var(--aq-text-secondary);max-width:500px;">
-                        Click <strong>Start</strong> to see the <strong>${algorithmType.replace(/_/g, ' ').toUpperCase()}</strong> algorithm in action!
-                        Watch step-by-step animations and understand how it works visually.
+                        Click <strong>Start</strong> to visualize <strong>${algorithmType.replace(/_/g, ' ').toUpperCase()}</strong>.
                     </p>
                 </div>
             `;
@@ -303,4 +346,3 @@
     });
 </script>
 {% endblock %}
-

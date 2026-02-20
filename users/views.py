@@ -9,6 +9,7 @@ from django.contrib.auth.views import (
 )
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from rest_framework import generics, permissions
@@ -22,9 +23,13 @@ from .forms import (
     CustomPasswordResetForm,
     CustomSetPasswordForm,
     SignUpForm,
+    UserProfileForm,
     UserSettingsForm,
 )
+from .models import UserProfile
 from .serializers import UserSerializer
+
+XP_PER_LEVEL = 250
 
 
 def home(request):
@@ -35,10 +40,15 @@ def signup_view(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            login(request, user)
-            messages.success(request, 'Your account has been created successfully.')
-            return redirect('dashboard')
+            try:
+                with transaction.atomic():
+                    user = form.save()
+            except IntegrityError:
+                form.add_error('email', 'An account with this email already exists.')
+            else:
+                login(request, user)
+                messages.success(request, 'Your account has been created successfully.')
+                return redirect('dashboard')
         messages.error(request, 'Please fix the highlighted signup errors.')
     else:
         form = SignUpForm()
@@ -47,18 +57,48 @@ def signup_view(request):
 
 @login_required
 def dashboard_view(request):
-    profile = request.user.profile
-    recent_attempts = ChallengeAttempt.objects.filter(user=request.user).select_related('challenge')[:5]
-    global_rank = Leaderboard.objects.filter(scope=Leaderboard.Scope.GLOBAL).order_by('-score')
-    weekly_rank = Leaderboard.objects.filter(scope=Leaderboard.Scope.WEEKLY).order_by('-score')
-    rewards = Reward.objects.filter(user=request.user)[:5]
+    profile, _created = UserProfile.objects.get_or_create(user=request.user)
+
+    # Progress should reflect the active level band, not total lifetime XP.
+    level_floor_xp = max(profile.level - 1, 0) * XP_PER_LEVEL
+    xp_in_level = profile.xp - level_floor_xp
+    if xp_in_level < 0 or xp_in_level >= XP_PER_LEVEL:
+        xp_in_level = profile.xp % XP_PER_LEVEL
+    xp_to_next_level = XP_PER_LEVEL - xp_in_level
+    xp_percentage = max(0, min(100, int((xp_in_level / XP_PER_LEVEL) * 100)))
+
+    recent_attempts = (
+        ChallengeAttempt.objects.filter(user=request.user)
+        .select_related('challenge')
+        .order_by('-created_at', '-id')[:5]
+    )
+    weekly_start = Leaderboard.current_week_start()
+    global_rank = (
+        Leaderboard.objects.filter(scope=Leaderboard.Scope.GLOBAL)
+        .select_related('user')
+        .order_by('-score', '-updated_at', 'id')
+    )
+    weekly_rank = (
+        Leaderboard.objects.filter(
+            scope=Leaderboard.Scope.WEEKLY,
+            week_start=weekly_start,
+        )
+        .select_related('user')
+        .order_by('-score', '-updated_at', 'id')
+    )
+    rewards = Reward.objects.filter(user=request.user).order_by('-granted_at', '-id')[:5]
     recommendations = recommend_next_challenges(request.user)
 
     context = {
         'profile': profile,
+        'xp_in_level': xp_in_level,
+        'xp_to_next_level': xp_to_next_level,
+        'xp_percentage': xp_percentage,
+        'xp_level_band': XP_PER_LEVEL,
         'recent_attempts': recent_attempts,
         'global_rankings': global_rank[:10],
         'weekly_rankings': weekly_rank[:10],
+        'weekly_start': weekly_start,
         'rewards': rewards,
         'recommendations': recommendations,
     }
@@ -67,20 +107,32 @@ def dashboard_view(request):
 
 @login_required
 def profile_settings_view(request):
-    profile = request.user.profile
+    profile, _created = UserProfile.objects.get_or_create(user=request.user)
+
     if request.method == 'POST':
         form = UserSettingsForm(request.POST, instance=request.user)
-        if form.is_valid():
-            form.save()
-            return redirect('profile-settings')
+        profile_form = UserProfileForm(request.POST, instance=profile)
+        if form.is_valid() and profile_form.is_valid():
+            try:
+                with transaction.atomic():
+                    form.save()
+                    profile_form.save()
+            except IntegrityError:
+                form.add_error('email', 'An account with this email already exists.')
+            else:
+                messages.success(request, 'Profile updated successfully.')
+                return redirect('profile-settings')
+        messages.error(request, 'Please fix the highlighted profile errors.')
     else:
         form = UserSettingsForm(instance=request.user)
+        profile_form = UserProfileForm(instance=profile)
 
     return render(
         request,
         'users/profile.html',
         {
             'form': form,
+            'profile_form': profile_form,
             'profile': profile,
         },
     )
@@ -89,7 +141,7 @@ def profile_settings_view(request):
 class UsersApiView(generics.ListAPIView):
     queryset = User.objects.select_related('profile').all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class CustomLoginView(LoginView):

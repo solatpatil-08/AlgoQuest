@@ -299,7 +299,7 @@
 
 .badge-warning {
     background: var(--aq-warning-light);
-    color: #B45309;
+    color: var(--aq-warning-ink);
 }
 
 .badge-easy {
@@ -310,7 +310,7 @@
 
 .badge-medium {
     background: var(--aq-warning-light);
-    color: #B45309;
+    color: var(--aq-warning-ink);
     font-weight: 600;
 }
 
@@ -321,7 +321,7 @@
 }
 
 .badge-level {
-    background: linear-gradient(135deg, var(--aq-primary), #6366F1);
+    background: linear-gradient(135deg, var(--aq-primary), var(--aq-indigo-ink));
     color: #FFFFFF;
     font-weight: 600;
     padding: 0.4em 1em;
@@ -366,7 +366,7 @@
 .alert-warning {
     background: var(--aq-warning-light);
     border-color: rgba(245, 158, 11, 0.2);
-    color: #B45309;
+    color: var(--aq-warning-ink);
 }
 
 .alert-info {
@@ -394,7 +394,7 @@
 }
 
 .list-group-item:hover {
-    background: rgba(37, 99, 235, 0.03);
+    background: var(--aq-primary-soft-bg);
     cursor: default;
 }
 
@@ -441,7 +441,7 @@
 }
 
 .table-hover tbody tr:hover {
-    background: rgba(37, 99, 235, 0.03);
+    background: var(--aq-primary-soft-bg);
 }
 
 /* ============================================
@@ -646,8 +646,8 @@
 }
 
 .feature-icon-purple {
-    background: rgba(139, 92, 246, 0.1);
-    color: #8B5CF6;
+    background: var(--aq-purple-soft-bg);
+    color: var(--aq-purple-ink);
 }
 
 /* ============================================
@@ -736,7 +736,7 @@
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, var(--aq-primary), var(--aq-accent), #6366F1);
+    background: linear-gradient(90deg, var(--aq-primary), var(--aq-accent), var(--aq-indigo-ink));
 }
 
 .auth-card:hover {
@@ -834,34 +834,34 @@
    ============================================ */
 
 .rank-gold {
-    background: linear-gradient(135deg, #FEF3C7, #FDE68A) !important;
-    border-color: #F59E0B !important;
+    background: var(--aq-rank-gold-bg) !important;
+    border-color: var(--aq-rank-gold-border) !important;
     font-weight: 700;
     position: relative;
 }
 
 .rank-gold::before {
-    color: #D97706 !important;
+    color: var(--aq-rank-gold-ink) !important;
 }
 
 .rank-silver {
-    background: linear-gradient(135deg, #F1F5F9, #E2E8F0) !important;
-    border-color: #94A3B8 !important;
+    background: var(--aq-rank-silver-bg) !important;
+    border-color: var(--aq-rank-silver-border) !important;
     font-weight: 600;
 }
 
 .rank-silver::before {
-    color: #64748B !important;
+    color: var(--aq-rank-silver-ink) !important;
 }
 
 .rank-bronze {
-    background: linear-gradient(135deg, #FED7AA, #FDBA74) !important;
-    border-color: #F97316 !important;
+    background: var(--aq-rank-bronze-bg) !important;
+    border-color: var(--aq-rank-bronze-border) !important;
     font-weight: 600;
 }
 
 .rank-bronze::before {
-    color: #EA580C !important;
+    color: var(--aq-rank-bronze-ink) !important;
 }
 
 /* ============================================
@@ -920,7 +920,7 @@
 }
 
 .battle-vs .badge {
-    background: linear-gradient(135deg, var(--aq-primary), #6366F1);
+    background: linear-gradient(135deg, var(--aq-primary), var(--aq-indigo-ink));
     color: #FFFFFF;
     font-size: 1.1rem;
     padding: 0.5em 1.2em;
@@ -1077,4 +1077,6 @@
         border-radius: var(--aq-radius-lg);
     }
 }
+
+
 

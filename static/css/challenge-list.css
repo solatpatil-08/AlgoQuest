@@ -7,7 +7,7 @@
     padding: 0.75rem;
     border: 1px solid var(--aq-border);
     border-radius: var(--aq-radius-lg);
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(16, 185, 129, 0.06));
+    background: linear-gradient(135deg, var(--aq-primary-soft-bg), var(--aq-success-soft-bg));
     overflow-x: auto;
     overflow-y: hidden;
     flex-wrap: nowrap;
@@ -19,7 +19,7 @@
 }
 
 .quick-filter-bar::-webkit-scrollbar-thumb {
-    background: rgba(37, 99, 235, 0.35);
+    background: var(--aq-primary);
     border-radius: var(--aq-radius-full);
 }
 
@@ -60,7 +60,7 @@
 
 .quick-filter-clear-btn {
     border: 0;
-    background: rgba(37, 99, 235, 0.12);
+    background: var(--aq-primary-soft-bg);
     border-radius: var(--aq-radius-full);
     padding: 0.32rem 0.65rem;
     font-size: 0.72rem;
@@ -71,7 +71,7 @@
 
 .quick-filter-clear-btn:hover,
 .quick-filter-clear-btn:focus-visible {
-    background: rgba(37, 99, 235, 0.2);
+    background: var(--aq-primary-light);
     outline: none;
 }
 
@@ -143,7 +143,7 @@
 }
 
 .category-header {
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(16, 185, 129, 0.05));
+    background: linear-gradient(135deg, var(--aq-primary-soft-bg), var(--aq-success-soft-bg));
     border-left: 4px solid var(--aq-primary);
     padding: 1rem 1.25rem;
     border-radius: var(--aq-radius-md);
@@ -152,7 +152,7 @@
 }
 
 .category-header:hover {
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.08));
+    background: linear-gradient(135deg, var(--aq-primary-light), var(--aq-accent-light));
     box-shadow: var(--aq-shadow-sm);
 }
 

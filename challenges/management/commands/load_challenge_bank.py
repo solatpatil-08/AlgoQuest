@@ -1,8 +1,11 @@
 """Management command to load challenge bank from JSON into database."""
 import json
 from pathlib import Path
+
 from django.core.management.base import BaseCommand, CommandError
-from challenges.models import Topic, Challenge
+from django.utils.text import slugify
+
+from challenges.models import Challenge, Topic
 from challenges.validators import ChallengeBankValidationError, validate_challenge_bank
 
 
@@ -23,41 +26,37 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         bank_file = Path('challenges/data/challenge_bank.json')
-        
+
         if not bank_file.exists():
             raise CommandError(f'Challenge bank file not found: {bank_file}')
-        
-        # Validate first
+
         self.stdout.write('Validating challenge bank JSON...')
         try:
             validate_challenge_bank(str(bank_file))
-            self.stdout.write(self.style.SUCCESS('✓ Challenge bank JSON is valid'))
-        except ChallengeBankValidationError as e:
-            raise CommandError(str(e))
-        
+            self.stdout.write(self.style.SUCCESS('[OK] Challenge bank JSON is valid'))
+        except ChallengeBankValidationError as exc:
+            raise CommandError(str(exc))
+
         if options['validate_only']:
             self.stdout.write(self.style.SUCCESS('Validation complete. No changes made.'))
             return
-        
-        # Load JSON
-        with open(bank_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Reset if requested
+
+        with open(bank_file, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+
         if options['reset']:
             self.stdout.write('Clearing existing topics and challenges...')
             Topic.objects.all().delete()
             Challenge.objects.all().delete()
-            self.stdout.write(self.style.WARNING('✓ Cleared all topics and challenges'))
-        
-        # Load topics and challenges
+            self.stdout.write(self.style.WARNING('[OK] Cleared all topics and challenges'))
+
         topics_created = 0
+        topics_updated = 0
         challenges_created = 0
         challenges_updated = 0
-        
+
         for topic_data in data.get('topics', []):
-            # Create or get topic
-            topic, topic_created = Topic.objects.get_or_create(
+            topic, topic_created = Topic.objects.update_or_create(
                 stable_id=topic_data['stable_id'],
                 defaults={
                     'label': topic_data['label'],
@@ -65,40 +64,46 @@ class Command(BaseCommand):
                     'description': topic_data['description'],
                     'icon_class': topic_data.get('icon_class', 'bi-puzzle'),
                     'visualization_type': topic_data.get('visualization_type', 'conceptual'),
-                    'is_active': True,
+                    'is_active': topic_data.get('is_active', True),
                 },
             )
             if topic_created:
                 topics_created += 1
-            
-            # Create challenges for this topic
-            for chal_data in topic_data.get('challenges', []):
-                # Use compound key: (topic_id, order_index) for uniqueness per topic
-                challenge, chal_created = Challenge.objects.update_or_create(
+            else:
+                topics_updated += 1
+
+            for challenge_data in topic_data.get('challenges', []):
+                challenge, challenge_created = Challenge.objects.update_or_create(
                     topic=topic,
-                    order_index=chal_data['order_index'],
+                    order_index=challenge_data['order_index'],
                     defaults={
-                        'title': chal_data['title'],
+                        'title': challenge_data['title'],
                         'challenge_type': Challenge.ChallengeType.ALGORITHM,
-                        'difficulty': chal_data['difficulty'],
-                        'description': chal_data['description'],
-                        'prompt': chal_data['prompt'],
-                        'expected_answer': chal_data['expected_answer'],
-                        'starter_code': chal_data.get('starter_code', ''),
-                        'xp_reward': chal_data['xp_reward'],
-                        'is_active': chal_data.get('is_active', True),
+                        'algorithm_type': challenge_data['algorithm_type'],
+                        'difficulty': challenge_data['difficulty'],
+                        'description': challenge_data['description'],
+                        'prompt': challenge_data['prompt'],
+                        'expected_answer': challenge_data['expected_answer'],
+                        'starter_code': challenge_data.get('starter_code', ''),
+                        'visualization_payload': challenge_data.get('visualization_payload', {}),
+                        'xp_reward': challenge_data['xp_reward'],
+                        'is_active': challenge_data.get('is_active', True),
                         'is_visual_supported': topic.visualization_type != 'conceptual',
                     },
                 )
-                # Force slug regeneration based on new save logic (topic + title)
-                if chal_created or not challenge.slug:
-                    challenge.save()
-                if chal_created:
+
+                desired_slug = slugify(f'{topic.stable_id}-{challenge.title}')
+                if challenge.slug != desired_slug:
+                    challenge.slug = desired_slug
+                    challenge.save(update_fields=['slug'])
+
+                if challenge_created:
                     challenges_created += 1
                 else:
                     challenges_updated += 1
-        
-        self.stdout.write(self.style.SUCCESS(f'✓ Loaded {topics_created} new topics'))
-        self.stdout.write(self.style.SUCCESS(f'✓ Created {challenges_created} new challenges'))
-        self.stdout.write(self.style.SUCCESS(f'✓ Updated {challenges_updated} existing challenges'))
+
+        self.stdout.write(self.style.SUCCESS(f'[OK] Loaded {topics_created} new topics'))
+        self.stdout.write(self.style.SUCCESS(f'[OK] Updated {topics_updated} existing topics'))
+        self.stdout.write(self.style.SUCCESS(f'[OK] Created {challenges_created} new challenges'))
+        self.stdout.write(self.style.SUCCESS(f'[OK] Updated {challenges_updated} existing challenges'))
         self.stdout.write(self.style.SUCCESS('Challenge bank loaded successfully!'))

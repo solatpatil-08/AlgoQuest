@@ -358,6 +358,7 @@ class Command(BaseCommand):
             Leaderboard.objects.update_or_create(
                 user=user,
                 scope=Leaderboard.Scope.WEEKLY,
+                week_start=Leaderboard.current_week_start(),
                 defaults={'score': user.profile.xp // 2},
             )
 
@@ -367,7 +368,7 @@ class Command(BaseCommand):
                 defaults={
                     'description': 'Joined AlgoQuest seed cohort',
                     'points_awarded': 50,
-                    'badge_icon': '🚀',
+                    'badge_icon': '\U0001f680',
                 },
             )
 
