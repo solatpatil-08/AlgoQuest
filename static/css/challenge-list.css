@@ -65,7 +65,7 @@
     padding: 0.32rem 0.65rem;
     font-size: 0.72rem;
     font-weight: 700;
-    color: var(--aq-primary-dark);
+    color: var(--aq-primary);
     line-height: 1;
 }
 
@@ -110,7 +110,7 @@
 .category-filter-btn:hover {
     border-color: var(--aq-primary);
     background: var(--aq-primary-light);
-    color: var(--aq-primary-dark);
+    color: var(--aq-text);
     transform: translateY(-1px);
     box-shadow: var(--aq-shadow-sm);
 }
@@ -168,6 +168,34 @@
     opacity: 1;
     transition: opacity 0.3s ease, transform 0.3s ease;
     animation: fadeInUp 0.5s ease forwards;
+}
+
+.challenge-list-page .challenge-algorithm-label {
+    color: var(--aq-primary);
+}
+
+[data-theme="dark"] .challenge-list-page .quick-filter-clear-btn {
+    background: rgba(59, 130, 246, 0.28);
+    color: #DBEAFE;
+}
+
+[data-theme="dark"] .challenge-list-page .category-filter-btn:hover {
+    background: rgba(59, 130, 246, 0.22);
+}
+
+[data-theme="dark"] .challenge-list-page .badge-primary {
+    background: rgba(59, 130, 246, 0.24);
+    color: #DBEAFE;
+}
+
+[data-theme="dark"] .challenge-list-page .badge-accent {
+    background: rgba(16, 185, 129, 0.24);
+    color: #A7F3D0;
+}
+
+[data-theme="dark"] .challenge-list-page .badge-secondary {
+    background: rgba(148, 163, 184, 0.24);
+    color: #E2E8F0;
 }
 
 @media (max-width: 767.98px) {

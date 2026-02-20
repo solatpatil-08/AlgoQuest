@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block content %}
-<div class="fade-in-up">
+<div class="fade-in-up challenge-list-page">
     <!-- Page Header -->
     <div class="section-header mb-4">
         <div>
@@ -159,7 +159,7 @@
                                         </div>
                                         <h3 class="h6 mb-2 fw-bold">{{ challenge.title }}</h3>
                                         {% if challenge.get_algorithm_type_display %}
-                                            <p class="mb-2" style="font-size: 0.8125rem; color: var(--aq-primary-dark); font-weight: 600;">
+                                            <p class="mb-2 challenge-algorithm-label" style="font-size: 0.8125rem; font-weight: 600;">
                                                 <i class="bi bi-cpu me-1"></i>{{ challenge.get_algorithm_type_display }}
                                             </p>
                                         {% endif %}

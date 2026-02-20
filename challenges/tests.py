@@ -116,6 +116,992 @@ class ChallengeAttemptFlowTests(TestCase):
         self.assertEqual(payload['xp_gained'], 0)
 
 
+class KnapsackActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='knapsack-player', password='StrongPass123!')
+        self.challenge = Challenge.objects.create(
+            title='Knapsack Action Mode',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.KNAPSACK,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            starter_code='Try selecting the best value combination under capacity.',
+            expected_answer='13',
+            xp_reward=50,
+            max_score=100,
+            visualization_payload={
+                'mode': 'grid',
+                'algorithm': 'knapsack',
+                'weights': [2, 3, 4],
+                'values': [6, 7, 8],
+                'capacity': 5,
+            },
+        )
+
+    def test_knapsack_action_payload_derives_authoritative_answer(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': '999',
+                'action_payload': json.dumps({'selected_indices': [0, 1], 'actions': []}),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['score'], 100)
+        self.assertEqual(payload['xp_gained'], 50)
+        self.assertEqual(payload['knapsack_total_weight'], 5)
+        self.assertFalse(payload['knapsack_over_capacity'])
+
+        attempt = ChallengeAttempt.objects.get(user=self.user, challenge=self.challenge)
+        self.assertEqual(attempt.submitted_answer, '13')
+
+    def test_knapsack_over_capacity_submission_stays_incorrect(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': '13',
+                'action_payload': json.dumps({'selected_indices': [1, 2], 'actions': []}),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertTrue(payload['knapsack_over_capacity'])
+        self.assertEqual(payload['score'], 0)
+        self.assertEqual(payload['xp_gained'], 0)
+        self.assertIn('overweight', payload['message'].lower())
+
+    def test_knapsack_action_with_hint_applies_first_attempt_penalty(self):
+        self.client.force_login(self.user)
+
+        hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(hint_response.status_code, 200)
+
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': '999',
+                'action_payload': json.dumps({'selected_indices': [0, 1], 'actions': []}),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['hint_used'])
+        self.assertEqual(payload['score'], 25)
+        self.assertEqual(payload['xp_gained'], 12)
+
+
+class AdvancedDsaActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='advanced-dsa-player', password='StrongPass123!')
+
+    def test_activity_selection_action_payload_derives_count(self):
+        challenge = Challenge.objects.create(
+            title='Activity Selection Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ACTIVITY_SELECTION,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='4',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={'starts': [1, 3, 0, 5, 8], 'ends': [2, 4, 6, 7, 9]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'selected_indices': [0, 1, 3, 4]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['activity_selected_count'], 4)
+
+    def test_lcs_action_payload_uses_candidate_length(self):
+        challenge = Challenge.objects.create(
+            title='LCS Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LCS,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='4',
+            xp_reward=45,
+            max_score=100,
+            visualization_payload={'s1': 'ABCBDAB', 's2': 'BDCABA'},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '1', 'action_payload': json.dumps({'candidate_subsequence': 'BCBA'})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['lcs_candidate_valid'])
+
+    def test_backtracking_action_payload_counts_unique_valid_subsets(self):
+        challenge = Challenge.objects.create(
+            title='Backtracking Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BACKTRACKING,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='2',
+            xp_reward=50,
+            max_score=100,
+            visualization_payload={'values': [2, 3, 5, 6, 8], 'target': 10},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'found_subsets': [[2, 8], [2, 3, 5]]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['backtracking_valid_subset_count'], 2)
+
+    def test_recursion_action_payload_requires_valid_fibonacci_sequence(self):
+        challenge = Challenge.objects.create(
+            title='Recursion Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.RECURSION,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='21',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={'n': 8},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'sequence': [0, 1, 1, 2, 3, 5, 8, 13, 21]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['recursion_sequence_valid'])
+
+    def test_bit_conversion_action_payload_uses_binary_candidate(self):
+        challenge = Challenge.objects.create(
+            title='Bit Conversion Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BIT_CONVERSION,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='11010',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'decimal': 26, 'binary': '11010'},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'binary': '011010'})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['bit_binary'], '11010')
+
+
+class GraphActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='graph-player', password='StrongPass123!')
+
+    def test_bfs_action_payload_uses_selected_order(self):
+        challenge = Challenge.objects.create(
+            title='BFS Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='0 1 2 3 4 5',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={
+                'nodes': [0, 1, 2, 3, 4, 5],
+                'edges': [[0, 1], [0, 2], [1, 3], [2, 4], [4, 5]],
+                'start': 0,
+            },
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'visitation_order': [0, 1, 2, 3, 4, 5]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['graph_algorithm'], 'bfs')
+
+    def test_dfs_action_payload_uses_selected_order(self):
+        challenge = Challenge.objects.create(
+            title='DFS Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.DFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='0 1 3 2 4 5',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={
+                'nodes': [0, 1, 2, 3, 4, 5],
+                'edges': [[0, 1], [0, 2], [1, 3], [2, 4], [4, 5]],
+                'start': 0,
+            },
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'visitation_order': [0, 1, 3, 2, 4, 5]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['graph_algorithm'], 'dfs')
+
+    def test_dijkstra_action_payload_derives_distance_from_path(self):
+        challenge = Challenge.objects.create(
+            title='Dijkstra Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.DIJKSTRA,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='5',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={
+                'weighted_edges': [[0, 1, 2], [1, 3, 3], [0, 2, 6], [2, 3, 2]],
+                'source': 0,
+                'target': 3,
+            },
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'path_nodes': [0, 1, 3]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['graph_selected_distance'], 5)
+
+    def test_dijkstra_action_payload_warns_on_non_shortest_path(self):
+        challenge = Challenge.objects.create(
+            title='Dijkstra Non Shortest',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.DIJKSTRA,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='5',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={
+                'weighted_edges': [[0, 1, 2], [1, 3, 3], [0, 2, 6], [2, 3, 2]],
+                'source': 0,
+                'target': 3,
+            },
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'path_nodes': [0, 2, 3]})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('not shortest', payload['message'].lower())
+
+    def test_astar_action_payload_uses_path_length(self):
+        challenge = Challenge.objects.create(
+            title='AStar Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ASTAR,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='4',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={'rows': 3, 'cols': 3, 'blocked': [[1, 1]]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'path': [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['graph_selected_moves'], 4)
+
+    def test_astar_action_payload_unreachable(self):
+        challenge = Challenge.objects.create(
+            title='AStar Unreachable',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ASTAR,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='-1',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={'rows': 3, 'cols': 3, 'blocked': [[0, 1], [1, 0], [1, 1]]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'is_unreachable': True})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['graph_selected_moves'], -1)
+
+    def test_minimax_action_payload_uses_root_value(self):
+        challenge = Challenge.objects.create(
+            title='Minimax Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.MINIMAX,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='3',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={'leaves': [3, 5, 2, 9, 12, 5, 23, 23]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'root_value': 3, 'fold_steps': ['MIN', 'MAX', 'MIN']})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['graph_root_expected'], 3)
+
+
+class SortingActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='sorting-player', password='StrongPass123!')
+
+    def test_sorting_action_payload_uses_array_state(self):
+        challenge = Challenge.objects.create(
+            title='Bubble Sort Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BUBBLE_SORT,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='1 3 5',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'data': [5, 1, 3]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'array': [1, 3, 5], 'swaps': [[0, 1], [1, 2]]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['sorting_is_sorted'])
+        self.assertEqual(payload['sorting_current_answer'], '1 3 5')
+
+    def test_sorting_action_payload_can_derive_from_swaps_only(self):
+        challenge = Challenge.objects.create(
+            title='Quick Sort Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.QUICK_SORT,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='1 2 3',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={'data': [3, 1, 2]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'swaps': [[0, 1], [1, 2]]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['sorting_current_answer'], '1 2 3')
+
+    def test_sorting_action_payload_rejects_value_mismatch(self):
+        challenge = Challenge.objects.create(
+            title='Selection Sort Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.SELECTION_SORT,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='1 2 3',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'data': [3, 1, 2]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'array': [1, 2, 9]})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('same values', payload['message'].lower())
+
+    def test_sorting_action_payload_feedback_when_not_sorted(self):
+        challenge = Challenge.objects.create(
+            title='Merge Sort Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.MERGE_SORT,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='1 2 4 6',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={'data': [6, 1, 4, 2]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'array': [1, 6, 2, 4]})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertFalse(payload['sorting_is_sorted'])
+        self.assertIn('not fully sorted', payload['message'].lower())
+
+
+class SearchingActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='search-player', password='StrongPass123!')
+
+    def test_linear_search_action_payload_derives_index(self):
+        challenge = Challenge.objects.create(
+            title='Linear Search Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LINEAR_SEARCH,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='2',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'data': [8, 3, 11, 5], 'target': 11},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '999', 'action_payload': json.dumps({'selected_index': 2, 'inspected_indices': [0, 1, 2]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['search_type'], 'linear')
+        self.assertEqual(payload['search_selected_index'], 2)
+
+    def test_linear_search_action_payload_rejects_non_matching_pick(self):
+        challenge = Challenge.objects.create(
+            title='Linear Search Invalid Pick',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LINEAR_SEARCH,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='1',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'data': [5, 2, 9], 'target': 2},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '1', 'action_payload': json.dumps({'selected_index': 0})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('does not match target', payload['message'].lower())
+
+    def test_binary_search_action_payload_derives_index(self):
+        challenge = Challenge.objects.create(
+            title='Binary Search Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BINARY_SEARCH,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='4',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'data': [2, 5, 8, 13, 21, 34], 'target': 21},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'selected_index': 4, 'trace': [{'low': 0, 'high': 5, 'mid': 2, 'decision': 'gt'}]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['search_type'], 'binary')
+        self.assertEqual(payload['search_selected_index'], 4)
+
+    def test_binary_search_action_payload_not_found(self):
+        challenge = Challenge.objects.create(
+            title='Binary Search Not Found',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BINARY_SEARCH,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='-1',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'data': [1, 4, 7, 10, 15], 'target': 9},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '2', 'action_payload': json.dumps({'selected_index': -1, 'trace': []})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['search_selected_index'], -1)
+
+    def test_binary_search_action_payload_wrong_not_found_is_rejected(self):
+        challenge = Challenge.objects.create(
+            title='Binary Search Wrong Not Found',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BINARY_SEARCH,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='3',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'data': [3, 6, 9, 12, 18], 'target': 12},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '-1', 'action_payload': json.dumps({'selected_index': -1})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('target exists', payload['message'].lower())
+
+
+class StringActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='string-player', password='StrongPass123!')
+
+    def test_string_action_payload_uses_candidate_prefix(self):
+        challenge = Challenge.objects.create(
+            title='String Prefix Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.STRING_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='algo',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'words': ['algox', 'algop', 'algozz']},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'x', 'action_payload': json.dumps({'candidate_prefix': 'algo'})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['string_is_common_prefix'])
+        self.assertFalse(payload['string_can_extend'])
+
+    def test_string_action_payload_rejects_invalid_prefix(self):
+        challenge = Challenge.objects.create(
+            title='String Prefix Invalid',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.STRING_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='data',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'words': ['datax', 'datay', 'dataz']},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'data', 'action_payload': json.dumps({'candidate_prefix': 'datx'})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('not a common prefix', payload['message'].lower())
+
+    def test_string_action_payload_reports_extendable_prefix(self):
+        challenge = Challenge.objects.create(
+            title='String Prefix Extendable',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.STRING_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='graph',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'words': ['graphx', 'graphy', 'graphzz']},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'graph', 'action_payload': json.dumps({'candidate_prefix': 'gra'})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertTrue(payload['string_can_extend'])
+        self.assertIn('can be extended', payload['message'].lower())
+
+
+class ArrayActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='array-player', password='StrongPass123!')
+
+    def test_array_action_payload_derives_sum_from_range_bounds(self):
+        challenge = Challenge.objects.create(
+            title='Array Max Subarray Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ARRAY_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='6',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'data': [4, -1, 2, 1, -5, 4]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'start_index': 0, 'end_index': 3})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['array_selection_valid'])
+        self.assertEqual(payload['array_selected_sum'], '6')
+
+    def test_array_action_payload_accepts_contiguous_indices(self):
+        challenge = Challenge.objects.create(
+            title='Array Contiguous Indices',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ARRAY_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='4',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'data': [-2, 5, -1]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '999', 'action_payload': json.dumps({'selected_indices': [1, 2]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['array_selected_start'], 1)
+        self.assertEqual(payload['array_selected_end'], 2)
+
+    def test_array_action_payload_rejects_non_contiguous_selection(self):
+        challenge = Challenge.objects.create(
+            title='Array Non Contiguous',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.ARRAY_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='7',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'data': [3, -2, 4]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '7', 'action_payload': json.dumps({'selected_indices': [0, 2]})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('contiguous', payload['message'].lower())
+
+
+class HashingActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='hash-player', password='StrongPass123!')
+
+    def test_hashing_action_payload_valid_pair_derives_true(self):
+        challenge = Challenge.objects.create(
+            title='Hash Pair Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.HASHING_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='true',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'arr': [7, 14, 16, 6, 23, 11], 'target': 37},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'false', 'action_payload': json.dumps({'selected_indices': [1, 4]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['hashing_selection_valid'])
+        self.assertEqual(payload['hashing_selected_indices'], [1, 4])
+
+    def test_hashing_action_payload_no_pair_derives_false(self):
+        challenge = Challenge.objects.create(
+            title='Hash Pair No Match',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.HASHING_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='false',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'arr': [20, 12, 23, 28, 11, 28], 'target': 20},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'true', 'action_payload': json.dumps({'declare_no_pair': True})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertFalse(payload['hashing_pair_exists'])
+
+    def test_hashing_action_payload_rejects_wrong_pair(self):
+        challenge = Challenge.objects.create(
+            title='Hash Pair Wrong',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.HASHING_ALGORITHM,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='true',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'arr': [7, 14, 16, 6, 23, 11], 'target': 37},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'true', 'action_payload': json.dumps({'selected_indices': [0, 1]})},
+        )
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('does not sum', payload['message'].lower())
+
+
+class AiMlActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='ai-ml-player', password='StrongPass123!')
+
+    def test_linear_regression_action_payload_derives_prediction(self):
+        challenge = Challenge.objects.create(
+            title='Linear Regression Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LINEAR_REGRESSION,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='20',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'points': [[1, 5], [2, 8], [3, 11]], 'query_x': 6},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'selected_indices': [0, 2]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['linear_prediction'], '20')
+
+    def test_logistic_regression_action_payload_uses_probability(self):
+        challenge = Challenge.objects.create(
+            title='Logistic Regression Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LOGISTIC_REGRESSION,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='0.500',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'z': 0.0},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'probability': 0.5})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['logistic_probability'], '0.500')
+
+    def test_kmeans_action_payload_derives_updated_centroids(self):
+        challenge = Challenge.objects.create(
+            title='K-Means Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.KMEANS,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='3.00 10.00',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={'points': [2, 4, 8, 12], 'centroids': [3, 11]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'assignments': [0, 0, 1, 1]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['kmeans_updated_centroids'], '3.00 10.00')
+
+    def test_knn_action_payload_requires_true_nearest_neighbors(self):
+        challenge = Challenge.objects.create(
+            title='KNN Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.KNN,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='B',
+            xp_reward=35,
+            max_score=100,
+            visualization_payload={
+                'train_points': [[2, 'A'], [4, 'A'], [9, 'B'], [12, 'B'], [7, 'B']],
+                'query_x': 8,
+                'k': 3,
+            },
+        )
+        self.client.force_login(self.user)
+
+        wrong_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'A', 'action_payload': json.dumps({'selected_indices': [0, 1, 2]})},
+        )
+        wrong_payload = wrong_response.json()
+        self.assertFalse(wrong_payload['is_correct'])
+        self.assertIn('nearest', wrong_payload['message'].lower())
+
+        correct_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'A', 'action_payload': json.dumps({'selected_indices': [4, 2, 1]})},
+        )
+        correct_payload = correct_response.json()
+        self.assertTrue(correct_payload['is_correct'])
+        self.assertEqual(correct_payload['knn_prediction'], 'B')
+
+    def test_decision_tree_action_payload_uses_entropy_candidate(self):
+        challenge = Challenge.objects.create(
+            title='Decision Tree Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.DECISION_TREE,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='0.811',
+            xp_reward=40,
+            max_score=100,
+            visualization_payload={'positive': 3, 'negative': 1},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'entropy': 0.811})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['decision_tree_entropy'], '0.811')
+
+    def test_naive_bayes_action_payload_uses_selected_label(self):
+        challenge = Challenge.objects.create(
+            title='Naive Bayes Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.NAIVE_BAYES,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='spam',
+            xp_reward=30,
+            max_score=100,
+            visualization_payload={'spam_score': 0.42, 'ham_score': 0.31},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'ham', 'action_payload': json.dumps({'label': 'spam'})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['naive_bayes_label'], 'spam')
+
+    def test_neural_network_action_payload_requires_linear_sum(self):
+        challenge = Challenge.objects.create(
+            title='Neural Network Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.NEURAL_NETWORK,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='desc',
+            prompt='prompt',
+            expected_answer='0.731',
+            xp_reward=45,
+            max_score=100,
+            visualization_payload={'x1': 2, 'x2': -1, 'w1': 1.0, 'w2': 0.5, 'b': -0.5},
+        )
+        self.client.force_login(self.user)
+
+        wrong_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'linear_sum': 0.5, 'output': 0.731})},
+        )
+        wrong_payload = wrong_response.json()
+        self.assertFalse(wrong_payload['is_correct'])
+        self.assertIn('linear combination', wrong_payload['message'].lower())
+
+        correct_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '0', 'action_payload': json.dumps({'linear_sum': 1.0, 'output': 0.731})},
+        )
+        correct_payload = correct_response.json()
+        self.assertTrue(correct_payload['is_correct'])
+        self.assertEqual(correct_payload['neural_output'], '0.731')
+
+
 class ChallengesApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='api-solver', password='StrongPass123!')

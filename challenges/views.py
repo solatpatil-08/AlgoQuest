@@ -1,6 +1,9 @@
+import json
+import math
 import re
+from collections import Counter, defaultdict, deque
+from heapq import heappop, heappush
 from urllib.parse import urlencode
-from collections import defaultdict
 from itertools import groupby
 
 from django.contrib.auth.decorators import login_required
@@ -432,12 +435,15 @@ def _is_challenge_unlocked(user, challenge):
     if not challenge.topic:
         return True
 
-    first_in_topic = challenge.topic.challenges.order_by('order_index').first()
+    topic_challenges = challenge.topic.challenges.filter(is_active=True)
+    first_in_topic = topic_challenges.order_by('order_index').first()
     if challenge == first_in_topic:
         return True
 
     if challenge.order_index > 0:
-        prev_challenge = challenge.topic.challenges.filter(order_index=challenge.order_index - 1).first()
+        prev_challenge = (
+            topic_challenges.filter(order_index__lt=challenge.order_index).order_by('-order_index').first()
+        )
         if prev_challenge:
             prev_prog = UserChallengeProg.objects.filter(
                 user=user,
@@ -455,15 +461,20 @@ def _unlock_next_challenge(user, challenge):
     if not challenge.topic:
         return
 
-    next_challenge = challenge.topic.challenges.filter(order_index=challenge.order_index + 1).first()
+    next_challenge = (
+        challenge.topic.challenges.filter(is_active=True, order_index__gt=challenge.order_index)
+        .order_by('order_index')
+        .first()
+    )
     if next_challenge:
         prog, _ = UserChallengeProg.objects.get_or_create(
             user=user,
             challenge=next_challenge,
             defaults={'is_unlocked': False},
         )
-        prog.is_unlocked = True
-        prog.save(update_fields=['is_unlocked'])
+        if not prog.is_unlocked:
+            prog.is_unlocked = True
+            prog.save(update_fields=['is_unlocked'])
 
 
 def _calculate_user_progress(user):
@@ -582,6 +593,1615 @@ def _display_prompt_for_challenge(challenge):
     return f"Level {level} ({difficulty_label}): Using {algorithm_label}, {action}."
 
 
+def _load_action_payload(raw_payload):
+    if not raw_payload:
+        return None
+    try:
+        parsed = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _build_knapsack_game_context(challenge):
+    """Build safe, normalized payload for knapsack action mode."""
+    if challenge.algorithm_type != Challenge.AlgorithmType.KNAPSACK:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    weights = payload.get('weights')
+    values = payload.get('values')
+    capacity = payload.get('capacity')
+    if not isinstance(weights, list) or not isinstance(values, list) or len(weights) != len(values) or not weights:
+        return None
+
+    try:
+        normalized_capacity = int(capacity)
+        items = []
+        for idx, (weight, value) in enumerate(zip(weights, values)):
+            normalized_weight = int(weight)
+            normalized_value = int(value)
+            if normalized_weight <= 0:
+                return None
+            items.append(
+                {
+                    'index': idx,
+                    'weight': normalized_weight,
+                    'value': normalized_value,
+                }
+            )
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        'capacity': normalized_capacity,
+        'items': items,
+    }
+
+
+def _evaluate_knapsack_action_payload(challenge, action_payload):
+    """
+    Derive authoritative knapsack answer from action payload.
+    Returns None when payload is unavailable/invalid.
+    """
+    knapsack_context = _build_knapsack_game_context(challenge)
+    if not knapsack_context or not action_payload:
+        return None
+
+    selected_indices = action_payload.get('selected_indices')
+    if not isinstance(selected_indices, list):
+        return None
+
+    item_count = len(knapsack_context['items'])
+    normalized_indices = []
+    for raw_index in selected_indices:
+        try:
+            idx = int(raw_index)
+        except (TypeError, ValueError):
+            return None
+        if idx < 0 or idx >= item_count:
+            return None
+        normalized_indices.append(idx)
+
+    normalized_indices = sorted(set(normalized_indices))
+    total_weight = sum(knapsack_context['items'][idx]['weight'] for idx in normalized_indices)
+    total_value = sum(knapsack_context['items'][idx]['value'] for idx in normalized_indices)
+    is_over_capacity = total_weight > knapsack_context['capacity']
+
+    return {
+        'answer': str(total_value) if not is_over_capacity else '__knapsack_over_capacity__',
+        'feedback': (
+            f"Selection is overweight ({total_weight} / {knapsack_context['capacity']}). Stay within capacity to score."
+            if is_over_capacity
+            else None
+        ),
+        'diagnostics': {
+            'knapsack_total_weight': total_weight,
+            'knapsack_total_value': total_value,
+            'knapsack_capacity': knapsack_context['capacity'],
+            'knapsack_over_capacity': is_over_capacity,
+            'knapsack_selected_indices': normalized_indices,
+        },
+    }
+
+
+def _evaluate_activity_selection_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.ACTIVITY_SELECTION or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    starts = payload.get('starts')
+    ends = payload.get('ends')
+    if not isinstance(starts, list) or not isinstance(ends, list) or len(starts) != len(ends) or not starts:
+        return None
+
+    selected_indices = action_payload.get('selected_indices')
+    if not isinstance(selected_indices, list):
+        return None
+
+    normalized_indices = []
+    for raw_index in selected_indices:
+        try:
+            idx = int(raw_index)
+        except (TypeError, ValueError):
+            return None
+        if idx < 0 or idx >= len(starts):
+            return None
+        normalized_indices.append(idx)
+
+    normalized_indices = sorted(set(normalized_indices))
+    intervals = sorted(
+        [(int(starts[idx]), int(ends[idx])) for idx in normalized_indices],
+        key=lambda item: (item[0], item[1]),
+    )
+    has_overlap = any(intervals[i][0] < intervals[i - 1][1] for i in range(1, len(intervals)))
+    count = len(normalized_indices)
+
+    return {
+        'answer': str(count) if not has_overlap else '__activity_overlap__',
+        'feedback': 'Selected activities overlap. Pick a non-overlapping schedule.' if has_overlap else None,
+        'diagnostics': {
+            'activity_selected_count': count,
+            'activity_has_overlap': has_overlap,
+            'activity_selected_indices': normalized_indices,
+        },
+    }
+
+
+def _is_subsequence(subsequence, text):
+    text_index = 0
+    for ch in subsequence:
+        text_index = text.find(ch, text_index)
+        if text_index == -1:
+            return False
+        text_index += 1
+    return True
+
+
+def _evaluate_lcs_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.LCS or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    s1 = str(payload.get('s1', ''))
+    s2 = str(payload.get('s2', ''))
+    candidate = str(action_payload.get('candidate_subsequence', '')).strip()
+
+    if not s1 or not s2:
+        return None
+
+    is_valid = _is_subsequence(candidate, s1) and _is_subsequence(candidate, s2)
+    return {
+        'answer': str(len(candidate)) if is_valid else '__invalid_lcs_subsequence__',
+        'feedback': 'Candidate is not a valid subsequence in both strings.' if not is_valid else None,
+        'diagnostics': {
+            'lcs_candidate': candidate,
+            'lcs_candidate_length': len(candidate),
+            'lcs_candidate_valid': is_valid,
+        },
+    }
+
+
+def _evaluate_backtracking_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.BACKTRACKING or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    values = payload.get('values')
+    target = payload.get('target')
+    if not isinstance(values, list) or not values:
+        return None
+
+    try:
+        normalized_values = [int(v) for v in values]
+        normalized_target = int(target)
+    except (TypeError, ValueError):
+        return None
+
+    allowed = set(normalized_values)
+    found_subsets = action_payload.get('found_subsets')
+    if not isinstance(found_subsets, list):
+        return None
+
+    valid_unique_subsets = set()
+    invalid_subset_count = 0
+
+    for subset in found_subsets:
+        if not isinstance(subset, list):
+            invalid_subset_count += 1
+            continue
+        try:
+            normalized_subset = [int(v) for v in subset]
+        except (TypeError, ValueError):
+            invalid_subset_count += 1
+            continue
+        if len(set(normalized_subset)) != len(normalized_subset):
+            invalid_subset_count += 1
+            continue
+        if any(v not in allowed for v in normalized_subset):
+            invalid_subset_count += 1
+            continue
+        if sum(normalized_subset) != normalized_target:
+            invalid_subset_count += 1
+            continue
+        valid_unique_subsets.add(tuple(sorted(normalized_subset)))
+
+    valid_count = len(valid_unique_subsets)
+    return {
+        'answer': str(valid_count),
+        'feedback': (
+            f'Ignored {invalid_subset_count} invalid subset(s). Only subsets summing to target are counted.'
+            if invalid_subset_count
+            else None
+        ),
+        'diagnostics': {
+            'backtracking_valid_subset_count': valid_count,
+            'backtracking_invalid_subset_count': invalid_subset_count,
+        },
+    }
+
+
+def _evaluate_recursion_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.RECURSION or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    try:
+        n_value = int(payload.get('n'))
+    except (TypeError, ValueError):
+        return None
+
+    user_sequence = action_payload.get('sequence')
+    if not isinstance(user_sequence, list):
+        return None
+
+    try:
+        sequence = [int(v) for v in user_sequence]
+    except (TypeError, ValueError):
+        return None
+
+    is_length_valid = len(sequence) == (n_value + 1)
+    has_valid_base = len(sequence) >= 2 and sequence[0] == 0 and sequence[1] == 1
+    follows_rule = all(sequence[idx] == sequence[idx - 1] + sequence[idx - 2] for idx in range(2, len(sequence)))
+    is_valid = is_length_valid and has_valid_base and follows_rule
+
+    return {
+        'answer': str(sequence[-1]) if (sequence and is_valid) else '__invalid_fibonacci_sequence__',
+        'feedback': 'Sequence does not follow Fibonacci base cases/recurrence.' if not is_valid else None,
+        'diagnostics': {
+            'recursion_sequence_valid': is_valid,
+            'recursion_sequence_length': len(sequence),
+        },
+    }
+
+
+def _evaluate_bit_conversion_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.BIT_CONVERSION or not action_payload:
+        return None
+
+    candidate = action_payload.get('binary')
+    if isinstance(candidate, list):
+        candidate = ''.join(str(bit) for bit in candidate)
+    candidate = str(candidate or '').strip()
+
+    if not candidate:
+        return None
+    if any(ch not in {'0', '1'} for ch in candidate):
+        return None
+
+    normalized = candidate.lstrip('0') or '0'
+    return {
+        'answer': normalized,
+        'feedback': None,
+        'diagnostics': {
+            'bit_binary': normalized,
+            'bit_length': len(normalized),
+        },
+    }
+
+
+def _extract_unweighted_graph_payload(payload):
+    edges = payload.get('edges')
+    if not isinstance(edges, list):
+        return None
+
+    normalized_edges = []
+    max_node = -1
+    for edge in edges:
+        if not isinstance(edge, (list, tuple)) or len(edge) != 2:
+            return None
+        left = _safe_int(edge[0])
+        right = _safe_int(edge[1])
+        if left is None or right is None or left < 0 or right < 0:
+            return None
+        normalized_edges.append((left, right))
+        max_node = max(max_node, left, right)
+
+    nodes = payload.get('nodes')
+    if isinstance(nodes, list) and nodes:
+        normalized_nodes = []
+        for node in nodes:
+            normalized_node = _safe_int(node)
+            if normalized_node is None or normalized_node < 0:
+                return None
+            normalized_nodes.append(normalized_node)
+        max_node = max(max_node, max(normalized_nodes))
+
+    if max_node < 0:
+        return None
+
+    node_count = max_node + 1
+    adjacency = {idx: [] for idx in range(node_count)}
+    for left, right in normalized_edges:
+        adjacency[left].append(right)
+        adjacency[right].append(left)
+    return adjacency
+
+
+def _canonical_bfs_order(adjacency, start):
+    if start not in adjacency:
+        return None
+    for node in adjacency:
+        adjacency[node].sort()
+    queue = deque([start])
+    visited = {start}
+    order = []
+    while queue:
+        current = queue.popleft()
+        order.append(current)
+        for nxt in adjacency[current]:
+            if nxt not in visited:
+                visited.add(nxt)
+                queue.append(nxt)
+    return order
+
+
+def _canonical_dfs_order(adjacency, start):
+    if start not in adjacency:
+        return None
+    for node in adjacency:
+        adjacency[node].sort(reverse=True)
+    stack = [start]
+    visited = set()
+    order = []
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        order.append(current)
+        for nxt in adjacency[current]:
+            if nxt not in visited:
+                stack.append(nxt)
+    return order
+
+
+def _normalize_node_sequence(raw_sequence):
+    if not isinstance(raw_sequence, list):
+        return None
+    normalized = []
+    for raw in raw_sequence:
+        node = _safe_int(raw)
+        if node is None:
+            return None
+        normalized.append(node)
+    return normalized
+
+
+def _evaluate_bfs_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.BFS or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    adjacency = _extract_unweighted_graph_payload(payload)
+    start = _safe_int(payload.get('start'))
+    candidate = _normalize_node_sequence(action_payload.get('visitation_order'))
+    if adjacency is None or start is None or candidate is None:
+        return None
+
+    canonical = _canonical_bfs_order(adjacency, start)
+    if canonical is None:
+        return None
+
+    valid_nodes = set(adjacency.keys())
+    if any(node not in valid_nodes for node in candidate):
+        return {
+            'answer': '__invalid_bfs_order__',
+            'feedback': 'Traversal contains node ids outside the graph.',
+            'diagnostics': {'graph_algorithm': 'bfs'},
+        }
+    if len(set(candidate)) != len(candidate):
+        return {
+            'answer': '__invalid_bfs_order__',
+            'feedback': 'Traversal order cannot repeat nodes.',
+            'diagnostics': {'graph_algorithm': 'bfs'},
+        }
+
+    answer = ' '.join(str(node) for node in candidate)
+    feedback = None
+    if candidate and candidate[0] != start:
+        feedback = 'BFS traversal must start from the given start node.'
+
+    return {
+        'answer': answer,
+        'feedback': feedback,
+        'diagnostics': {
+            'graph_algorithm': 'bfs',
+            'graph_selected_order': candidate,
+            'graph_expected_order': canonical,
+        },
+    }
+
+
+def _evaluate_dfs_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.DFS or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    adjacency = _extract_unweighted_graph_payload(payload)
+    start = _safe_int(payload.get('start'))
+    candidate = _normalize_node_sequence(action_payload.get('visitation_order'))
+    if adjacency is None or start is None or candidate is None:
+        return None
+
+    canonical = _canonical_dfs_order(adjacency, start)
+    if canonical is None:
+        return None
+
+    valid_nodes = set(adjacency.keys())
+    if any(node not in valid_nodes for node in candidate):
+        return {
+            'answer': '__invalid_dfs_order__',
+            'feedback': 'Traversal contains node ids outside the graph.',
+            'diagnostics': {'graph_algorithm': 'dfs'},
+        }
+    if len(set(candidate)) != len(candidate):
+        return {
+            'answer': '__invalid_dfs_order__',
+            'feedback': 'Traversal order cannot repeat nodes.',
+            'diagnostics': {'graph_algorithm': 'dfs'},
+        }
+
+    answer = ' '.join(str(node) for node in candidate)
+    feedback = None
+    if candidate and candidate[0] != start:
+        feedback = 'DFS traversal must start from the given start node.'
+
+    return {
+        'answer': answer,
+        'feedback': feedback,
+        'diagnostics': {
+            'graph_algorithm': 'dfs',
+            'graph_selected_order': candidate,
+            'graph_expected_order': canonical,
+        },
+    }
+
+
+def _extract_weighted_graph_payload(payload):
+    weighted_edges = payload.get('weighted_edges')
+    if not isinstance(weighted_edges, list) or not weighted_edges:
+        return None
+
+    normalized_edges = []
+    max_node = -1
+    edge_weights = {}
+    for edge in weighted_edges:
+        if not isinstance(edge, (list, tuple)) or len(edge) < 3:
+            return None
+        left = _safe_int(edge[0])
+        right = _safe_int(edge[1])
+        weight = _safe_int(edge[2])
+        if left is None or right is None or weight is None:
+            return None
+        if left < 0 or right < 0 or weight <= 0:
+            return None
+        normalized_edges.append((left, right, weight))
+        max_node = max(max_node, left, right)
+        edge_weights[(left, right)] = min(weight, edge_weights.get((left, right), weight))
+        edge_weights[(right, left)] = min(weight, edge_weights.get((right, left), weight))
+
+    source = _safe_int(payload.get('source'))
+    target = _safe_int(payload.get('target'))
+    if source is None or target is None or source < 0 or target < 0:
+        return None
+    max_node = max(max_node, source, target)
+
+    node_count = max_node + 1
+    adjacency = {idx: [] for idx in range(node_count)}
+    for left, right, weight in normalized_edges:
+        adjacency[left].append((right, weight))
+        adjacency[right].append((left, weight))
+
+    return {
+        'adjacency': adjacency,
+        'edge_weights': edge_weights,
+        'source': source,
+        'target': target,
+    }
+
+
+def _shortest_weighted_distance(adjacency, source, target):
+    if source not in adjacency or target not in adjacency:
+        return -1
+    distances = {node: math.inf for node in adjacency}
+    distances[source] = 0
+    heap = [(0, source)]
+    while heap:
+        current_distance, node = heappop(heap)
+        if current_distance > distances[node]:
+            continue
+        if node == target:
+            return int(current_distance)
+        for nxt, weight in adjacency[node]:
+            candidate = current_distance + weight
+            if candidate < distances[nxt]:
+                distances[nxt] = candidate
+                heappush(heap, (candidate, nxt))
+    return -1
+
+
+def _evaluate_dijkstra_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.DIJKSTRA or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    graph = _extract_weighted_graph_payload(payload)
+    if graph is None:
+        return None
+
+    shortest = _shortest_weighted_distance(graph['adjacency'], graph['source'], graph['target'])
+    is_unreachable = action_payload.get('is_unreachable') is True
+    path_nodes = _normalize_node_sequence(action_payload.get('path_nodes'))
+
+    if is_unreachable:
+        return {
+            'answer': '-1',
+            'feedback': None if shortest == -1 else 'A path exists. Build a valid source-to-target route.',
+            'diagnostics': {
+                'graph_algorithm': 'dijkstra',
+                'graph_shortest_distance': shortest,
+                'graph_selected_distance': -1,
+            },
+        }
+
+    if not isinstance(path_nodes, list) or len(path_nodes) < 2:
+        return {
+            'answer': '__invalid_dijkstra_path__',
+            'feedback': 'Select a path from source to target.',
+            'diagnostics': {'graph_algorithm': 'dijkstra'},
+        }
+
+    if path_nodes[0] != graph['source'] or path_nodes[-1] != graph['target']:
+        return {
+            'answer': '__invalid_dijkstra_path__',
+            'feedback': 'Path must start at source and end at target.',
+            'diagnostics': {'graph_algorithm': 'dijkstra'},
+        }
+
+    path_cost = 0
+    for idx in range(1, len(path_nodes)):
+        left = path_nodes[idx - 1]
+        right = path_nodes[idx]
+        edge_weight = graph['edge_weights'].get((left, right))
+        if edge_weight is None:
+            return {
+                'answer': '__invalid_dijkstra_path__',
+                'feedback': 'Path contains an edge not present in graph.',
+                'diagnostics': {'graph_algorithm': 'dijkstra'},
+            }
+        path_cost += edge_weight
+
+    feedback = None
+    if shortest != -1 and path_cost > shortest:
+        feedback = 'Path is valid but not shortest. Try a lower total weight route.'
+
+    return {
+        'answer': str(path_cost),
+        'feedback': feedback,
+        'diagnostics': {
+            'graph_algorithm': 'dijkstra',
+            'graph_selected_path': path_nodes,
+            'graph_selected_distance': path_cost,
+            'graph_shortest_distance': shortest,
+        },
+    }
+
+
+def _extract_grid_payload(payload):
+    rows = _safe_int(payload.get('rows'))
+    cols = _safe_int(payload.get('cols'))
+    blocked_raw = payload.get('blocked')
+    if rows is None or cols is None or rows <= 0 or cols <= 0:
+        return None
+    if not isinstance(blocked_raw, list):
+        blocked_raw = []
+
+    blocked = set()
+    for cell in blocked_raw:
+        if not isinstance(cell, (list, tuple)) or len(cell) != 2:
+            return None
+        r = _safe_int(cell[0])
+        c = _safe_int(cell[1])
+        if r is None or c is None:
+            return None
+        if r < 0 or c < 0 or r >= rows or c >= cols:
+            return None
+        blocked.add((r, c))
+    return {'rows': rows, 'cols': cols, 'blocked': blocked}
+
+
+def _grid_shortest_distance(rows, cols, blocked):
+    start = (0, 0)
+    goal = (rows - 1, cols - 1)
+    if start in blocked or goal in blocked:
+        return -1
+    queue = deque([(start[0], start[1], 0)])
+    visited = {start}
+    directions = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    while queue:
+        row, col, dist = queue.popleft()
+        if (row, col) == goal:
+            return dist
+        for dr, dc in directions:
+            nr = row + dr
+            nc = col + dc
+            nxt = (nr, nc)
+            if 0 <= nr < rows and 0 <= nc < cols and nxt not in blocked and nxt not in visited:
+                visited.add(nxt)
+                queue.append((nr, nc, dist + 1))
+    return -1
+
+
+def _normalize_grid_path(raw_path):
+    if not isinstance(raw_path, list):
+        return None
+    normalized = []
+    for cell in raw_path:
+        if not isinstance(cell, (list, tuple)) or len(cell) != 2:
+            return None
+        row = _safe_int(cell[0])
+        col = _safe_int(cell[1])
+        if row is None or col is None:
+            return None
+        normalized.append((row, col))
+    return normalized
+
+
+def _evaluate_astar_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.ASTAR or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    grid = _extract_grid_payload(payload)
+    if grid is None:
+        return None
+
+    shortest = _grid_shortest_distance(grid['rows'], grid['cols'], grid['blocked'])
+    is_unreachable = action_payload.get('is_unreachable') is True
+    path = _normalize_grid_path(action_payload.get('path'))
+    goal = (grid['rows'] - 1, grid['cols'] - 1)
+
+    if is_unreachable:
+        return {
+            'answer': '-1',
+            'feedback': None if shortest == -1 else 'A route exists. Build a valid path to the goal.',
+            'diagnostics': {
+                'graph_algorithm': 'astar',
+                'graph_selected_moves': -1,
+                'graph_shortest_moves': shortest,
+            },
+        }
+
+    if not path:
+        return {
+            'answer': '__invalid_astar_path__',
+            'feedback': 'Build a path from start to goal, or mark unreachable.',
+            'diagnostics': {'graph_algorithm': 'astar'},
+        }
+
+    if path[0] != (0, 0):
+        return {
+            'answer': '__invalid_astar_path__',
+            'feedback': 'Path must start at (0, 0).',
+            'diagnostics': {'graph_algorithm': 'astar'},
+        }
+    if path[-1] != goal:
+        return {
+            'answer': '__invalid_astar_path__',
+            'feedback': 'Path must end at goal cell.',
+            'diagnostics': {'graph_algorithm': 'astar'},
+        }
+
+    for idx, cell in enumerate(path):
+        row, col = cell
+        if row < 0 or col < 0 or row >= grid['rows'] or col >= grid['cols']:
+            return {
+                'answer': '__invalid_astar_path__',
+                'feedback': 'Path steps must stay inside grid bounds.',
+                'diagnostics': {'graph_algorithm': 'astar'},
+            }
+        if cell in grid['blocked']:
+            return {
+                'answer': '__invalid_astar_path__',
+                'feedback': 'Path cannot go through blocked cells.',
+                'diagnostics': {'graph_algorithm': 'astar'},
+            }
+        if idx > 0:
+            prev = path[idx - 1]
+            if abs(prev[0] - row) + abs(prev[1] - col) != 1:
+                return {
+                    'answer': '__invalid_astar_path__',
+                    'feedback': 'Use only 4-direction adjacent moves.',
+                    'diagnostics': {'graph_algorithm': 'astar'},
+                }
+
+    moves = len(path) - 1
+    feedback = None
+    if shortest != -1 and moves > shortest:
+        feedback = 'Path reaches goal but is not shortest.'
+
+    return {
+        'answer': str(moves),
+        'feedback': feedback,
+        'diagnostics': {
+            'graph_algorithm': 'astar',
+            'graph_selected_moves': moves,
+            'graph_shortest_moves': shortest,
+            'graph_path_length': len(path),
+        },
+    }
+
+
+def _minimax_fold_value(leaves):
+    if not leaves:
+        return None
+    level = list(leaves)
+    maximizing = False
+    while len(level) > 1:
+        if len(level) % 2 != 0:
+            return None
+        nxt = []
+        for idx in range(0, len(level), 2):
+            left = level[idx]
+            right = level[idx + 1]
+            nxt.append(max(left, right) if maximizing else min(left, right))
+        level = nxt
+        maximizing = not maximizing
+    return level[0]
+
+
+def _evaluate_minimax_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.MINIMAX or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    leaves_raw = payload.get('leaves')
+    if not isinstance(leaves_raw, list) or len(leaves_raw) < 2:
+        return None
+
+    leaves = []
+    for raw in leaves_raw:
+        value = _safe_int(raw)
+        if value is None:
+            return None
+        leaves.append(value)
+
+    expected = _minimax_fold_value(leaves)
+    root_value = _safe_int(action_payload.get('root_value'))
+    if expected is None or root_value is None:
+        return None
+
+    feedback = None if root_value == expected else 'Fold pair values level by level with the shown min/max turns.'
+    return {
+        'answer': str(root_value),
+        'feedback': feedback,
+        'diagnostics': {
+            'graph_algorithm': 'minimax',
+            'graph_root_candidate': root_value,
+            'graph_root_expected': expected,
+        },
+    }
+
+
+def _is_close_number(left, right, tolerance=1e-9):
+    return abs(left - right) <= tolerance
+
+
+def _resolve_selected_search_index(action_payload):
+    if action_payload.get('is_not_found') is True:
+        return -1
+    selected_raw = action_payload.get('selected_index', action_payload.get('result_index'))
+    if selected_raw is None:
+        return None
+    return _safe_int(selected_raw)
+
+
+def _evaluate_linear_search_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.LINEAR_SEARCH or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    data_values, _ = _normalize_numeric_list(payload.get('data'))
+    target = _safe_float(payload.get('target'))
+    selected_index = _resolve_selected_search_index(action_payload)
+    if not data_values or target is None or selected_index is None:
+        return None
+
+    if selected_index < -1 or selected_index >= len(data_values):
+        return {
+            'answer': '__invalid_linear_search_index__',
+            'feedback': 'Selected index is out of range for this array.',
+            'diagnostics': {'search_type': 'linear', 'search_selected_index': selected_index},
+        }
+
+    first_match_index = -1
+    for idx, value in enumerate(data_values):
+        if _is_close_number(value, target):
+            first_match_index = idx
+            break
+
+    if selected_index == -1:
+        feedback = None if first_match_index == -1 else 'Target exists in array. Choose its first occurrence index.'
+    else:
+        if not _is_close_number(data_values[selected_index], target):
+            return {
+                'answer': '__invalid_linear_search_pick__',
+                'feedback': 'Chosen index does not match target value.',
+                'diagnostics': {'search_type': 'linear', 'search_selected_index': selected_index},
+            }
+        feedback = None if first_match_index == selected_index else 'For linear search, return the first matching index.'
+
+    return {
+        'answer': str(selected_index),
+        'feedback': feedback,
+        'diagnostics': {
+            'search_type': 'linear',
+            'search_selected_index': selected_index,
+            'search_expected_index': first_match_index,
+            'search_target': _format_number_token(target),
+        },
+    }
+
+
+def _evaluate_binary_search_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.BINARY_SEARCH or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    data_values, _ = _normalize_numeric_list(payload.get('data'))
+    target = _safe_float(payload.get('target'))
+    selected_index = _resolve_selected_search_index(action_payload)
+    if not data_values or target is None or selected_index is None:
+        return None
+
+    if selected_index < -1 or selected_index >= len(data_values):
+        return {
+            'answer': '__invalid_binary_search_index__',
+            'feedback': 'Selected index is out of range for this array.',
+            'diagnostics': {'search_type': 'binary', 'search_selected_index': selected_index},
+        }
+
+    is_sorted = all(data_values[idx] <= data_values[idx + 1] for idx in range(len(data_values) - 1))
+    if not is_sorted:
+        return None
+
+    expected_index = -1
+    low = 0
+    high = len(data_values) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if _is_close_number(data_values[mid], target):
+            expected_index = mid
+            break
+        if data_values[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    if selected_index == -1:
+        feedback = None if expected_index == -1 else 'Target exists in array. Follow comparisons to locate its index.'
+    else:
+        if not _is_close_number(data_values[selected_index], target):
+            return {
+                'answer': '__invalid_binary_search_pick__',
+                'feedback': 'Chosen index does not match target value.',
+                'diagnostics': {'search_type': 'binary', 'search_selected_index': selected_index},
+            }
+        feedback = None
+
+    return {
+        'answer': str(selected_index),
+        'feedback': feedback,
+        'diagnostics': {
+            'search_type': 'binary',
+            'search_selected_index': selected_index,
+            'search_expected_index': expected_index,
+            'search_target': _format_number_token(target),
+        },
+    }
+
+
+def _longest_common_prefix_text(words):
+    if not words:
+        return ''
+    prefix = words[0]
+    for word in words[1:]:
+        while not word.startswith(prefix):
+            prefix = prefix[:-1]
+            if not prefix:
+                return ''
+    return prefix
+
+
+def _evaluate_string_algorithm_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.STRING_ALGORITHM or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    raw_words = payload.get('words')
+    if not isinstance(raw_words, list) or not raw_words:
+        return None
+
+    words = [str(word) for word in raw_words]
+    candidate = action_payload.get('candidate_prefix', action_payload.get('prefix'))
+    candidate = str(candidate if candidate is not None else '')
+
+    is_common_prefix = all(word.startswith(candidate) for word in words)
+    max_prefix = _longest_common_prefix_text(words)
+    can_extend = is_common_prefix and len(candidate) < len(max_prefix)
+
+    if not is_common_prefix:
+        return {
+            'answer': '__invalid_string_prefix__',
+            'feedback': 'Candidate is not a common prefix for all words.',
+            'diagnostics': {
+                'string_candidate_prefix': candidate,
+                'string_max_prefix': max_prefix,
+                'string_is_common_prefix': False,
+                'string_can_extend': False,
+            },
+        }
+
+    return {
+        'answer': candidate,
+        'feedback': 'Valid prefix, but it can be extended.' if can_extend else None,
+        'diagnostics': {
+            'string_candidate_prefix': candidate,
+            'string_max_prefix': max_prefix,
+            'string_is_common_prefix': True,
+            'string_can_extend': can_extend,
+        },
+    }
+
+
+def _resolve_array_subrange(action_payload, item_count):
+    start = _safe_int(action_payload.get('start_index'))
+    end = _safe_int(action_payload.get('end_index'))
+    if start is not None and end is not None:
+        if start > end:
+            start, end = end, start
+        if start < 0 or end < 0 or start >= item_count or end >= item_count:
+            return None
+        return start, end
+
+    selected = action_payload.get('selected_indices')
+    if not isinstance(selected, list) or not selected:
+        return None
+    normalized = []
+    for raw_index in selected:
+        idx = _safe_int(raw_index)
+        if idx is None or idx < 0 or idx >= item_count:
+            return None
+        normalized.append(idx)
+    normalized = sorted(set(normalized))
+    if not normalized:
+        return None
+    expected = list(range(normalized[0], normalized[-1] + 1))
+    if normalized != expected:
+        return None
+    return normalized[0], normalized[-1]
+
+
+def _evaluate_array_algorithm_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.ARRAY_ALGORITHM or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    values, _ = _normalize_numeric_list(payload.get('data'))
+    if not values:
+        return None
+
+    bounds = _resolve_array_subrange(action_payload, len(values))
+    if bounds is None:
+        return {
+            'answer': '__invalid_array_subrange__',
+            'feedback': 'Choose one contiguous subarray range.',
+            'diagnostics': {'array_selection_valid': False},
+        }
+
+    start, end = bounds
+    segment = values[start:end + 1]
+    total = sum(segment)
+    answer_token = _format_number_token(total)
+    if answer_token is None:
+        return {
+            'answer': '__invalid_array_subrange__',
+            'feedback': 'Unable to compute selected subarray sum.',
+            'diagnostics': {'array_selection_valid': False},
+        }
+
+    return {
+        'answer': answer_token,
+        'feedback': None,
+        'diagnostics': {
+            'array_selection_valid': True,
+            'array_selected_start': start,
+            'array_selected_end': end,
+            'array_selected_sum': answer_token,
+            'array_selected_length': end - start + 1,
+        },
+    }
+
+
+def _has_pair_sum(values, target):
+    seen = set()
+    for value in values:
+        complement = target - value
+        if complement in seen:
+            return True
+        seen.add(value)
+    return False
+
+
+def _evaluate_hashing_algorithm_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.HASHING_ALGORITHM or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    values, _ = _normalize_numeric_list(payload.get('arr'))
+    target = _safe_float(payload.get('target'))
+    if not values or target is None:
+        return None
+
+    pair_exists = _has_pair_sum(values, target)
+    declare_no_pair = action_payload.get('declare_no_pair') is True or action_payload.get('is_not_found') is True
+
+    selected_indices = action_payload.get('selected_indices')
+    if isinstance(selected_indices, list) and selected_indices:
+        normalized = []
+        for raw_index in selected_indices:
+            idx = _safe_int(raw_index)
+            if idx is None or idx < 0 or idx >= len(values):
+                return {
+                    'answer': '__invalid_hash_selection__',
+                    'feedback': 'Selected index is out of bounds.',
+                    'diagnostics': {'hashing_selection_valid': False},
+                }
+            normalized.append(idx)
+
+        normalized = sorted(set(normalized))
+        if len(normalized) != 2:
+            return {
+                'answer': '__invalid_hash_selection__',
+                'feedback': 'Select exactly two distinct indices.',
+                'diagnostics': {'hashing_selection_valid': False},
+            }
+
+        selected_sum = values[normalized[0]] + values[normalized[1]]
+        is_pair_valid = _is_close_number(selected_sum, target)
+        if not is_pair_valid:
+            return {
+                'answer': '__invalid_hash_pair__',
+                'feedback': 'Selected pair does not sum to target.',
+                'diagnostics': {
+                    'hashing_selection_valid': True,
+                    'hashing_selected_indices': normalized,
+                    'hashing_selected_sum': _format_number_token(selected_sum),
+                    'hashing_target': _format_number_token(target),
+                    'hashing_pair_exists': pair_exists,
+                },
+            }
+
+        return {
+            'answer': 'true',
+            'feedback': None,
+            'diagnostics': {
+                'hashing_selection_valid': True,
+                'hashing_selected_indices': normalized,
+                'hashing_selected_sum': _format_number_token(selected_sum),
+                'hashing_target': _format_number_token(target),
+                'hashing_pair_exists': pair_exists,
+            },
+        }
+
+    if declare_no_pair:
+        return {
+            'answer': 'false',
+            'feedback': None if not pair_exists else 'A valid pair exists. Try selecting two indices that sum to target.',
+            'diagnostics': {
+                'hashing_selection_valid': True,
+                'hashing_pair_exists': pair_exists,
+                'hashing_target': _format_number_token(target),
+            },
+        }
+
+    has_pair = action_payload.get('has_pair')
+    if isinstance(has_pair, bool):
+        return {
+            'answer': 'true' if has_pair else 'false',
+            'feedback': None if (has_pair == pair_exists) else 'Selection does not match actual pair-sum existence.',
+            'diagnostics': {
+                'hashing_selection_valid': True,
+                'hashing_pair_exists': pair_exists,
+                'hashing_target': _format_number_token(target),
+            },
+        }
+
+    return {
+        'answer': '__invalid_hash_selection__',
+        'feedback': 'Choose two indices or mark no pair.',
+        'diagnostics': {'hashing_selection_valid': False},
+    }
+
+
+def _format_number_token(value):
+    normalized = _safe_float(value)
+    if normalized is None or not math.isfinite(normalized):
+        return None
+    rounded_int = round(normalized)
+    if abs(normalized - rounded_int) < 1e-9:
+        return str(int(rounded_int))
+    return f"{normalized:.3f}".rstrip('0').rstrip('.')
+
+
+def _normalize_numeric_list(raw_values):
+    if not isinstance(raw_values, list) or not raw_values:
+        return None, None
+    numeric_values = []
+    tokens = []
+    for raw_value in raw_values:
+        numeric_value = _safe_float(raw_value)
+        if numeric_value is None or not math.isfinite(numeric_value):
+            return None, None
+        token = _format_number_token(numeric_value)
+        if token is None:
+            return None, None
+        numeric_values.append(numeric_value)
+        tokens.append(token)
+    return numeric_values, tokens
+
+
+def _apply_swap_sequence(base_values, swap_sequence):
+    if not isinstance(swap_sequence, list):
+        return None
+    working = list(base_values)
+    for swap in swap_sequence:
+        if not isinstance(swap, (list, tuple)) or len(swap) != 2:
+            return None
+        left = _safe_int(swap[0])
+        right = _safe_int(swap[1])
+        if left is None or right is None:
+            return None
+        if left < 0 or right < 0 or left >= len(working) or right >= len(working):
+            return None
+        working[left], working[right] = working[right], working[left]
+    return working
+
+
+def _evaluate_sorting_action_payload(challenge, action_payload):
+    sorting_algorithms = {
+        Challenge.AlgorithmType.BUBBLE_SORT,
+        Challenge.AlgorithmType.SELECTION_SORT,
+        Challenge.AlgorithmType.INSERTION_SORT,
+        Challenge.AlgorithmType.MERGE_SORT,
+        Challenge.AlgorithmType.QUICK_SORT,
+        Challenge.AlgorithmType.HEAP_SORT,
+    }
+    if challenge.algorithm_type not in sorting_algorithms or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    source_values, source_tokens = _normalize_numeric_list(payload.get('data'))
+    if not source_values:
+        return None
+
+    candidate_values = None
+    candidate_tokens = None
+    candidate_array = action_payload.get('array')
+    if isinstance(candidate_array, list):
+        candidate_values, candidate_tokens = _normalize_numeric_list(candidate_array)
+    elif isinstance(action_payload.get('final_array'), list):
+        candidate_values, candidate_tokens = _normalize_numeric_list(action_payload.get('final_array'))
+    elif isinstance(action_payload.get('swaps'), list):
+        candidate_values = _apply_swap_sequence(source_values, action_payload.get('swaps'))
+        if candidate_values is not None:
+            candidate_tokens = [_format_number_token(value) for value in candidate_values]
+
+    if candidate_values is None or candidate_tokens is None:
+        return {
+            'answer': '__invalid_sorting_array__',
+            'feedback': 'Sorting state is invalid. Submit a valid reordered array.',
+            'diagnostics': {'sorting_payload_valid': False},
+        }
+
+    if len(candidate_values) != len(source_values):
+        return {
+            'answer': '__invalid_sorting_array__',
+            'feedback': 'Sorting state has incorrect length.',
+            'diagnostics': {'sorting_payload_valid': False},
+        }
+
+    if Counter(candidate_tokens) != Counter(source_tokens):
+        return {
+            'answer': '__invalid_sorting_array__',
+            'feedback': 'Sorted array must contain exactly the same values as input.',
+            'diagnostics': {'sorting_payload_valid': False},
+        }
+
+    is_sorted = all(candidate_values[idx] <= candidate_values[idx + 1] for idx in range(len(candidate_values) - 1))
+    answer = ' '.join(candidate_tokens)
+    swaps = action_payload.get('swaps')
+
+    return {
+        'answer': answer,
+        'feedback': None if is_sorted else 'Array is not fully sorted yet. Arrange in non-decreasing order.',
+        'diagnostics': {
+            'sorting_payload_valid': True,
+            'sorting_is_sorted': is_sorted,
+            'sorting_current_answer': answer,
+            'sorting_swap_count': len(swaps) if isinstance(swaps, list) else 0,
+        },
+    }
+
+
+def _safe_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sigmoid(value):
+    return 1.0 / (1.0 + math.exp(-value))
+
+
+def _evaluate_linear_regression_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.LINEAR_REGRESSION or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    points = payload.get('points')
+    query_x = _safe_float(payload.get('query_x'))
+    selected_indices = action_payload.get('selected_indices')
+
+    if not isinstance(points, list) or len(points) < 2 or query_x is None or not isinstance(selected_indices, list):
+        return None
+
+    normalized_indices = []
+    for raw_index in selected_indices:
+        idx = _safe_int(raw_index)
+        if idx is None or idx < 0 or idx >= len(points):
+            return None
+        normalized_indices.append(idx)
+    normalized_indices = sorted(set(normalized_indices))
+    if len(normalized_indices) != 2:
+        return None
+
+    p1 = points[normalized_indices[0]]
+    p2 = points[normalized_indices[1]]
+    if not isinstance(p1, (list, tuple)) or not isinstance(p2, (list, tuple)) or len(p1) < 2 or len(p2) < 2:
+        return None
+
+    x1, y1 = _safe_float(p1[0]), _safe_float(p1[1])
+    x2, y2 = _safe_float(p2[0]), _safe_float(p2[1])
+    if None in {x1, y1, x2, y2}:
+        return None
+    if x1 == x2:
+        return {
+            'answer': '__invalid_linear_points__',
+            'feedback': 'Selected points have same x-value. Choose two points that define a line.',
+            'diagnostics': {
+                'linear_selected_indices': normalized_indices,
+                'linear_vertical_line': True,
+            },
+        }
+
+    slope = (y2 - y1) / (x2 - x1)
+    intercept = y1 - slope * x1
+    prediction = slope * query_x + intercept
+    rounded_prediction = round(prediction, 3)
+    if abs(rounded_prediction - round(rounded_prediction)) < 1e-9:
+        answer = str(int(round(rounded_prediction)))
+    else:
+        answer = f"{rounded_prediction:.3f}".rstrip('0').rstrip('.')
+
+    return {
+        'answer': answer,
+        'feedback': None,
+        'diagnostics': {
+            'linear_selected_indices': normalized_indices,
+            'linear_slope': round(slope, 4),
+            'linear_intercept': round(intercept, 4),
+            'linear_prediction': answer,
+        },
+    }
+
+
+def _evaluate_logistic_regression_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.LOGISTIC_REGRESSION or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    z_value = _safe_float(payload.get('z'))
+    probability = _safe_float(action_payload.get('probability'))
+    if z_value is None or probability is None:
+        return None
+    if probability < 0 or probability > 1:
+        return None
+
+    expected_probability = round(_sigmoid(z_value), 3)
+    return {
+        'answer': f"{round(probability, 3):.3f}",
+        'feedback': None,
+        'diagnostics': {
+            'logistic_z': round(z_value, 4),
+            'logistic_expected_probability': f"{expected_probability:.3f}",
+            'logistic_probability': f"{round(probability, 3):.3f}",
+        },
+    }
+
+
+def _evaluate_kmeans_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.KMEANS or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    points = payload.get('points')
+    centroids = payload.get('centroids')
+    assignments = action_payload.get('assignments')
+
+    if not isinstance(points, list) or not points or not isinstance(centroids, list) or len(centroids) != 2:
+        return None
+    if not isinstance(assignments, list) or len(assignments) != len(points):
+        return None
+
+    normalized_points = []
+    for point in points:
+        normalized_point = _safe_float(point)
+        if normalized_point is None:
+            return None
+        normalized_points.append(normalized_point)
+
+    normalized_centroids = []
+    for centroid in centroids:
+        normalized_centroid = _safe_float(centroid)
+        if normalized_centroid is None:
+            return None
+        normalized_centroids.append(normalized_centroid)
+
+    groups = [[], []]
+    normalized_assignments = []
+    for idx, assignment in enumerate(assignments):
+        normalized_assignment = _safe_int(assignment)
+        if normalized_assignment not in {0, 1}:
+            return None
+        normalized_assignments.append(normalized_assignment)
+        groups[normalized_assignment].append(normalized_points[idx])
+
+    new_centroids = []
+    for centroid_idx, group_points in enumerate(groups):
+        if group_points:
+            new_centroids.append(round(sum(group_points) / len(group_points), 2))
+        else:
+            new_centroids.append(round(normalized_centroids[centroid_idx], 2))
+
+    answer = f"{new_centroids[0]:.2f} {new_centroids[1]:.2f}"
+    return {
+        'answer': answer,
+        'feedback': None,
+        'diagnostics': {
+            'kmeans_assignments': normalized_assignments,
+            'kmeans_updated_centroids': answer,
+        },
+    }
+
+
+def _evaluate_knn_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.KNN or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    train_points = payload.get('train_points')
+    query_x = _safe_float(payload.get('query_x'))
+    k_value = _safe_int(payload.get('k') or 3)
+    selected_indices = action_payload.get('selected_indices')
+
+    if not isinstance(train_points, list) or not train_points or query_x is None or not isinstance(selected_indices, list):
+        return None
+    if k_value is None or k_value <= 0 or k_value > len(train_points):
+        return None
+
+    normalized_points = []
+    for idx, row in enumerate(train_points):
+        if not isinstance(row, (list, tuple)) or len(row) < 2:
+            return None
+        x_value = _safe_float(row[0])
+        label = str(row[1]).strip().upper()
+        if x_value is None or label not in {'A', 'B'}:
+            return None
+        normalized_points.append({'index': idx, 'x': x_value, 'label': label})
+
+    normalized_selected = []
+    for raw_index in selected_indices:
+        idx = _safe_int(raw_index)
+        if idx is None or idx < 0 or idx >= len(normalized_points):
+            return None
+        normalized_selected.append(idx)
+    normalized_selected = sorted(set(normalized_selected))
+    if len(normalized_selected) != k_value:
+        return {
+            'answer': '__invalid_knn_neighbors__',
+            'feedback': f'Select exactly {k_value} nearest neighbors.',
+            'diagnostics': {
+                'knn_selected_indices': normalized_selected,
+                'knn_k': k_value,
+            },
+        }
+
+    ranked = sorted(
+        normalized_points,
+        key=lambda row: (abs(row['x'] - query_x), row['x'], row['label'], row['index']),
+    )
+    canonical = sorted(row['index'] for row in ranked[:k_value])
+    if normalized_selected != canonical:
+        return {
+            'answer': '__invalid_knn_neighbors__',
+            'feedback': 'Selected neighbors are not the nearest points by tie-break rules.',
+            'diagnostics': {
+                'knn_selected_indices': normalized_selected,
+                'knn_expected_indices': canonical,
+                'knn_k': k_value,
+            },
+        }
+
+    top_neighbors = ranked[:k_value]
+    count_a = sum(1 for row in top_neighbors if row['label'] == 'A')
+    prediction = 'A' if count_a >= (k_value - count_a) else 'B'
+    return {
+        'answer': prediction,
+        'feedback': None,
+        'diagnostics': {
+            'knn_selected_indices': normalized_selected,
+            'knn_expected_indices': canonical,
+            'knn_prediction': prediction,
+        },
+    }
+
+
+def _evaluate_decision_tree_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.DECISION_TREE or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    positive = _safe_float(payload.get('positive'))
+    negative = _safe_float(payload.get('negative'))
+    entropy = _safe_float(action_payload.get('entropy'))
+
+    if positive is None or negative is None or entropy is None:
+        return None
+    if positive <= 0 or negative <= 0 or entropy < 0:
+        return None
+
+    total = positive + negative
+    expected_entropy = 0.0
+    for ratio in (positive / total, negative / total):
+        if ratio > 0:
+            expected_entropy -= ratio * math.log2(ratio)
+
+    return {
+        'answer': f"{round(entropy, 3):.3f}",
+        'feedback': None,
+        'diagnostics': {
+            'decision_tree_entropy': f"{round(entropy, 3):.3f}",
+            'decision_tree_expected_entropy': f"{round(expected_entropy, 3):.3f}",
+        },
+    }
+
+
+def _evaluate_naive_bayes_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.NAIVE_BAYES or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    spam_score = _safe_float(payload.get('spam_score'))
+    ham_score = _safe_float(payload.get('ham_score'))
+    label = str(action_payload.get('label', '')).strip().lower()
+
+    if spam_score is None or ham_score is None:
+        return None
+    if label not in {'spam', 'ham'}:
+        return None
+
+    expected_label = 'spam' if spam_score >= ham_score else 'ham'
+    return {
+        'answer': label,
+        'feedback': None,
+        'diagnostics': {
+            'naive_bayes_label': label,
+            'naive_bayes_expected_label': expected_label,
+        },
+    }
+
+
+def _evaluate_neural_network_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.NEURAL_NETWORK or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    x1 = _safe_float(payload.get('x1'))
+    x2 = _safe_float(payload.get('x2'))
+    w1 = _safe_float(payload.get('w1'))
+    w2 = _safe_float(payload.get('w2'))
+    bias = _safe_float(payload.get('b'))
+    linear_sum = _safe_float(action_payload.get('linear_sum'))
+    output = _safe_float(action_payload.get('output'))
+
+    if None in {x1, x2, w1, w2, bias, linear_sum, output}:
+        return None
+    if output < 0 or output > 1:
+        return None
+
+    expected_linear_sum = x1 * w1 + x2 * w2 + bias
+    if abs(linear_sum - expected_linear_sum) > 0.01:
+        return {
+            'answer': '__invalid_neural_linear_sum__',
+            'feedback': 'Linear combination is incorrect. Recompute z = w1*x1 + w2*x2 + b.',
+            'diagnostics': {
+                'neural_linear_sum': round(linear_sum, 4),
+                'neural_expected_linear_sum': round(expected_linear_sum, 4),
+            },
+        }
+
+    expected_output = _sigmoid(expected_linear_sum)
+    return {
+        'answer': f"{round(output, 3):.3f}",
+        'feedback': None,
+        'diagnostics': {
+            'neural_linear_sum': round(linear_sum, 4),
+            'neural_expected_linear_sum': round(expected_linear_sum, 4),
+            'neural_output': f"{round(output, 3):.3f}",
+            'neural_expected_output': f"{round(expected_output, 3):.3f}",
+        },
+    }
+
+
+def _evaluate_action_payload(challenge, raw_payload):
+    action_payload = _load_action_payload(raw_payload)
+    if not action_payload:
+        return None
+
+    evaluators = (
+        _evaluate_knapsack_action_payload,
+        _evaluate_activity_selection_action_payload,
+        _evaluate_lcs_action_payload,
+        _evaluate_backtracking_action_payload,
+        _evaluate_recursion_action_payload,
+        _evaluate_bit_conversion_action_payload,
+        _evaluate_bfs_action_payload,
+        _evaluate_dfs_action_payload,
+        _evaluate_dijkstra_action_payload,
+        _evaluate_astar_action_payload,
+        _evaluate_minimax_action_payload,
+        _evaluate_linear_search_action_payload,
+        _evaluate_binary_search_action_payload,
+        _evaluate_string_algorithm_action_payload,
+        _evaluate_array_algorithm_action_payload,
+        _evaluate_hashing_algorithm_action_payload,
+        _evaluate_sorting_action_payload,
+        _evaluate_linear_regression_action_payload,
+        _evaluate_logistic_regression_action_payload,
+        _evaluate_kmeans_action_payload,
+        _evaluate_knn_action_payload,
+        _evaluate_decision_tree_action_payload,
+        _evaluate_naive_bayes_action_payload,
+        _evaluate_neural_network_action_payload,
+    )
+
+    for evaluator in evaluators:
+        result = evaluator(challenge, action_payload)
+        if result is not None:
+            return result
+    return None
+
+
 def challenge_list_view(request):
     """Enhanced list view with filtering, sorting, searching, and URL persistence."""
     challenges = Challenge.objects.filter(is_active=True).select_related('topic').only(
@@ -604,7 +2224,7 @@ def challenge_list_view(request):
     solved_ids = set()
     unlocked_ids = set()
     if request.user.is_authenticated:
-        user_progress_rows = UserChallengeProg.objects.filter(user=request.user).values_list(
+        user_progress_rows = UserChallengeProg.objects.filter(user=request.user, challenge__is_active=True).values_list(
             'challenge_id',
             'is_solved',
             'is_unlocked',
@@ -696,6 +2316,9 @@ def challenge_list_view(request):
     elif selected_unlocked != 'all':
         selected_unlocked = 'all'
 
+    if request.user.is_authenticated:
+        unlocked_ids = {challenge.id for challenge in challenges if _is_challenge_unlocked(request.user, challenge)}
+
     for challenge in challenges:
         effective_category = _effective_category_for_challenge(challenge)
         challenge.effective_category = _normalize_category(effective_category)
@@ -719,7 +2342,16 @@ def challenge_list_view(request):
             challenge.subtype_level_count = subtype_counts[subtype_key]
             challenge.subtype_query = _build_subtype_query_string(request.GET, subtype_key)
 
-    show_landing_placeholder = selected_category == 'all' and selected_subtype == 'all' and not search_query
+    show_landing_placeholder = (
+        selected_category == 'all'
+        and selected_subtype == 'all'
+        and selected_kind == 'all'
+        and selected_difficulty == 'all'
+        and selected_topic == 'all'
+        and selected_solved == 'all'
+        and selected_unlocked == 'all'
+        and not search_query
+    )
 
     grouped_by_category = _group_challenges_by_category(display_challenges, selected_category, category_options)
 
@@ -851,6 +2483,10 @@ def submit_attempt_view(request, slug):
     prog = _get_user_challenge_progress(request.user, challenge)
 
     answer = request.POST.get('answer', '').strip()
+    action_eval = _evaluate_action_payload(challenge, request.POST.get('action_payload', '').strip())
+    if action_eval:
+        answer = action_eval['answer']
+
     expected_answer = challenge.expected_answer.strip()
     is_correct = bool(expected_answer) and expected_answer.lower() == answer.lower()
     attempt_index = prog.attempt_count + 1
@@ -907,6 +2543,9 @@ def submit_attempt_view(request, slug):
     else:
         message = 'Try again'
 
+    if action_eval and action_eval.get('feedback') and not is_correct:
+        message = action_eval['feedback']
+
     response_data = {
         'is_correct': is_correct,
         'score': score,
@@ -918,6 +2557,8 @@ def submit_attempt_view(request, slug):
         'current_level': request.user.profile.level,
         'message': message,
     }
+    if action_eval and action_eval.get('diagnostics'):
+        response_data.update(action_eval['diagnostics'])
 
     battle_room_code = request.POST.get('battle_room_code', '').strip()
     if battle_room_code and is_correct and is_score_eligible:
@@ -941,7 +2582,11 @@ def submit_attempt_view(request, slug):
             )
 
     if is_correct and challenge.topic:
-        next_challenge = challenge.topic.challenges.filter(order_index=challenge.order_index + 1).first()
+        next_challenge = (
+            challenge.topic.challenges.filter(is_active=True, order_index__gt=challenge.order_index)
+            .order_by('order_index')
+            .first()
+        )
 
         if next_challenge:
             next_is_unlocked = _is_challenge_unlocked(request.user, next_challenge)

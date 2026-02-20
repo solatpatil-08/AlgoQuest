@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block content %}
-<div class="fade-in-up">
+<div class="fade-in-up challenge-detail-page">
     <div class="row g-4">
         <!-- Main Content -->
         <div class="col-lg-8">
@@ -80,7 +80,9 @@
                         <h2 class="h5 mb-3"><i class="bi bi-send me-2" style="color: var(--aq-accent);"></i>Submit Answer</h2>
                         <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
                             {% csrf_token %}
-                            <textarea class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
+                            <div id="actionGameHost" class="mb-3 d-none"></div>
+                            <input type="hidden" name="action_payload" id="actionPayloadInput" value="">
+                            <textarea id="answerInput" class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
                             <button type="submit" class="btn btn-success px-4" id="submitAnswerBtn">
                                 <i class="bi bi-check2-circle me-1"></i>Submit
                             </button>
@@ -171,7 +173,7 @@
         
         if (visualizationType !== 'graph') {
             // Load conceptual visualization
-            if (ConceptualVisualizations) {
+            if (typeof ConceptualVisualizations !== 'undefined' && typeof showConceptualVisualization === 'function') {
                 showConceptualVisualization(
                     challengeTopic,
                     'visualizationOutput',
@@ -186,11 +188,2616 @@
     const attemptForm = document.getElementById("attemptForm");
     const attemptResult = document.getElementById("attemptResult");
     const submitBtn = document.getElementById("submitAnswerBtn");
+    const answerInput = document.getElementById("answerInput");
     const hintBtn = document.getElementById("hintBtn");
     const hintBox = document.getElementById("hintBox");
     const hintText = document.getElementById("hintText");
     const csrfTokenInput = attemptForm ? attemptForm.querySelector('input[name=\"csrfmiddlewaretoken\"]') : null;
     const csrfToken = csrfTokenInput ? csrfTokenInput.value : "";
+
+    const actionGameHost = document.getElementById('actionGameHost');
+    const actionPayloadInput = document.getElementById('actionPayloadInput');
+
+    function setActionPayload(payload) {
+        if (actionPayloadInput) {
+            actionPayloadInput.value = JSON.stringify(payload || {});
+        }
+    }
+
+    function setDerivedAnswer(value) {
+        if (!answerInput) {
+            return;
+        }
+        answerInput.value = String(value);
+        answerInput.readOnly = true;
+        answerInput.setAttribute('aria-readonly', 'true');
+    }
+
+    function clearDerivedAnswer() {
+        if (!answerInput) {
+            return;
+        }
+        answerInput.readOnly = false;
+        answerInput.removeAttribute('aria-readonly');
+    }
+
+    function roundTo(value, digits = 3) {
+        const scale = 10 ** digits;
+        return Math.round((Number(value) + Number.EPSILON) * scale) / scale;
+    }
+
+    function formatActionNumber(value, digits = 3, fixed = false) {
+        if (!Number.isFinite(Number(value))) {
+            return '';
+        }
+        const rounded = roundTo(value, digits);
+        if (!fixed && Number.isInteger(rounded)) {
+            return String(rounded);
+        }
+        return fixed ? rounded.toFixed(digits) : String(rounded);
+    }
+
+    function renderActionHostShell(title, subtitle) {
+        if (!actionGameHost) {
+            return null;
+        }
+        actionGameHost.classList.remove('d-none');
+        actionGameHost.innerHTML = `
+            <div class="action-game-shell">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <h3 class="h6 mb-0 fw-bold">${title}</h3>
+                    <span class="badge badge-accent action-game-badge" id="actionGameBadge">Ready</span>
+                </div>
+                <p class="text-muted small mb-3">${subtitle}</p>
+                <div id="actionGameBody"></div>
+            </div>
+        `;
+        return {
+            body: actionGameHost.querySelector('#actionGameBody'),
+            badge: actionGameHost.querySelector('#actionGameBadge'),
+        };
+    }
+
+    function buildKnapsackActionMode() {
+        const weights = Array.isArray(challengeVisualizationPayload.weights) ? challengeVisualizationPayload.weights : [];
+        const values = Array.isArray(challengeVisualizationPayload.values) ? challengeVisualizationPayload.values : [];
+        const capacity = Number(challengeVisualizationPayload.capacity);
+        if (!weights.length || weights.length !== values.length || !Number.isFinite(capacity)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Knapsack Pack Challenge',
+            'Select item cards to maximize value without crossing capacity.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="row g-2">
+                ${weights.map((weight, idx) => `
+                    <div class="col-sm-6 col-xl-4">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start action-item-btn"
+                            data-index="${idx}" data-weight="${Number(weight)}" data-value="${Number(values[idx])}">
+                            <span class="d-block fw-semibold">Item ${idx + 1}</span>
+                            <small class="d-block text-muted">Weight ${Number(weight)} | Value ${Number(values[idx])}</small>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                <small class="text-muted" id="actionMetaOne">Weight: 0 / ${capacity}</small>
+                <small class="text-muted" id="actionMetaTwo">Value: 0</small>
+            </div>
+        `;
+
+        const selected = new Set();
+        const buttons = Array.from(shell.body.querySelectorAll('.action-item-btn'));
+        const metaOne = shell.body.querySelector('#actionMetaOne');
+        const metaTwo = shell.body.querySelector('#actionMetaTwo');
+
+        function render() {
+            const ordered = Array.from(selected).sort((a, b) => a - b);
+            let totalWeight = 0;
+            let totalValue = 0;
+
+            buttons.forEach((button) => {
+                const idx = Number(button.dataset.index);
+                const isActive = selected.has(idx);
+                button.classList.toggle('active', isActive);
+                if (isActive) {
+                    totalWeight += Number(button.dataset.weight);
+                    totalValue += Number(button.dataset.value);
+                }
+            });
+
+            if (metaOne) {
+                metaOne.textContent = `Weight: ${totalWeight} / ${capacity}`;
+            }
+            if (metaTwo) {
+                metaTwo.textContent = `Value: ${totalValue}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = totalWeight > capacity ? 'Over Capacity' : 'Valid';
+                shell.badge.classList.toggle('badge-danger', totalWeight > capacity);
+                shell.badge.classList.toggle('badge-accent', totalWeight <= capacity);
+            }
+
+            setDerivedAnswer(totalValue);
+            setActionPayload({ mode: 'knapsack_pack', selected_indices: ordered });
+        }
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                if (selected.has(idx)) {
+                    selected.delete(idx);
+                } else {
+                    selected.add(idx);
+                }
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildActivitySelectionMode() {
+        const starts = Array.isArray(challengeVisualizationPayload.starts) ? challengeVisualizationPayload.starts : [];
+        const ends = Array.isArray(challengeVisualizationPayload.ends) ? challengeVisualizationPayload.ends : [];
+        if (!starts.length || starts.length !== ends.length) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Activity Timeline Picker',
+            'Pick non-overlapping activities. Your selected count is the submitted answer.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="d-flex flex-column gap-2">
+                ${starts.map((start, idx) => `
+                    <button type="button" class="btn btn-outline-primary text-start action-interval-btn" data-index="${idx}">
+                        A${idx + 1}: [${Number(start)}, ${Number(ends[idx])})
+                    </button>
+                `).join('')}
+            </div>
+            <div class="mt-3 text-muted small" id="activityStatus">Selected: none</div>
+        `;
+
+        const selected = new Set();
+        const buttons = Array.from(shell.body.querySelectorAll('.action-interval-btn'));
+        const status = shell.body.querySelector('#activityStatus');
+
+        function hasOverlap(indices) {
+            const intervals = indices
+                .map((idx) => [Number(starts[idx]), Number(ends[idx])])
+                .sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+            for (let i = 1; i < intervals.length; i += 1) {
+                if (intervals[i][0] < intervals[i - 1][1]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function render() {
+            const ordered = Array.from(selected).sort((a, b) => a - b);
+            const overlap = hasOverlap(ordered);
+            buttons.forEach((button) => button.classList.toggle('active', selected.has(Number(button.dataset.index))));
+            if (status) {
+                status.textContent = ordered.length ? `Selected: ${ordered.map((idx) => `A${idx + 1}`).join(', ')}` : 'Selected: none';
+            }
+            if (shell.badge) {
+                shell.badge.textContent = overlap ? 'Overlap' : 'Valid';
+                shell.badge.classList.toggle('badge-danger', overlap);
+                shell.badge.classList.toggle('badge-accent', !overlap);
+            }
+            setDerivedAnswer(overlap ? -1 : ordered.length);
+            setActionPayload({ mode: 'activity_selection', selected_indices: ordered });
+        }
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                if (selected.has(idx)) {
+                    selected.delete(idx);
+                } else {
+                    selected.add(idx);
+                }
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildLcsMode() {
+        const s1 = String(challengeVisualizationPayload.s1 || '');
+        const s2 = String(challengeVisualizationPayload.s2 || '');
+        if (!s1 || !s2) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'LCS Builder',
+            'Build any common subsequence. Submitted answer is its length.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <p class="text-muted small mb-2">s1: <strong>${s1}</strong> | s2: <strong>${s2}</strong></p>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                ${Array.from(new Set((s1 + s2).split(''))).map((ch) => `
+                    <button type="button" class="btn btn-outline-primary btn-sm action-char-btn" data-char="${ch}">${ch}</button>
+                `).join('')}
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="lcsBackspaceBtn">Backspace</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="lcsClearBtn">Clear</button>
+            </div>
+            <div class="text-muted small" id="lcsCandidateLabel">Candidate: (empty)</div>
+        `;
+
+        let candidate = '';
+        const label = shell.body.querySelector('#lcsCandidateLabel');
+
+        function isSubsequence(sub, text) {
+            let pos = 0;
+            for (const ch of sub) {
+                pos = text.indexOf(ch, pos);
+                if (pos === -1) return false;
+                pos += 1;
+            }
+            return true;
+        }
+
+        function render() {
+            const valid = isSubsequence(candidate, s1) && isSubsequence(candidate, s2);
+            if (label) {
+                label.textContent = `Candidate: ${candidate || '(empty)'}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = valid ? 'Valid' : 'Invalid';
+                shell.badge.classList.toggle('badge-danger', !valid);
+                shell.badge.classList.toggle('badge-accent', valid);
+            }
+            setDerivedAnswer(valid ? candidate.length : -1);
+            setActionPayload({ mode: 'lcs_builder', candidate_subsequence: candidate });
+        }
+
+        shell.body.querySelectorAll('.action-char-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                candidate += String(button.dataset.char || '');
+                render();
+            });
+        });
+        const backspaceBtn = shell.body.querySelector('#lcsBackspaceBtn');
+        if (backspaceBtn) {
+            backspaceBtn.addEventListener('click', () => {
+                candidate = candidate.slice(0, -1);
+                render();
+            });
+        }
+        const clearBtn = shell.body.querySelector('#lcsClearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                candidate = '';
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildBacktrackingMode() {
+        const values = Array.isArray(challengeVisualizationPayload.values) ? challengeVisualizationPayload.values : [];
+        const target = Number(challengeVisualizationPayload.target);
+        if (!values.length || !Number.isFinite(target)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Subset Finder',
+            'Build valid subsets that sum to target. Answer is number of unique valid subsets found.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <p class="text-muted small mb-2">Target: <strong>${target}</strong></p>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                ${values.map((value, idx) => `<button type="button" class="btn btn-outline-primary btn-sm action-value-btn" data-index="${idx}" data-value="${Number(value)}">${Number(value)}</button>`).join('')}
+            </div>
+            <div class="d-flex gap-2 mb-2">
+                <button type="button" class="btn btn-outline-success btn-sm" id="subsetAddBtn">Add Subset</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="subsetResetBtn">Reset Current</button>
+            </div>
+            <div class="text-muted small mb-1" id="subsetCurrentLabel">Current subset: (empty)</div>
+            <div class="text-muted small" id="subsetFoundLabel">Found valid subsets: 0</div>
+        `;
+
+        const selected = new Set();
+        const found = new Set();
+        const currentLabel = shell.body.querySelector('#subsetCurrentLabel');
+        const foundLabel = shell.body.querySelector('#subsetFoundLabel');
+        const valueButtons = Array.from(shell.body.querySelectorAll('.action-value-btn'));
+
+        function render() {
+            const current = Array.from(selected).sort((a, b) => a - b).map((idx) => Number(valueButtons[idx].dataset.value));
+            const sum = current.reduce((acc, value) => acc + value, 0);
+            valueButtons.forEach((button) => button.classList.toggle('active', selected.has(Number(button.dataset.index))));
+            if (currentLabel) {
+                currentLabel.textContent = `Current subset: ${current.length ? `[${current.join(', ')}]` : '(empty)'} | Sum: ${sum}`;
+            }
+            if (foundLabel) {
+                foundLabel.textContent = `Found valid subsets: ${found.size}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = sum === target ? 'Target hit' : 'Exploring';
+                shell.badge.classList.toggle('badge-accent', sum === target);
+                shell.badge.classList.toggle('badge-primary', sum !== target);
+            }
+            setDerivedAnswer(found.size);
+            setActionPayload({ mode: 'subset_finder', found_subsets: Array.from(found).map((key) => key.split(',').filter(Boolean).map(Number)) });
+        }
+
+        valueButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                if (selected.has(idx)) {
+                    selected.delete(idx);
+                } else {
+                    selected.add(idx);
+                }
+                render();
+            });
+        });
+
+        const addBtn = shell.body.querySelector('#subsetAddBtn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                const subset = Array.from(selected).sort((a, b) => a - b).map((idx) => Number(valueButtons[idx].dataset.value));
+                const sum = subset.reduce((acc, value) => acc + value, 0);
+                if (sum === target) {
+                    found.add(subset.join(','));
+                }
+                render();
+            });
+        }
+
+        const resetBtn = shell.body.querySelector('#subsetResetBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                selected.clear();
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildRecursionMode() {
+        const n = Number(challengeVisualizationPayload.n);
+        if (!Number.isFinite(n) || n < 1) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Fibonacci Sequence Builder',
+            'Complete Fibonacci values up to Fn. Submitted answer is Fn.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        const rows = [];
+        rows.push('<div class="text-muted small mb-2">F0 = 0, F1 = 1 are fixed.</div>');
+        for (let idx = 2; idx <= n; idx += 1) {
+            rows.push(`
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text">F${idx}</span>
+                    <input type="number" class="form-control recursion-input" data-index="${idx}" placeholder="value">
+                </div>
+            `);
+        }
+        shell.body.innerHTML = rows.join('');
+        const inputs = Array.from(shell.body.querySelectorAll('.recursion-input'));
+
+        function render() {
+            const sequence = [0, 1];
+            let valid = true;
+            for (const input of inputs) {
+                const value = Number(input.value);
+                if (!Number.isFinite(value)) {
+                    valid = false;
+                    break;
+                }
+                sequence.push(value);
+            }
+            if (valid) {
+                for (let idx = 2; idx < sequence.length; idx += 1) {
+                    if (sequence[idx] !== sequence[idx - 1] + sequence[idx - 2]) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if (shell.badge) {
+                shell.badge.textContent = valid && sequence.length === n + 1 ? 'Valid' : 'Incomplete';
+                shell.badge.classList.toggle('badge-accent', valid && sequence.length === n + 1);
+                shell.badge.classList.toggle('badge-primary', !(valid && sequence.length === n + 1));
+            }
+            setDerivedAnswer(valid && sequence.length === n + 1 ? sequence[sequence.length - 1] : -1);
+            setActionPayload({ mode: 'recursion_sequence', sequence: sequence });
+        }
+
+        inputs.forEach((input) => input.addEventListener('input', render));
+        render();
+        return true;
+    }
+
+    function buildBitConversionMode() {
+        const decimal = Number(challengeVisualizationPayload.decimal);
+        if (!Number.isFinite(decimal) || decimal < 0) {
+            return false;
+        }
+
+        const expectedSize = Math.max(1, decimal.toString(2).length);
+        const bits = new Array(expectedSize).fill(0);
+        const shell = renderActionHostShell(
+            'Binary Toggle Board',
+            'Toggle bits to build binary representation.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <p class="text-muted small mb-2">Decimal value: <strong>${decimal}</strong></p>
+            <div class="d-flex flex-wrap gap-2 mb-2" id="bitToggleRow">
+                ${bits.map((_, idx) => `<button type="button" class="btn btn-outline-primary action-bit-btn" data-index="${idx}">0</button>`).join('')}
+            </div>
+            <small class="text-muted" id="bitBinaryLabel">Binary: 0</small>
+        `;
+        const bitButtons = Array.from(shell.body.querySelectorAll('.action-bit-btn'));
+        const bitLabel = shell.body.querySelector('#bitBinaryLabel');
+
+        function render() {
+            bitButtons.forEach((button, idx) => {
+                button.textContent = String(bits[idx]);
+                button.classList.toggle('active', bits[idx] === 1);
+            });
+            const binary = bits.join('').replace(/^0+(?=\d)/, '') || '0';
+            if (bitLabel) {
+                bitLabel.textContent = `Binary: ${binary}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = 'Binary updated';
+            }
+            setDerivedAnswer(binary);
+            setActionPayload({ mode: 'bit_toggle', binary: binary });
+        }
+
+        bitButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                bits[idx] = bits[idx] === 1 ? 0 : 1;
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildTraversalMode(mode) {
+        const rawEdges = Array.isArray(challengeVisualizationPayload.edges) ? challengeVisualizationPayload.edges : [];
+        const edges = rawEdges
+            .map((edge) => {
+                if (!Array.isArray(edge) || edge.length < 2) {
+                    return null;
+                }
+                const left = Number(edge[0]);
+                const right = Number(edge[1]);
+                if (!Number.isInteger(left) || !Number.isInteger(right) || left < 0 || right < 0) {
+                    return null;
+                }
+                return [left, right];
+            })
+            .filter(Boolean);
+        if (!edges.length) {
+            return false;
+        }
+
+        const nodeSet = new Set();
+        edges.forEach(([left, right]) => {
+            nodeSet.add(left);
+            nodeSet.add(right);
+        });
+        const nodes = Array.from(nodeSet).sort((a, b) => a - b);
+        const start = Number(challengeVisualizationPayload.start);
+        if (!Number.isInteger(start) || !nodeSet.has(start)) {
+            return false;
+        }
+
+        const adjacency = new Map(nodes.map((node) => [node, []]));
+        edges.forEach(([left, right]) => {
+            adjacency.get(left).push(right);
+            adjacency.get(right).push(left);
+        });
+        adjacency.forEach((neighbors) => neighbors.sort((a, b) => a - b));
+
+        const reachable = new Set([start]);
+        const queue = [start];
+        while (queue.length) {
+            const current = queue.shift();
+            (adjacency.get(current) || []).forEach((nextNode) => {
+                if (!reachable.has(nextNode)) {
+                    reachable.add(nextNode);
+                    queue.push(nextNode);
+                }
+            });
+        }
+        const expectedLength = reachable.size;
+
+        const shell = renderActionHostShell(
+            mode === 'bfs' ? 'BFS Route Builder' : 'DFS Route Builder',
+            'Click nodes in traversal order. Start node is pre-selected.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2">
+                <strong>Start:</strong> ${start} | <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="traversalNodeBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="traversalUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="traversalResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="traversalMeta"></small>
+        `;
+
+        const board = shell.body.querySelector('#traversalNodeBoard');
+        const meta = shell.body.querySelector('#traversalMeta');
+        const undoBtn = shell.body.querySelector('#traversalUndoBtn');
+        const resetBtn = shell.body.querySelector('#traversalResetBtn');
+
+        const order = [start];
+        const used = new Set([start]);
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            board.innerHTML = nodes
+                .map((node) => {
+                    const index = order.indexOf(node);
+                    const isUsed = index !== -1;
+                    const btnClass = isUsed ? 'btn-outline-success' : 'btn-outline-primary';
+                    return `
+                        <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-node="${node}">
+                            ${node}${isUsed ? ` (#${index + 1})` : ''}
+                        </button>
+                    `;
+                })
+                .join('');
+
+            board.querySelectorAll('.action-value-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const node = Number(button.dataset.node);
+                    if (!Number.isInteger(node) || used.has(node)) {
+                        return;
+                    }
+                    order.push(node);
+                    used.add(node);
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderBoard();
+            if (meta) {
+                meta.textContent = `Traversal: ${order.join(' -> ')} | Step ${order.length}/${expectedLength}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = `${order.length}/${expectedLength}`;
+                shell.badge.classList.toggle('badge-accent', order.length === expectedLength);
+                shell.badge.classList.toggle('badge-primary', order.length !== expectedLength);
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(order.join(' '));
+            setActionPayload({
+                mode: mode === 'bfs' ? 'bfs_traversal' : 'dfs_traversal',
+                visitation_order: order.slice(),
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                if (order.length <= 1) {
+                    return;
+                }
+                const removed = order.pop();
+                used.delete(removed);
+                render();
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                order.length = 1;
+                used.clear();
+                used.add(start);
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildDijkstraMode() {
+        const rawEdges = Array.isArray(challengeVisualizationPayload.weighted_edges) ? challengeVisualizationPayload.weighted_edges : [];
+        const edges = rawEdges
+            .map((edge) => {
+                if (!Array.isArray(edge) || edge.length < 3) {
+                    return null;
+                }
+                const left = Number(edge[0]);
+                const right = Number(edge[1]);
+                const weight = Number(edge[2]);
+                if (!Number.isInteger(left) || !Number.isInteger(right) || !Number.isFinite(weight) || weight <= 0) {
+                    return null;
+                }
+                return [left, right, weight];
+            })
+            .filter(Boolean);
+        const source = Number(challengeVisualizationPayload.source);
+        const target = Number(challengeVisualizationPayload.target);
+        if (!edges.length || !Number.isInteger(source) || !Number.isInteger(target)) {
+            return false;
+        }
+
+        const nodeSet = new Set([source, target]);
+        const edgeMap = new Map();
+        edges.forEach(([left, right, weight]) => {
+            nodeSet.add(left);
+            nodeSet.add(right);
+            edgeMap.set(`${left}|${right}`, weight);
+            edgeMap.set(`${right}|${left}`, weight);
+        });
+        const nodes = Array.from(nodeSet).sort((a, b) => a - b);
+
+        const shell = renderActionHostShell(
+            'Dijkstra Path Builder',
+            'Build a valid source-to-target path. Submitted answer is path weight.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Source:</strong> ${source} | <strong>Target:</strong> ${target}</div>
+            <div class="text-muted small mb-2">Edges: ${edges.map((edge) => `${edge[0]}-${edge[1]}(${edge[2]})`).join(', ')}</div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="dijkstraNodeBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="dijkstraUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="dijkstraResetBtn">Reset</button>
+                <button type="button" class="btn btn-outline-warning btn-sm" id="dijkstraUnreachableBtn">Mark Unreachable</button>
+            </div>
+            <small class="text-muted" id="dijkstraMeta"></small>
+        `;
+
+        const board = shell.body.querySelector('#dijkstraNodeBoard');
+        const meta = shell.body.querySelector('#dijkstraMeta');
+        const undoBtn = shell.body.querySelector('#dijkstraUndoBtn');
+        const resetBtn = shell.body.querySelector('#dijkstraResetBtn');
+        const unreachableBtn = shell.body.querySelector('#dijkstraUnreachableBtn');
+
+        const path = [source];
+        let isUnreachable = false;
+
+        function pathDistance() {
+            let total = 0;
+            for (let idx = 1; idx < path.length; idx += 1) {
+                const weight = edgeMap.get(`${path[idx - 1]}|${path[idx]}`);
+                if (!Number.isFinite(weight)) {
+                    return null;
+                }
+                total += weight;
+            }
+            return total;
+        }
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            board.innerHTML = nodes
+                .map((node) => `
+                    <button type="button" class="btn btn-outline-primary btn-sm action-value-btn" data-node="${node}">
+                        ${node}
+                    </button>
+                `)
+                .join('');
+            board.querySelectorAll('.action-value-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const node = Number(button.dataset.node);
+                    if (!Number.isInteger(node)) {
+                        return;
+                    }
+                    if (isUnreachable) {
+                        isUnreachable = false;
+                        path.length = 1;
+                    }
+                    const last = path[path.length - 1];
+                    if (!edgeMap.has(`${last}|${node}`)) {
+                        return;
+                    }
+                    path.push(node);
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderBoard();
+            const distance = pathDistance();
+            const finished = !isUnreachable && path[path.length - 1] === target && Number.isFinite(distance);
+            if (meta) {
+                if (isUnreachable) {
+                    meta.textContent = 'Submitted as unreachable.';
+                } else {
+                    meta.textContent = `Path: ${path.join(' -> ')} | Distance: ${Number.isFinite(distance) ? distance : '-'}`;
+                }
+            }
+            if (shell.badge) {
+                shell.badge.textContent = isUnreachable ? 'Unreachable' : (finished ? `Distance ${distance}` : 'Building Path');
+                shell.badge.classList.toggle('badge-accent', isUnreachable || finished);
+                shell.badge.classList.toggle('badge-primary', !(isUnreachable || finished));
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(isUnreachable ? -1 : (finished ? distance : ''));
+            setActionPayload({
+                mode: 'dijkstra_path',
+                path_nodes: path.slice(),
+                is_unreachable: isUnreachable,
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                if (isUnreachable) {
+                    isUnreachable = false;
+                    render();
+                    return;
+                }
+                if (path.length > 1) {
+                    path.pop();
+                    render();
+                }
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                path.length = 1;
+                isUnreachable = false;
+                render();
+            });
+        }
+        if (unreachableBtn) {
+            unreachableBtn.addEventListener('click', () => {
+                isUnreachable = true;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildAStarMode() {
+        const rows = Number(challengeVisualizationPayload.rows);
+        const cols = Number(challengeVisualizationPayload.cols);
+        const blockedRaw = Array.isArray(challengeVisualizationPayload.blocked) ? challengeVisualizationPayload.blocked : [];
+        if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows <= 0 || cols <= 0) {
+            return false;
+        }
+
+        const blocked = new Set();
+        for (const cell of blockedRaw) {
+            if (!Array.isArray(cell) || cell.length < 2) {
+                return false;
+            }
+            const row = Number(cell[0]);
+            const col = Number(cell[1]);
+            if (!Number.isInteger(row) || !Number.isInteger(col)) {
+                return false;
+            }
+            blocked.add(`${row},${col}`);
+        }
+
+        const goal = [rows - 1, cols - 1];
+        const shell = renderActionHostShell(
+            'A* Grid Route',
+            'Build a valid 4-direction route from S(0,0) to goal.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Grid:</strong> ${rows}x${cols} | <strong>Goal:</strong> (${goal[0]}, ${goal[1]})</div>
+            <div class="d-inline-flex flex-column gap-1 mb-3" id="astarGridBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="astarUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="astarResetBtn">Reset</button>
+                <button type="button" class="btn btn-outline-warning btn-sm" id="astarUnreachableBtn">Mark Unreachable</button>
+            </div>
+            <small class="text-muted" id="astarMeta"></small>
+        `;
+
+        const board = shell.body.querySelector('#astarGridBoard');
+        const meta = shell.body.querySelector('#astarMeta');
+        const undoBtn = shell.body.querySelector('#astarUndoBtn');
+        const resetBtn = shell.body.querySelector('#astarResetBtn');
+        const unreachableBtn = shell.body.querySelector('#astarUnreachableBtn');
+
+        const path = [[0, 0]];
+        let isUnreachable = false;
+
+        function keyFor(row, col) {
+            return `${row},${col}`;
+        }
+
+        function isAdjacent(a, b) {
+            return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
+        }
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            const pathKeys = new Set(path.map((cell) => keyFor(cell[0], cell[1])));
+            const rowsHtml = [];
+            for (let row = 0; row < rows; row += 1) {
+                const cells = [];
+                for (let col = 0; col < cols; col += 1) {
+                    const key = keyFor(row, col);
+                    const isBlocked = blocked.has(key);
+                    const inPath = pathKeys.has(key);
+                    let btnClass = 'btn-outline-primary';
+                    if (isBlocked) btnClass = 'btn-outline-dark';
+                    if (inPath) btnClass = 'btn-outline-success';
+                    if (row === 0 && col === 0) btnClass = 'btn-outline-info';
+                    if (row === goal[0] && col === goal[1]) btnClass = inPath ? 'btn-outline-success' : 'btn-outline-warning';
+                    cells.push(
+                        `<button type="button" class="btn ${btnClass} btn-sm action-grid-btn" data-row="${row}" data-col="${col}" ${isBlocked ? 'disabled' : ''}>
+                            ${row},${col}
+                        </button>`
+                    );
+                }
+                rowsHtml.push(`<div class="d-flex gap-1">${cells.join('')}</div>`);
+            }
+            board.innerHTML = rowsHtml.join('');
+            board.querySelectorAll('.action-grid-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const row = Number(button.dataset.row);
+                    const col = Number(button.dataset.col);
+                    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+                        return;
+                    }
+                    if (isUnreachable) {
+                        isUnreachable = false;
+                        path.length = 1;
+                    }
+                    const cell = [row, col];
+                    const last = path[path.length - 1];
+                    if (path.length >= 2 && row === path[path.length - 2][0] && col === path[path.length - 2][1]) {
+                        path.pop();
+                        render();
+                        return;
+                    }
+                    if (!isAdjacent(last, cell)) {
+                        return;
+                    }
+                    if (path.some((item) => item[0] === row && item[1] === col)) {
+                        return;
+                    }
+                    path.push(cell);
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderBoard();
+            const reachedGoal = !isUnreachable && path[path.length - 1][0] === goal[0] && path[path.length - 1][1] === goal[1];
+            const moves = reachedGoal ? path.length - 1 : null;
+            if (meta) {
+                if (isUnreachable) {
+                    meta.textContent = 'Submitted as unreachable.';
+                } else {
+                    meta.textContent = `Path length: ${path.length} | Moves: ${moves ?? '-'} | Route: ${path.map((cell) => `(${cell[0]},${cell[1]})`).join(' -> ')}`;
+                }
+            }
+            if (shell.badge) {
+                shell.badge.textContent = isUnreachable ? 'Unreachable' : (reachedGoal ? `Moves ${moves}` : 'Building Route');
+                shell.badge.classList.toggle('badge-accent', isUnreachable || reachedGoal);
+                shell.badge.classList.toggle('badge-primary', !(isUnreachable || reachedGoal));
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(isUnreachable ? -1 : (reachedGoal ? moves : ''));
+            setActionPayload({
+                mode: 'astar_grid_route',
+                path: path.map((cell) => [cell[0], cell[1]]),
+                is_unreachable: isUnreachable,
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                if (isUnreachable) {
+                    isUnreachable = false;
+                    render();
+                    return;
+                }
+                if (path.length > 1) {
+                    path.pop();
+                    render();
+                }
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                path.length = 1;
+                isUnreachable = false;
+                render();
+            });
+        }
+        if (unreachableBtn) {
+            unreachableBtn.addEventListener('click', () => {
+                isUnreachable = true;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildMinimaxMode() {
+        const leaves = (Array.isArray(challengeVisualizationPayload.leaves) ? challengeVisualizationPayload.leaves : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value) && Number.isInteger(value));
+        if (leaves.length < 2 || (leaves.length & (leaves.length - 1)) !== 0) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Minimax Fold Arena',
+            'Fold pairs each level: MIN, then MAX, then MIN ... until one value remains.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2">Leaves: [${leaves.join(', ')}]</div>
+            <div class="text-muted small mb-2" id="minimaxOpLabel"></div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="minimaxLevelBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="minimaxFoldBtn">Apply Fold</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="minimaxUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="minimaxResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="minimaxMeta"></small>
+        `;
+
+        const opLabel = shell.body.querySelector('#minimaxOpLabel');
+        const board = shell.body.querySelector('#minimaxLevelBoard');
+        const foldBtn = shell.body.querySelector('#minimaxFoldBtn');
+        const undoBtn = shell.body.querySelector('#minimaxUndoBtn');
+        const resetBtn = shell.body.querySelector('#minimaxResetBtn');
+        const meta = shell.body.querySelector('#minimaxMeta');
+
+        const history = [];
+        let level = leaves.slice();
+        let isMax = false;
+
+        function render() {
+            if (board) {
+                board.innerHTML = level.map((value) => `<span class="badge badge-primary">${value}</span>`).join('');
+            }
+            if (opLabel) {
+                opLabel.textContent = level.length > 1 ? `Current operator: ${isMax ? 'MAX' : 'MIN'}` : 'Root value ready.';
+            }
+            if (meta) {
+                meta.textContent = `Level size: ${level.length}`;
+            }
+            const done = level.length === 1;
+            if (foldBtn) {
+                foldBtn.disabled = done;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = done ? `Root ${level[0]}` : `${isMax ? 'MAX' : 'MIN'} Fold`;
+                shell.badge.classList.toggle('badge-accent', done);
+                shell.badge.classList.toggle('badge-primary', !done);
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(done ? level[0] : '');
+            setActionPayload({
+                mode: 'minimax_fold',
+                root_value: done ? level[0] : null,
+                fold_steps: history.map((entry) => entry.operator),
+            });
+        }
+
+        if (foldBtn) {
+            foldBtn.addEventListener('click', () => {
+                if (level.length <= 1 || level.length % 2 !== 0) {
+                    return;
+                }
+                history.push({ level: level.slice(), operator: isMax ? 'MAX' : 'MIN' });
+                const next = [];
+                for (let idx = 0; idx < level.length; idx += 2) {
+                    const left = level[idx];
+                    const right = level[idx + 1];
+                    next.push(isMax ? Math.max(left, right) : Math.min(left, right));
+                }
+                level = next;
+                isMax = !isMax;
+                render();
+            });
+        }
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                const previous = history.pop();
+                if (!previous) {
+                    return;
+                }
+                level = previous.level.slice();
+                isMax = previous.operator === 'MAX';
+                render();
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                history.length = 0;
+                level = leaves.slice();
+                isMax = false;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildLinearSearchMode() {
+        const data = (Array.isArray(challengeVisualizationPayload.data) ? challengeVisualizationPayload.data : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const target = Number(challengeVisualizationPayload.target);
+        if (!data.length || !Number.isFinite(target)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Linear Search Trail',
+            'Walk left to right. Mark match when current value equals target.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Target:</strong> ${target}</div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="linearSearchBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-success btn-sm" id="linearFoundBtn">Match Found</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="linearNextBtn">Not Equal, Next</button>
+                <button type="button" class="btn btn-outline-warning btn-sm" id="linearNotFoundBtn">Mark Not Found</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="linearResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="linearSearchMeta"></small>
+        `;
+
+        const board = shell.body.querySelector('#linearSearchBoard');
+        const meta = shell.body.querySelector('#linearSearchMeta');
+        const foundBtn = shell.body.querySelector('#linearFoundBtn');
+        const nextBtn = shell.body.querySelector('#linearNextBtn');
+        const notFoundBtn = shell.body.querySelector('#linearNotFoundBtn');
+        const resetBtn = shell.body.querySelector('#linearResetBtn');
+
+        let pointer = 0;
+        let selectedIndex = null;
+        const inspected = [];
+        let finished = false;
+
+        function inspectCurrent() {
+            if (!inspected.includes(pointer) && pointer >= 0 && pointer < data.length) {
+                inspected.push(pointer);
+            }
+        }
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            board.innerHTML = data
+                .map((value, idx) => {
+                    const isPointer = !finished && idx === pointer;
+                    const isInspected = inspected.includes(idx);
+                    const baseClass = isPointer ? 'btn-outline-warning' : (isInspected ? 'btn-outline-secondary' : 'btn-outline-primary');
+                    return `
+                        <button type="button" class="btn ${baseClass} btn-sm" disabled>
+                            <span class="d-block">${value}</span>
+                            <small class="d-block">idx ${idx}</small>
+                        </button>
+                    `;
+                })
+                .join('');
+        }
+
+        function render() {
+            renderBoard();
+            const currentValue = pointer >= 0 && pointer < data.length ? data[pointer] : null;
+            const done = finished || selectedIndex !== null;
+
+            if (foundBtn) {
+                foundBtn.disabled = done || pointer >= data.length;
+            }
+            if (nextBtn) {
+                nextBtn.disabled = done || pointer >= data.length;
+            }
+            if (notFoundBtn) {
+                notFoundBtn.disabled = done;
+            }
+
+            if (meta) {
+                if (selectedIndex === null) {
+                    meta.textContent = pointer < data.length
+                        ? `Pointer at idx ${pointer} (value ${currentValue}).`
+                        : 'Reached end of array.';
+                } else if (selectedIndex === -1) {
+                    meta.textContent = `Submitted not found. Checked: [${inspected.join(', ')}].`;
+                } else {
+                    meta.textContent = `Submitted index ${selectedIndex}. Checked: [${inspected.join(', ')}].`;
+                }
+            }
+
+            if (shell.badge) {
+                if (selectedIndex === null) {
+                    shell.badge.textContent = pointer < data.length ? `idx ${pointer}` : 'End reached';
+                    shell.badge.classList.add('badge-primary');
+                    shell.badge.classList.remove('badge-accent');
+                    shell.badge.classList.remove('badge-danger');
+                } else {
+                    shell.badge.textContent = selectedIndex === -1 ? 'Not Found' : `Found @ ${selectedIndex}`;
+                    shell.badge.classList.add('badge-accent');
+                    shell.badge.classList.remove('badge-primary');
+                    shell.badge.classList.remove('badge-danger');
+                }
+            }
+
+            setDerivedAnswer(selectedIndex === null ? '' : selectedIndex);
+            setActionPayload({
+                mode: 'linear_search_trace',
+                selected_index: selectedIndex,
+                inspected_indices: inspected.slice(),
+            });
+        }
+
+        if (foundBtn) {
+            foundBtn.addEventListener('click', () => {
+                if (finished || pointer >= data.length) {
+                    return;
+                }
+                inspectCurrent();
+                selectedIndex = pointer;
+                finished = true;
+                render();
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                if (finished || pointer >= data.length) {
+                    return;
+                }
+                inspectCurrent();
+                pointer += 1;
+                render();
+            });
+        }
+
+        if (notFoundBtn) {
+            notFoundBtn.addEventListener('click', () => {
+                if (finished) {
+                    return;
+                }
+                selectedIndex = -1;
+                finished = true;
+                render();
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                pointer = 0;
+                selectedIndex = null;
+                inspected.length = 0;
+                finished = false;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildBinarySearchMode() {
+        const data = (Array.isArray(challengeVisualizationPayload.data) ? challengeVisualizationPayload.data : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const target = Number(challengeVisualizationPayload.target);
+        if (!data.length || !Number.isFinite(target)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Binary Search Navigator',
+            'At each midpoint, choose comparison result to shrink range.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Target:</strong> ${target}</div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="binarySearchBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="binaryLessBtn">Target &lt; Mid</button>
+                <button type="button" class="btn btn-outline-success btn-sm" id="binaryEqualBtn">Target = Mid</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="binaryGreaterBtn">Target &gt; Mid</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="binaryResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="binarySearchMeta"></small>
+        `;
+
+        const board = shell.body.querySelector('#binarySearchBoard');
+        const meta = shell.body.querySelector('#binarySearchMeta');
+        const lessBtn = shell.body.querySelector('#binaryLessBtn');
+        const equalBtn = shell.body.querySelector('#binaryEqualBtn');
+        const greaterBtn = shell.body.querySelector('#binaryGreaterBtn');
+        const resetBtn = shell.body.querySelector('#binaryResetBtn');
+
+        let low = 0;
+        let high = data.length - 1;
+        let selectedIndex = null;
+        let finished = false;
+        const trace = [];
+
+        function currentMid() {
+            if (low > high) {
+                return null;
+            }
+            return Math.floor((low + high) / 2);
+        }
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            const mid = currentMid();
+            board.innerHTML = data
+                .map((value, idx) => {
+                    let btnClass = 'btn-outline-primary';
+                    if (!finished && idx >= low && idx <= high) {
+                        btnClass = 'btn-outline-secondary';
+                    }
+                    if (!finished && idx === mid) {
+                        btnClass = 'btn-outline-warning';
+                    }
+                    if (finished && selectedIndex === idx) {
+                        btnClass = 'btn-outline-success';
+                    }
+                    return `
+                        <button type="button" class="btn ${btnClass} btn-sm" disabled>
+                            <span class="d-block">${value}</span>
+                            <small class="d-block">idx ${idx}</small>
+                        </button>
+                    `;
+                })
+                .join('');
+        }
+
+        function finalizeNotFound() {
+            selectedIndex = -1;
+            finished = true;
+        }
+
+        function render() {
+            renderBoard();
+            const mid = currentMid();
+            const done = finished || selectedIndex !== null;
+
+            if (lessBtn) {
+                lessBtn.disabled = done || mid === null;
+            }
+            if (equalBtn) {
+                equalBtn.disabled = done || mid === null;
+            }
+            if (greaterBtn) {
+                greaterBtn.disabled = done || mid === null;
+            }
+
+            if (!finished && mid === null) {
+                finalizeNotFound();
+            }
+
+            if (meta) {
+                if (selectedIndex === null) {
+                    meta.textContent = `Range: [${low}, ${high}] | Mid: ${mid === null ? '-' : mid}`;
+                } else if (selectedIndex === -1) {
+                    meta.textContent = `Target not found after ${trace.length} step(s).`;
+                } else {
+                    meta.textContent = `Target found at index ${selectedIndex} in ${trace.length} step(s).`;
+                }
+            }
+
+            if (shell.badge) {
+                if (selectedIndex === null) {
+                    shell.badge.textContent = mid === null ? 'Not Found' : `mid=${mid}`;
+                    shell.badge.classList.add('badge-primary');
+                    shell.badge.classList.remove('badge-accent');
+                    shell.badge.classList.remove('badge-danger');
+                } else {
+                    shell.badge.textContent = selectedIndex === -1 ? 'Not Found' : `Found @ ${selectedIndex}`;
+                    shell.badge.classList.add('badge-accent');
+                    shell.badge.classList.remove('badge-primary');
+                    shell.badge.classList.remove('badge-danger');
+                }
+            }
+
+            setDerivedAnswer(selectedIndex === null ? '' : selectedIndex);
+            setActionPayload({
+                mode: 'binary_search_trace',
+                selected_index: selectedIndex,
+                trace: trace.slice(),
+            });
+        }
+
+        function applyDecision(decision) {
+            if (finished) {
+                return;
+            }
+            const mid = currentMid();
+            if (mid === null) {
+                finalizeNotFound();
+                render();
+                return;
+            }
+            trace.push({ low, high, mid, decision });
+            if (decision === 'lt') {
+                high = mid - 1;
+            } else if (decision === 'gt') {
+                low = mid + 1;
+            } else if (decision === 'eq') {
+                selectedIndex = mid;
+                finished = true;
+            }
+            if (!finished && low > high) {
+                finalizeNotFound();
+            }
+            render();
+        }
+
+        if (lessBtn) {
+            lessBtn.addEventListener('click', () => applyDecision('lt'));
+        }
+        if (equalBtn) {
+            equalBtn.addEventListener('click', () => applyDecision('eq'));
+        }
+        if (greaterBtn) {
+            greaterBtn.addEventListener('click', () => applyDecision('gt'));
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                low = 0;
+                high = data.length - 1;
+                selectedIndex = null;
+                finished = false;
+                trace.length = 0;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildStringAlgorithmMode() {
+        const words = (Array.isArray(challengeVisualizationPayload.words) ? challengeVisualizationPayload.words : [])
+            .map((word) => String(word));
+        if (!words.length) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Prefix Forge',
+            'Build the longest common prefix shared by all words.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        shell.body.innerHTML = `
+            <div class="d-flex flex-column gap-1 mb-3">
+                ${words.map((word, idx) => `<div class="text-muted small"><strong>W${idx + 1}:</strong> ${escapeHtml(word)}</div>`).join('')}
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-2" id="stringCharChoices"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="stringBackspaceBtn">Backspace</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="stringClearBtn">Clear</button>
+            </div>
+            <small class="text-muted" id="stringPrefixMeta">Candidate: (empty)</small>
+        `;
+
+        const charChoices = shell.body.querySelector('#stringCharChoices');
+        const backspaceBtn = shell.body.querySelector('#stringBackspaceBtn');
+        const clearBtn = shell.body.querySelector('#stringClearBtn');
+        const meta = shell.body.querySelector('#stringPrefixMeta');
+
+        let candidate = '';
+
+        function isCommonPrefix(prefix) {
+            return words.every((word) => word.startsWith(prefix));
+        }
+
+        function longestCommonPrefix() {
+            let prefix = words[0] || '';
+            for (let idx = 1; idx < words.length; idx += 1) {
+                while (prefix && !words[idx].startsWith(prefix)) {
+                    prefix = prefix.slice(0, -1);
+                }
+            }
+            return prefix;
+        }
+
+        const maxPrefix = longestCommonPrefix();
+
+        function nextChoiceChars() {
+            const chars = new Set();
+            for (const word of words) {
+                if (word.length > candidate.length) {
+                    chars.add(word.charAt(candidate.length));
+                }
+            }
+            const list = Array.from(chars);
+            list.sort((a, b) => a.localeCompare(b));
+            return list.slice(0, 12);
+        }
+
+        function renderChoices() {
+            if (!charChoices) {
+                return;
+            }
+            const chars = nextChoiceChars();
+            charChoices.innerHTML = chars.length
+                ? chars.map((ch) => `<button type="button" class="btn btn-outline-primary btn-sm action-char-btn" data-char="${escapeHtml(ch)}">${escapeHtml(ch)}</button>`).join('')
+                : '<span class="text-muted small">No more characters to add.</span>';
+            charChoices.querySelectorAll('.action-char-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    candidate += String(button.dataset.char || '');
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderChoices();
+            const valid = isCommonPrefix(candidate);
+            const canExtend = valid && candidate.length < maxPrefix.length;
+
+            if (meta) {
+                meta.textContent = `Candidate: ${candidate || '(empty)'} | Max: ${maxPrefix || '(empty)'}`;
+            }
+            if (shell.badge) {
+                if (!valid) {
+                    shell.badge.textContent = 'Invalid';
+                    shell.badge.classList.add('badge-danger');
+                    shell.badge.classList.remove('badge-accent');
+                    shell.badge.classList.remove('badge-primary');
+                } else if (canExtend) {
+                    shell.badge.textContent = 'Valid (extend)';
+                    shell.badge.classList.add('badge-primary');
+                    shell.badge.classList.remove('badge-accent');
+                    shell.badge.classList.remove('badge-danger');
+                } else {
+                    shell.badge.textContent = 'Max Prefix';
+                    shell.badge.classList.add('badge-accent');
+                    shell.badge.classList.remove('badge-primary');
+                    shell.badge.classList.remove('badge-danger');
+                }
+            }
+
+            setDerivedAnswer(candidate);
+            setActionPayload({
+                mode: 'string_prefix_builder',
+                candidate_prefix: candidate,
+                words_count: words.length,
+            });
+        }
+
+        if (backspaceBtn) {
+            backspaceBtn.addEventListener('click', () => {
+                candidate = candidate.slice(0, -1);
+                render();
+            });
+        }
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                candidate = '';
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildArrayAlgorithmMode() {
+        const data = (Array.isArray(challengeVisualizationPayload.data) ? challengeVisualizationPayload.data : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        if (!data.length) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Max Subarray Picker',
+            'Pick a contiguous range. Submitted answer is the range sum.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="d-flex flex-wrap gap-2 mb-3" id="arrayRangeBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="arrayResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="arrayRangeMeta">Select start and end indices.</small>
+        `;
+
+        const board = shell.body.querySelector('#arrayRangeBoard');
+        const meta = shell.body.querySelector('#arrayRangeMeta');
+        const resetBtn = shell.body.querySelector('#arrayResetBtn');
+
+        let startIndex = null;
+        let endIndex = null;
+
+        function activeBounds() {
+            if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) {
+                return null;
+            }
+            return [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
+        }
+
+        function selectedIndices(bounds) {
+            if (!bounds) return [];
+            const [left, right] = bounds;
+            const out = [];
+            for (let idx = left; idx <= right; idx += 1) {
+                out.push(idx);
+            }
+            return out;
+        }
+
+        function renderBoard() {
+            if (!board) return;
+            const bounds = activeBounds();
+            const inRange = new Set(selectedIndices(bounds));
+            board.innerHTML = data
+                .map((value, idx) => {
+                    const isPicked = inRange.has(idx);
+                    const btnClass = isPicked ? 'btn-outline-success' : 'btn-outline-primary';
+                    return `
+                        <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-index="${idx}">
+                            <span class="d-block">${value}</span>
+                            <small class="d-block">idx ${idx}</small>
+                        </button>
+                    `;
+                })
+                .join('');
+
+            board.querySelectorAll('.action-value-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const idx = Number(button.dataset.index);
+                    if (!Number.isInteger(idx) || idx < 0 || idx >= data.length) {
+                        return;
+                    }
+                    if (startIndex === null) {
+                        startIndex = idx;
+                        endIndex = idx;
+                    } else if (startIndex === endIndex && idx !== startIndex) {
+                        endIndex = idx;
+                    } else if (idx === startIndex && idx === endIndex) {
+                        startIndex = null;
+                        endIndex = null;
+                    } else {
+                        startIndex = idx;
+                        endIndex = idx;
+                    }
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderBoard();
+            const bounds = activeBounds();
+            const indices = selectedIndices(bounds);
+            const sum = indices.reduce((acc, idx) => acc + data[idx], 0);
+            const hasRange = Boolean(bounds);
+
+            if (meta) {
+                if (!hasRange) {
+                    meta.textContent = 'Select start and end indices.';
+                } else {
+                    const [left, right] = bounds;
+                    meta.textContent = `Range [${left}, ${right}] | Length ${indices.length} | Sum ${formatActionNumber(sum, 3, false)}`;
+                }
+            }
+
+            if (shell.badge) {
+                shell.badge.textContent = hasRange ? `Sum ${formatActionNumber(sum, 3, false)}` : 'Pick range';
+                shell.badge.classList.toggle('badge-accent', hasRange);
+                shell.badge.classList.toggle('badge-primary', !hasRange);
+                shell.badge.classList.remove('badge-danger');
+            }
+
+            setDerivedAnswer(hasRange ? formatActionNumber(sum, 3, false) : '');
+            setActionPayload({
+                mode: 'array_max_subarray',
+                start_index: hasRange ? bounds[0] : null,
+                end_index: hasRange ? bounds[1] : null,
+                selected_indices: indices,
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                startIndex = null;
+                endIndex = null;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildHashingAlgorithmMode() {
+        const data = (Array.isArray(challengeVisualizationPayload.arr) ? challengeVisualizationPayload.arr : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const target = Number(challengeVisualizationPayload.target);
+        if (!data.length || !Number.isFinite(target)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Pair Sum Detector',
+            'Select two indices that sum to target, or mark no pair.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="hashBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-warning btn-sm" id="hashNoPairBtn">No Pair</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="hashResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="hashMeta">Select two values.</small>
+        `;
+
+        const board = shell.body.querySelector('#hashBoard');
+        const noPairBtn = shell.body.querySelector('#hashNoPairBtn');
+        const resetBtn = shell.body.querySelector('#hashResetBtn');
+        const meta = shell.body.querySelector('#hashMeta');
+
+        const selected = new Set();
+        let declareNoPair = false;
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            board.innerHTML = data
+                .map((value, idx) => {
+                    const isActive = selected.has(idx);
+                    const btnClass = isActive ? 'btn-outline-success active' : 'btn-outline-primary';
+                    return `
+                        <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-index="${idx}">
+                            <span class="d-block">${formatActionNumber(value, 3, false)}</span>
+                            <small class="d-block">idx ${idx}</small>
+                        </button>
+                    `;
+                })
+                .join('');
+
+            board.querySelectorAll('.action-value-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const idx = Number(button.dataset.index);
+                    if (!Number.isInteger(idx) || idx < 0 || idx >= data.length) {
+                        return;
+                    }
+                    if (declareNoPair) {
+                        declareNoPair = false;
+                    }
+                    if (selected.has(idx)) {
+                        selected.delete(idx);
+                    } else if (selected.size < 2) {
+                        selected.add(idx);
+                    } else {
+                        const first = Array.from(selected.values())[0];
+                        selected.delete(first);
+                        selected.add(idx);
+                    }
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderBoard();
+            const indices = Array.from(selected).sort((a, b) => a - b);
+            const hasPairSelection = indices.length === 2;
+            const pairSum = hasPairSelection ? (data[indices[0]] + data[indices[1]]) : null;
+            const isValidPair = hasPairSelection && Math.abs(pairSum - target) <= 1e-9;
+
+            if (meta) {
+                if (declareNoPair) {
+                    meta.textContent = 'Marked as no pair exists.';
+                } else if (!hasPairSelection) {
+                    meta.textContent = `Selected ${indices.length}/2 indices.`;
+                } else {
+                    meta.textContent = `Pair (${indices[0]}, ${indices[1]}) -> sum ${formatActionNumber(pairSum, 3, false)}.`;
+                }
+            }
+            if (shell.badge) {
+                if (declareNoPair) {
+                    shell.badge.textContent = 'No Pair';
+                    shell.badge.classList.add('badge-primary');
+                    shell.badge.classList.remove('badge-accent');
+                    shell.badge.classList.remove('badge-danger');
+                } else if (!hasPairSelection) {
+                    shell.badge.textContent = 'Pick 2';
+                    shell.badge.classList.add('badge-primary');
+                    shell.badge.classList.remove('badge-accent');
+                    shell.badge.classList.remove('badge-danger');
+                } else if (isValidPair) {
+                    shell.badge.textContent = 'Valid Pair';
+                    shell.badge.classList.add('badge-accent');
+                    shell.badge.classList.remove('badge-primary');
+                    shell.badge.classList.remove('badge-danger');
+                } else {
+                    shell.badge.textContent = 'Wrong Sum';
+                    shell.badge.classList.add('badge-danger');
+                    shell.badge.classList.remove('badge-primary');
+                    shell.badge.classList.remove('badge-accent');
+                }
+            }
+
+            const derived = declareNoPair ? 'false' : (isValidPair ? 'true' : '');
+            setDerivedAnswer(derived);
+            setActionPayload({
+                mode: 'hash_pair_sum',
+                selected_indices: indices,
+                declare_no_pair: declareNoPair,
+            });
+        }
+
+        if (noPairBtn) {
+            noPairBtn.addEventListener('click', () => {
+                declareNoPair = true;
+                selected.clear();
+                render();
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                declareNoPair = false;
+                selected.clear();
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildSortingMode() {
+        const rawData = Array.isArray(challengeVisualizationPayload.data) ? challengeVisualizationPayload.data : [];
+        const values = rawData.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+        if (values.length < 2 || values.length !== rawData.length) {
+            return false;
+        }
+
+        const algo = (algorithmTypeValue || '').toLowerCase();
+        const algorithmLabel = {
+            bubble_sort: 'Bubble Sort',
+            selection_sort: 'Selection Sort',
+            insertion_sort: 'Insertion Sort',
+            merge_sort: 'Merge Sort',
+            quick_sort: 'Quick Sort',
+            heap_sort: 'Heap Sort',
+        };
+
+        const shell = renderActionHostShell(
+            `${algorithmLabel[algo] || 'Sorting'} Move Board`,
+            'Click two values to swap. Arrange array in non-decreasing order.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2">Goal: sort ascending using swaps.</div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="sortingBoard"></div>
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                <small class="text-muted ms-1" id="sortingMeta"></small>
+            </div>
+        `;
+
+        const board = shell.body.querySelector('#sortingBoard');
+        const meta = shell.body.querySelector('#sortingMeta');
+        const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+        const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+        const initial = values.slice();
+        const current = values.slice();
+        const swaps = [];
+        let selectedIndex = null;
+
+        function formatToken(value) {
+            return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+        }
+
+        function isSortedAscending(list) {
+            for (let i = 1; i < list.length; i += 1) {
+                if (list[i] < list[i - 1]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function bindBoardClicks() {
+            if (!board) {
+                return;
+            }
+            board.querySelectorAll('.action-value-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const idx = Number(button.dataset.index);
+                    if (!Number.isInteger(idx) || idx < 0 || idx >= current.length) {
+                        return;
+                    }
+
+                    if (selectedIndex === null) {
+                        selectedIndex = idx;
+                    } else if (selectedIndex === idx) {
+                        selectedIndex = null;
+                    } else {
+                        swaps.push([selectedIndex, idx]);
+                        const temp = current[selectedIndex];
+                        current[selectedIndex] = current[idx];
+                        current[idx] = temp;
+                        selectedIndex = null;
+                    }
+                    render();
+                });
+            });
+        }
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            board.innerHTML = current
+                .map((value, idx) => `
+                    <button type="button" class="btn btn-outline-primary action-value-btn${selectedIndex === idx ? ' active' : ''}"
+                        data-index="${idx}" title="Index ${idx}">
+                        ${formatToken(value)}
+                    </button>
+                `)
+                .join('');
+            bindBoardClicks();
+        }
+
+        function render() {
+            renderBoard();
+            const answer = current.map((value) => formatToken(value)).join(' ');
+            const sorted = isSortedAscending(current);
+            if (meta) {
+                const picked = selectedIndex === null ? 'none' : selectedIndex + 1;
+                meta.textContent = `Swaps: ${swaps.length} | Selected: ${picked} | Current: ${answer}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = sorted ? 'Sorted' : `Swaps: ${swaps.length}`;
+                shell.badge.classList.toggle('badge-accent', sorted);
+                shell.badge.classList.toggle('badge-primary', !sorted);
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(answer);
+            setActionPayload({
+                mode: 'sorting_swap',
+                algorithm: algo,
+                array: current.slice(),
+                swaps: swaps.slice(),
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                const last = swaps.pop();
+                if (Array.isArray(last) && last.length === 2) {
+                    const left = Number(last[0]);
+                    const right = Number(last[1]);
+                    if (
+                        Number.isInteger(left) &&
+                        Number.isInteger(right) &&
+                        left >= 0 &&
+                        right >= 0 &&
+                        left < current.length &&
+                        right < current.length
+                    ) {
+                        const temp = current[left];
+                        current[left] = current[right];
+                        current[right] = temp;
+                    }
+                }
+                selectedIndex = null;
+                render();
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                for (let idx = 0; idx < current.length; idx += 1) {
+                    current[idx] = initial[idx];
+                }
+                swaps.length = 0;
+                selectedIndex = null;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildLinearRegressionMode() {
+        const rawPoints = Array.isArray(challengeVisualizationPayload.points) ? challengeVisualizationPayload.points : [];
+        const queryX = Number(challengeVisualizationPayload.query_x);
+        const points = rawPoints
+            .map((row, idx) => {
+                if (!Array.isArray(row) || row.length < 2) {
+                    return null;
+                }
+                const x = Number(row[0]);
+                const y = Number(row[1]);
+                if (!Number.isFinite(x) || !Number.isFinite(y)) {
+                    return null;
+                }
+                return { index: idx, x, y };
+            })
+            .filter(Boolean);
+        if (points.length < 2 || !Number.isFinite(queryX)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Line Fit Lab',
+            'Pick two points to infer y = m*x + b, then predict y for query x.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="row g-2">
+                ${points.map((point) => `
+                    <div class="col-sm-6 col-xl-4">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start action-item-btn" data-index="${point.index}">
+                            <span class="d-block fw-semibold">P${point.index + 1}</span>
+                            <small class="d-block text-muted">(${point.x}, ${point.y})</small>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="d-flex flex-column gap-1 mt-3 text-muted small">
+                <div><strong>Query x:</strong> ${queryX}</div>
+                <div id="linearMeta">Select exactly two points.</div>
+            </div>
+        `;
+
+        const selected = new Set();
+        const buttons = Array.from(shell.body.querySelectorAll('.action-item-btn'));
+        const meta = shell.body.querySelector('#linearMeta');
+
+        function render() {
+            const ordered = Array.from(selected).sort((a, b) => a - b);
+            buttons.forEach((button) => button.classList.toggle('active', selected.has(Number(button.dataset.index))));
+
+            let derivedAnswer = '';
+            let badge = 'Pick 2 points';
+            let badgeDanger = false;
+            let badgeAccent = false;
+            let metaText = 'Select exactly two points.';
+
+            if (ordered.length === 2) {
+                const p1 = points.find((point) => point.index === ordered[0]);
+                const p2 = points.find((point) => point.index === ordered[1]);
+                if (p1 && p2) {
+                    if (p1.x === p2.x) {
+                        badge = 'Invalid pair';
+                        badgeDanger = true;
+                        metaText = 'Both selected points have same x-value.';
+                    } else {
+                        const slope = (p2.y - p1.y) / (p2.x - p1.x);
+                        const intercept = p1.y - (slope * p1.x);
+                        const prediction = (slope * queryX) + intercept;
+                        derivedAnswer = formatActionNumber(prediction);
+                        badge = 'Prediction ready';
+                        badgeAccent = true;
+                        metaText = `m=${formatActionNumber(slope)} | b=${formatActionNumber(intercept)} | y(${queryX})=${derivedAnswer}`;
+                    }
+                }
+            } else if (ordered.length > 2) {
+                badge = 'Too many points';
+                badgeDanger = true;
+                metaText = 'Use exactly two points.';
+            }
+
+            if (meta) {
+                meta.textContent = metaText;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = badge;
+                shell.badge.classList.toggle('badge-danger', badgeDanger);
+                shell.badge.classList.toggle('badge-accent', badgeAccent);
+                shell.badge.classList.toggle('badge-primary', !badgeDanger && !badgeAccent);
+            }
+            setDerivedAnswer(derivedAnswer);
+            setActionPayload({ mode: 'linear_regression_line_fit', selected_indices: ordered });
+        }
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                if (selected.has(idx)) {
+                    selected.delete(idx);
+                } else if (selected.size < 2) {
+                    selected.add(idx);
+                } else {
+                    const first = Array.from(selected.values())[0];
+                    selected.delete(first);
+                    selected.add(idx);
+                }
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildLogisticRegressionMode() {
+        const z = Number(challengeVisualizationPayload.z);
+        if (!Number.isFinite(z)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Logistic Probability Dial',
+            'Tune your sigma(z) estimate (3 decimals).'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>z:</strong> ${formatActionNumber(z)}</div>
+            <input type="range" class="form-range" min="0" max="1" step="0.001" value="0.500" id="logisticProbabilitySlider">
+            <div class="d-flex justify-content-between text-muted small">
+                <span>0.000</span>
+                <span id="logisticProbabilityLabel">0.500</span>
+                <span>1.000</span>
+            </div>
+        `;
+
+        const slider = shell.body.querySelector('#logisticProbabilitySlider');
+        const label = shell.body.querySelector('#logisticProbabilityLabel');
+
+        function render() {
+            const probability = Number(slider ? slider.value : 0.5);
+            const formatted = formatActionNumber(probability, 3, true);
+            if (label) {
+                label.textContent = formatted;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = `sigma(z): ${formatted}`;
+                shell.badge.classList.add('badge-accent');
+                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary');
+            }
+            setDerivedAnswer(formatted);
+            setActionPayload({ mode: 'logistic_meter', probability: Number(formatted) });
+        }
+
+        if (slider) {
+            slider.addEventListener('input', render);
+        }
+        render();
+        return true;
+    }
+
+    function buildKMeansMode() {
+        const points = (Array.isArray(challengeVisualizationPayload.points) ? challengeVisualizationPayload.points : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const centroids = (Array.isArray(challengeVisualizationPayload.centroids) ? challengeVisualizationPayload.centroids : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        if (!points.length || centroids.length !== 2) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'K-Means Cluster Round',
+            'Assign each point to C1/C2. New centroids become your submitted answer.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        const assignments = points.map((point) => (Math.abs(point - centroids[0]) <= Math.abs(point - centroids[1]) ? 0 : 1));
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2">Initial centroids: C1=${formatActionNumber(centroids[0], 2, true)}, C2=${formatActionNumber(centroids[1], 2, true)}</div>
+            <div class="d-flex flex-column gap-2">
+                ${points.map((point, idx) => `
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <span class="small fw-semibold">Point ${point}</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Point assignment ${idx}">
+                            <button type="button" class="btn btn-outline-primary action-value-btn" data-index="${idx}" data-cluster="0">C1</button>
+                            <button type="button" class="btn btn-outline-primary action-value-btn" data-index="${idx}" data-cluster="1">C2</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="text-muted small mt-3" id="kmeansMeta"></div>
+        `;
+
+        const toggleButtons = Array.from(shell.body.querySelectorAll('.action-value-btn'));
+        const meta = shell.body.querySelector('#kmeansMeta');
+
+        function render() {
+            toggleButtons.forEach((button) => {
+                const idx = Number(button.dataset.index);
+                const cluster = Number(button.dataset.cluster);
+                button.classList.toggle('active', assignments[idx] === cluster);
+            });
+
+            const groupOne = [];
+            const groupTwo = [];
+            points.forEach((point, idx) => {
+                if (assignments[idx] === 0) {
+                    groupOne.push(point);
+                } else {
+                    groupTwo.push(point);
+                }
+            });
+
+            const centroidOne = groupOne.length ? roundTo(groupOne.reduce((sum, value) => sum + value, 0) / groupOne.length, 2) : roundTo(centroids[0], 2);
+            const centroidTwo = groupTwo.length ? roundTo(groupTwo.reduce((sum, value) => sum + value, 0) / groupTwo.length, 2) : roundTo(centroids[1], 2);
+            const answer = `${formatActionNumber(centroidOne, 2, true)} ${formatActionNumber(centroidTwo, 2, true)}`;
+
+            if (meta) {
+                meta.textContent = `C1 points: [${groupOne.join(', ') || '-'}] | C2 points: [${groupTwo.join(', ') || '-'}] | Updated: ${answer}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = 'Centroids updated';
+                shell.badge.classList.add('badge-accent');
+                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary');
+            }
+            setDerivedAnswer(answer);
+            setActionPayload({ mode: 'kmeans_assign', assignments: assignments.slice() });
+        }
+
+        toggleButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                const cluster = Number(button.dataset.cluster);
+                assignments[idx] = cluster;
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildKnnMode() {
+        const rawTrain = Array.isArray(challengeVisualizationPayload.train_points) ? challengeVisualizationPayload.train_points : [];
+        const train = rawTrain
+            .map((row, idx) => {
+                if (!Array.isArray(row) || row.length < 2) {
+                    return null;
+                }
+                const x = Number(row[0]);
+                const label = String(row[1] || '').trim().toUpperCase();
+                if (!Number.isFinite(x) || !['A', 'B'].includes(label)) {
+                    return null;
+                }
+                return { index: idx, x, label };
+            })
+            .filter(Boolean);
+        const queryX = Number(challengeVisualizationPayload.query_x);
+        const k = Number(challengeVisualizationPayload.k || 3);
+        if (!train.length || !Number.isFinite(queryX) || !Number.isInteger(k) || k <= 0 || k > train.length) {
+            return false;
+        }
+
+        const ranked = train.slice().sort((left, right) => {
+            const d = Math.abs(left.x - queryX) - Math.abs(right.x - queryX);
+            if (d !== 0) return d;
+            if (left.x !== right.x) return left.x - right.x;
+            if (left.label !== right.label) return left.label.localeCompare(right.label);
+            return left.index - right.index;
+        });
+        const canonical = ranked.slice(0, k).map((row) => row.index).sort((a, b) => a - b);
+        const canonicalLabel = (() => {
+            const top = ranked.slice(0, k);
+            const countA = top.filter((row) => row.label === 'A').length;
+            return countA >= (k - countA) ? 'A' : 'B';
+        })();
+
+        const shell = renderActionHostShell(
+            'KNN Neighbor Selector',
+            `Pick exactly ${k} nearest neighbors. Tie-break: lower x, then label.`
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Query x:</strong> ${queryX}</div>
+            <div class="d-flex flex-column gap-2">
+                ${train.map((row) => `
+                    <button type="button" class="btn btn-outline-primary text-start action-interval-btn" data-index="${row.index}">
+                        x=${row.x}, label=${row.label}, distance=${formatActionNumber(Math.abs(row.x - queryX))}
+                    </button>
+                `).join('')}
+            </div>
+            <div class="text-muted small mt-3" id="knnMeta">Select ${k} neighbors.</div>
+        `;
+
+        const selected = new Set();
+        const buttons = Array.from(shell.body.querySelectorAll('.action-interval-btn'));
+        const meta = shell.body.querySelector('#knnMeta');
+
+        function render() {
+            const ordered = Array.from(selected).sort((a, b) => a - b);
+            buttons.forEach((button) => button.classList.toggle('active', selected.has(Number(button.dataset.index))));
+            const isValidCount = ordered.length === k;
+            const isCanonical = isValidCount && ordered.every((value, idx) => value === canonical[idx]);
+
+            if (meta) {
+                if (!isValidCount) {
+                    meta.textContent = `Selected ${ordered.length}/${k} neighbors.`;
+                } else if (!isCanonical) {
+                    meta.textContent = `Nearest set mismatch. Expected indices: [${canonical.join(', ')}].`;
+                } else {
+                    meta.textContent = `Valid nearest set. Predicted label: ${canonicalLabel}.`;
+                }
+            }
+            if (shell.badge) {
+                shell.badge.textContent = isCanonical ? `Valid (${canonicalLabel})` : (isValidCount ? 'Wrong neighbors' : 'Select k');
+                shell.badge.classList.toggle('badge-accent', isCanonical);
+                shell.badge.classList.toggle('badge-danger', isValidCount && !isCanonical);
+                shell.badge.classList.toggle('badge-primary', !isCanonical && !(isValidCount && !isCanonical));
+            }
+            setDerivedAnswer(isCanonical ? canonicalLabel : '');
+            setActionPayload({ mode: 'knn_neighbors', selected_indices: ordered });
+        }
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.index);
+                if (selected.has(idx)) {
+                    selected.delete(idx);
+                } else {
+                    selected.add(idx);
+                }
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildDecisionTreeMode() {
+        const positive = Number(challengeVisualizationPayload.positive);
+        const negative = Number(challengeVisualizationPayload.negative);
+        if (!Number.isFinite(positive) || !Number.isFinite(negative) || positive <= 0 || negative <= 0) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Entropy Estimator',
+            'Estimate entropy H = -sum(p_i log2 p_i), rounded to 3 decimals.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2">Class counts: positive=${positive}, negative=${negative}</div>
+            <input type="range" class="form-range" min="0" max="1" step="0.001" value="0.500" id="entropySlider">
+            <div class="d-flex justify-content-between text-muted small">
+                <span>0.000</span>
+                <span id="entropyLabel">0.500</span>
+                <span>1.000</span>
+            </div>
+        `;
+
+        const slider = shell.body.querySelector('#entropySlider');
+        const label = shell.body.querySelector('#entropyLabel');
+
+        function render() {
+            const entropy = Number(slider ? slider.value : 0.5);
+            const formatted = formatActionNumber(entropy, 3, true);
+            if (label) {
+                label.textContent = formatted;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = `Entropy: ${formatted}`;
+                shell.badge.classList.add('badge-accent');
+                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary');
+            }
+            setDerivedAnswer(formatted);
+            setActionPayload({ mode: 'decision_entropy', entropy: Number(formatted) });
+        }
+
+        if (slider) {
+            slider.addEventListener('input', render);
+        }
+        render();
+        return true;
+    }
+
+    function buildNaiveBayesMode() {
+        const spamScore = Number(challengeVisualizationPayload.spam_score);
+        const hamScore = Number(challengeVisualizationPayload.ham_score);
+        if (!Number.isFinite(spamScore) || !Number.isFinite(hamScore)) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Bayes Class Pick',
+            'Choose the label with higher posterior score.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="d-flex flex-column gap-1 text-muted small mb-3">
+                <div><strong>Spam score:</strong> ${formatActionNumber(spamScore, 4, true)}</div>
+                <div><strong>Ham score:</strong> ${formatActionNumber(hamScore, 4, true)}</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary action-value-btn flex-fill" data-label="spam">Spam</button>
+                <button type="button" class="btn btn-outline-primary action-value-btn flex-fill" data-label="ham">Ham</button>
+            </div>
+        `;
+
+        let selectedLabel = '';
+        const buttons = Array.from(shell.body.querySelectorAll('.action-value-btn'));
+
+        function render() {
+            buttons.forEach((button) => button.classList.toggle('active', button.dataset.label === selectedLabel));
+            if (shell.badge) {
+                shell.badge.textContent = selectedLabel ? `Selected: ${selectedLabel}` : 'Pick a label';
+                shell.badge.classList.toggle('badge-accent', Boolean(selectedLabel));
+                shell.badge.classList.toggle('badge-primary', !selectedLabel);
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(selectedLabel);
+            setActionPayload({ mode: 'naive_bayes_label', label: selectedLabel });
+        }
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                selectedLabel = String(button.dataset.label || '');
+                render();
+            });
+        });
+
+        render();
+        return true;
+    }
+
+    function buildNeuralNetworkMode() {
+        const x1 = Number(challengeVisualizationPayload.x1);
+        const x2 = Number(challengeVisualizationPayload.x2);
+        const w1 = Number(challengeVisualizationPayload.w1);
+        const w2 = Number(challengeVisualizationPayload.w2);
+        const b = Number(challengeVisualizationPayload.b);
+        if (![x1, x2, w1, w2, b].every((value) => Number.isFinite(value))) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Neuron Forward Pass',
+            'Enter z = w1*x1 + w2*x2 + b, then set output sigma(z) to 3 decimals.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2">
+                x1=${formatActionNumber(x1)}, x2=${formatActionNumber(x2)}, w1=${formatActionNumber(w1, 3, true)}, w2=${formatActionNumber(w2, 3, true)}, b=${formatActionNumber(b, 3, true)}
+            </div>
+            <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">z</span>
+                <input type="number" step="0.001" class="form-control" id="neuralLinearInput" placeholder="linear sum">
+            </div>
+            <input type="range" class="form-range" min="0" max="1" step="0.001" value="0.500" id="neuralOutputSlider">
+            <div class="d-flex justify-content-between text-muted small">
+                <span>0.000</span>
+                <span id="neuralOutputLabel">0.500</span>
+                <span>1.000</span>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="neuralAutoBtn">Set output = sigma(z)</button>
+        `;
+
+        const linearInput = shell.body.querySelector('#neuralLinearInput');
+        const outputSlider = shell.body.querySelector('#neuralOutputSlider');
+        const outputLabel = shell.body.querySelector('#neuralOutputLabel');
+        const autoBtn = shell.body.querySelector('#neuralAutoBtn');
+
+        function sigmoid(value) {
+            return 1 / (1 + Math.exp(-value));
+        }
+
+        function render() {
+            const linear = Number(linearInput ? linearInput.value : Number.NaN);
+            const output = Number(outputSlider ? outputSlider.value : 0.5);
+            const outputFormatted = formatActionNumber(output, 3, true);
+            if (outputLabel) {
+                outputLabel.textContent = outputFormatted;
+            }
+
+            const linearValid = Number.isFinite(linear);
+            if (shell.badge) {
+                shell.badge.textContent = linearValid ? `z=${formatActionNumber(linear, 3, true)}` : 'Enter z first';
+                shell.badge.classList.toggle('badge-accent', linearValid);
+                shell.badge.classList.toggle('badge-primary', !linearValid);
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(linearValid ? outputFormatted : '');
+            setActionPayload({
+                mode: 'neural_forward',
+                linear_sum: linearValid ? roundTo(linear, 3) : null,
+                output: Number(outputFormatted),
+            });
+        }
+
+        if (linearInput) {
+            linearInput.addEventListener('input', render);
+        }
+        if (outputSlider) {
+            outputSlider.addEventListener('input', render);
+        }
+        if (autoBtn) {
+            autoBtn.addEventListener('click', () => {
+                const linear = Number(linearInput ? linearInput.value : Number.NaN);
+                if (!Number.isFinite(linear) || !outputSlider) {
+                    return;
+                }
+                outputSlider.value = formatActionNumber(sigmoid(linear), 3, true);
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function initializeActionGameMode() {
+        if (!actionGameHost || !answerInput) {
+            return;
+        }
+        const algo = (algorithmTypeValue || '').toLowerCase();
+        const builders = {
+            knapsack: buildKnapsackActionMode,
+            activity_selection: buildActivitySelectionMode,
+            lcs: buildLcsMode,
+            backtracking: buildBacktrackingMode,
+            recursion: buildRecursionMode,
+            bit_conversion: buildBitConversionMode,
+            bfs: () => buildTraversalMode('bfs'),
+            dfs: () => buildTraversalMode('dfs'),
+            dijkstra: buildDijkstraMode,
+            astar: buildAStarMode,
+            minimax: buildMinimaxMode,
+            linear_search: buildLinearSearchMode,
+            binary_search: buildBinarySearchMode,
+            string_algorithm: buildStringAlgorithmMode,
+            array_algorithm: buildArrayAlgorithmMode,
+            hashing_algorithm: buildHashingAlgorithmMode,
+            bubble_sort: buildSortingMode,
+            selection_sort: buildSortingMode,
+            insertion_sort: buildSortingMode,
+            merge_sort: buildSortingMode,
+            quick_sort: buildSortingMode,
+            heap_sort: buildSortingMode,
+            linear_regression: buildLinearRegressionMode,
+            logistic_regression: buildLogisticRegressionMode,
+            kmeans: buildKMeansMode,
+            knn: buildKnnMode,
+            decision_tree: buildDecisionTreeMode,
+            naive_bayes: buildNaiveBayesMode,
+            neural_network: buildNeuralNetworkMode,
+        };
+        const builder = builders[algo];
+        if (!builder || !builder()) {
+            actionGameHost.classList.add('d-none');
+            actionGameHost.innerHTML = '';
+            clearDerivedAnswer();
+            setActionPayload({});
+        }
+    }
+
+    initializeActionGameMode();
 
     if (hintBtn) {
         hintBtn.addEventListener("click", async function () {
@@ -407,3 +3014,5 @@
     });
 </script>
 {% endblock %}
+
+
