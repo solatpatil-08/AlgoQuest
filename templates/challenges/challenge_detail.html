@@ -2046,6 +2046,349 @@
         return true;
     }
 
+    function buildLinkedListMode(listKind = 'linked') {
+        const values = (Array.isArray(challengeVisualizationPayload.values) ? challengeVisualizationPayload.values : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const target = Number(challengeVisualizationPayload.target);
+        if (!values.length || !Number.isFinite(target)) {
+            return false;
+        }
+
+        const labels = {
+            linked: 'Linked List',
+            doubly: 'Doubly Linked List',
+            circular: 'Circular Linked List',
+        };
+        const shell = renderActionHostShell(
+            `${labels[listKind] || 'Linked List'} Node Picker`,
+            'Select the node index that matches target value, or mark not found.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="linkedNodeBoard"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-warning btn-sm" id="linkedNotFoundBtn">Not Found</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="linkedResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="linkedMeta">Pick one node.</small>
+        `;
+
+        const board = shell.body.querySelector('#linkedNodeBoard');
+        const notFoundBtn = shell.body.querySelector('#linkedNotFoundBtn');
+        const resetBtn = shell.body.querySelector('#linkedResetBtn');
+        const meta = shell.body.querySelector('#linkedMeta');
+
+        let selectedIndex = null;
+
+        function renderBoard() {
+            if (!board) {
+                return;
+            }
+            board.innerHTML = values
+                .map((value, idx) => {
+                    const isActive = selectedIndex === idx;
+                    const btnClass = isActive ? 'btn-outline-success active' : 'btn-outline-primary';
+                    return `
+                        <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-index="${idx}">
+                            <span class="d-block">${formatActionNumber(value, 3, false)}</span>
+                            <small class="d-block">idx ${idx}</small>
+                        </button>
+                    `;
+                })
+                .join('');
+            board.querySelectorAll('.action-value-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const idx = Number(button.dataset.index);
+                    if (!Number.isInteger(idx) || idx < 0 || idx >= values.length) {
+                        return;
+                    }
+                    selectedIndex = idx;
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            renderBoard();
+            const resolved = selectedIndex === null ? null : selectedIndex;
+            if (meta) {
+                meta.textContent = resolved === -1 ? 'Marked as not found.' : (resolved === null ? 'Pick one node.' : `Selected index ${resolved}.`);
+            }
+            if (shell.badge) {
+                shell.badge.textContent = resolved === null ? 'Pick Node' : (resolved === -1 ? 'Not Found' : `idx ${resolved}`);
+                shell.badge.classList.toggle('badge-accent', resolved !== null);
+                shell.badge.classList.toggle('badge-primary', resolved === null);
+                shell.badge.classList.remove('badge-danger');
+            }
+            setDerivedAnswer(resolved === null ? '' : resolved);
+            setActionPayload({
+                mode: `${listKind}_linked_lookup`,
+                selected_index: resolved,
+            });
+        }
+
+        if (notFoundBtn) {
+            notFoundBtn.addEventListener('click', () => {
+                selectedIndex = -1;
+                render();
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                selectedIndex = null;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildStackMode() {
+        const initial = (Array.isArray(challengeVisualizationPayload.initial) ? challengeVisualizationPayload.initial : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const rawOps = Array.isArray(challengeVisualizationPayload.operations) ? challengeVisualizationPayload.operations : [];
+        const operations = rawOps.map((entry) => {
+            if (typeof entry === 'string') {
+                return { op: entry.toLowerCase() };
+            }
+            if (entry && typeof entry === 'object') {
+                return { op: String(entry.op || '').toLowerCase(), value: entry.value };
+            }
+            return { op: '' };
+        }).filter((entry) => ['push', 'pop'].includes(entry.op));
+        if (!operations.length) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Stack Operation Simulator',
+            'Apply all operations. Submitted answer becomes final top (or empty).'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Initial stack:</strong> [${initial.map((v) => formatActionNumber(v, 3, false)).join(', ')}]</div>
+            <div class="text-muted small mb-2" id="stackOpsLabel"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="stackApplyBtn">Apply Next</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="stackUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="stackResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="stackMeta"></small>
+        `;
+
+        const opsLabel = shell.body.querySelector('#stackOpsLabel');
+        const applyBtn = shell.body.querySelector('#stackApplyBtn');
+        const undoBtn = shell.body.querySelector('#stackUndoBtn');
+        const resetBtn = shell.body.querySelector('#stackResetBtn');
+        const meta = shell.body.querySelector('#stackMeta');
+
+        let applied = 0;
+
+        function computeState(count) {
+            const stack = initial.slice();
+            for (let i = 0; i < count; i += 1) {
+                const op = operations[i];
+                if (!op) continue;
+                if (op.op === 'push') {
+                    const value = Number(op.value);
+                    if (Number.isFinite(value)) {
+                        stack.push(value);
+                    }
+                } else if (op.op === 'pop') {
+                    if (stack.length) {
+                        stack.pop();
+                    }
+                }
+            }
+            return stack;
+        }
+
+        function opText(op) {
+            if (!op) return '-';
+            if (op.op === 'push') return `push(${formatActionNumber(Number(op.value), 3, false)})`;
+            return 'pop()';
+        }
+
+        function render() {
+            const stack = computeState(applied);
+            const isComplete = applied >= operations.length;
+            const top = stack.length ? formatActionNumber(stack[stack.length - 1], 3, false) : 'empty';
+
+            if (opsLabel) {
+                const next = operations[applied];
+                opsLabel.textContent = `Applied ${applied}/${operations.length} | Next: ${opText(next)}`;
+            }
+            if (meta) {
+                meta.textContent = `Stack: [${stack.map((value) => formatActionNumber(value, 3, false)).join(', ')}] | Top: ${top}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = isComplete ? `Top ${top}` : `Step ${applied}/${operations.length}`;
+                shell.badge.classList.toggle('badge-accent', isComplete);
+                shell.badge.classList.toggle('badge-primary', !isComplete);
+                shell.badge.classList.remove('badge-danger');
+            }
+            if (applyBtn) applyBtn.disabled = isComplete;
+            if (undoBtn) undoBtn.disabled = applied === 0;
+
+            setDerivedAnswer(isComplete ? top : '');
+            setActionPayload({
+                mode: 'stack_simulator',
+                applied_count: applied,
+                final_stack: stack,
+            });
+        }
+
+        if (applyBtn) applyBtn.addEventListener('click', () => {
+            if (applied < operations.length) {
+                applied += 1;
+                render();
+            }
+        });
+        if (undoBtn) undoBtn.addEventListener('click', () => {
+            if (applied > 0) {
+                applied -= 1;
+                render();
+            }
+        });
+        if (resetBtn) resetBtn.addEventListener('click', () => {
+            applied = 0;
+            render();
+        });
+
+        render();
+        return true;
+    }
+
+    function buildQueueMode() {
+        const initial = (Array.isArray(challengeVisualizationPayload.initial) ? challengeVisualizationPayload.initial : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const rawOps = Array.isArray(challengeVisualizationPayload.operations) ? challengeVisualizationPayload.operations : [];
+        const operations = rawOps.map((entry) => {
+            if (typeof entry === 'string') {
+                return { op: entry.toLowerCase() };
+            }
+            if (entry && typeof entry === 'object') {
+                return { op: String(entry.op || '').toLowerCase(), value: entry.value };
+            }
+            return { op: '' };
+        }).filter((entry) => ['enqueue', 'dequeue'].includes(entry.op));
+        if (!operations.length) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'Queue Operation Simulator',
+            'Apply all operations. Submitted answer becomes final front (or empty).'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="text-muted small mb-2"><strong>Initial queue:</strong> [${initial.map((v) => formatActionNumber(v, 3, false)).join(', ')}]</div>
+            <div class="text-muted small mb-2" id="queueOpsLabel"></div>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="queueApplyBtn">Apply Next</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="queueUndoBtn">Undo</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="queueResetBtn">Reset</button>
+            </div>
+            <small class="text-muted" id="queueMeta"></small>
+        `;
+
+        const opsLabel = shell.body.querySelector('#queueOpsLabel');
+        const applyBtn = shell.body.querySelector('#queueApplyBtn');
+        const undoBtn = shell.body.querySelector('#queueUndoBtn');
+        const resetBtn = shell.body.querySelector('#queueResetBtn');
+        const meta = shell.body.querySelector('#queueMeta');
+
+        let applied = 0;
+
+        function computeState(count) {
+            const queue = initial.slice();
+            for (let i = 0; i < count; i += 1) {
+                const op = operations[i];
+                if (!op) continue;
+                if (op.op === 'enqueue') {
+                    const value = Number(op.value);
+                    if (Number.isFinite(value)) {
+                        queue.push(value);
+                    }
+                } else if (op.op === 'dequeue') {
+                    if (queue.length) {
+                        queue.shift();
+                    }
+                }
+            }
+            return queue;
+        }
+
+        function opText(op) {
+            if (!op) return '-';
+            if (op.op === 'enqueue') return `enqueue(${formatActionNumber(Number(op.value), 3, false)})`;
+            return 'dequeue()';
+        }
+
+        function render() {
+            const queue = computeState(applied);
+            const isComplete = applied >= operations.length;
+            const front = queue.length ? formatActionNumber(queue[0], 3, false) : 'empty';
+
+            if (opsLabel) {
+                const next = operations[applied];
+                opsLabel.textContent = `Applied ${applied}/${operations.length} | Next: ${opText(next)}`;
+            }
+            if (meta) {
+                meta.textContent = `Queue: [${queue.map((value) => formatActionNumber(value, 3, false)).join(', ')}] | Front: ${front}`;
+            }
+            if (shell.badge) {
+                shell.badge.textContent = isComplete ? `Front ${front}` : `Step ${applied}/${operations.length}`;
+                shell.badge.classList.toggle('badge-accent', isComplete);
+                shell.badge.classList.toggle('badge-primary', !isComplete);
+                shell.badge.classList.remove('badge-danger');
+            }
+            if (applyBtn) applyBtn.disabled = isComplete;
+            if (undoBtn) undoBtn.disabled = applied === 0;
+
+            setDerivedAnswer(isComplete ? front : '');
+            setActionPayload({
+                mode: 'queue_simulator',
+                applied_count: applied,
+                final_queue: queue,
+            });
+        }
+
+        if (applyBtn) applyBtn.addEventListener('click', () => {
+            if (applied < operations.length) {
+                applied += 1;
+                render();
+            }
+        });
+        if (undoBtn) undoBtn.addEventListener('click', () => {
+            if (applied > 0) {
+                applied -= 1;
+                render();
+            }
+        });
+        if (resetBtn) resetBtn.addEventListener('click', () => {
+            applied = 0;
+            render();
+        });
+
+        render();
+        return true;
+    }
+
     function buildSortingMode() {
         const rawData = Array.isArray(challengeVisualizationPayload.data) ? challengeVisualizationPayload.data : [];
         const values = rawData.map((value) => Number(value)).filter((value) => Number.isFinite(value));
@@ -2769,6 +3112,11 @@
             dijkstra: buildDijkstraMode,
             astar: buildAStarMode,
             minimax: buildMinimaxMode,
+            linked_list: () => buildLinkedListMode('linked'),
+            doubly_linked_list: () => buildLinkedListMode('doubly'),
+            circular_linked_list: () => buildLinkedListMode('circular'),
+            stack: buildStackMode,
+            queue: buildQueueMode,
             linear_search: buildLinearSearchMode,
             binary_search: buildBinarySearchMode,
             string_algorithm: buildStringAlgorithmMode,

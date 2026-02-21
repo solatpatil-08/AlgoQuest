@@ -26,6 +26,9 @@ GENERIC_LEVEL_PROMPT_RE = re.compile(r'^solve\s+.+\s+problem at level\s+\d+\s+\(
 CATEGORY_OPTIONS = (
     ('advanced_dsa', 'Advanced DSA'),
     ('ai_ml', 'AI/ML'),
+    ('linked_list', 'Linked List'),
+    ('stack', 'Stack'),
+    ('queue', 'Queue'),
     ('sorting', 'Sorting'),
     ('searching', 'Searching'),
     ('graph', 'Graph'),
@@ -45,7 +48,7 @@ CATEGORY_FILTER_EQUIVALENTS = {
     'sorting_searching': {'sorting_searching', 'sorting', 'searching'},
     'trees_graphs': {'trees_graphs', 'tree', 'graph'},
     'advanced_dsa': {'advanced_dsa', 'dynamic_programming', 'greedy', 'backtracking', 'bit_manipulation', 'recursion'},
-    'dsa_core': {'dsa_core', 'array', 'string', 'hashing', 'recursion', 'math', 'bit_manipulation'},
+    'dsa_core': {'dsa_core', 'array', 'string', 'hashing', 'linked_list', 'stack', 'queue', 'recursion', 'math', 'bit_manipulation'},
     'trees_dp_greedy': {'trees_dp_greedy', 'tree', 'dynamic_programming', 'greedy'},
     'bit_manipulation': {'bit_manipulation', 'bit_conversion'},
 }
@@ -62,6 +65,9 @@ CATEGORY_ICON_MAP = {
     'trees_graphs': 'bi-diagram-3',
     'advanced_dsa': 'bi-lightning-charge',
     'ai_ml': 'bi-cpu',
+    'linked_list': 'bi-link-45deg',
+    'stack': 'bi-stack',
+    'queue': 'bi-collection',
     'sorting': 'bi-arrow-down-up',
     'searching': 'bi-search',
     'graph': 'bi-diagram-3',
@@ -80,6 +86,11 @@ CATEGORY_ICON_MAP = {
 }
 
 ALGORITHM_TYPE_FILTER_MAP = {
+    Challenge.AlgorithmType.LINKED_LIST: {'linked_list'},
+    Challenge.AlgorithmType.DOUBLY_LINKED_LIST: {'linked_list'},
+    Challenge.AlgorithmType.CIRCULAR_LINKED_LIST: {'linked_list'},
+    Challenge.AlgorithmType.STACK: {'stack'},
+    Challenge.AlgorithmType.QUEUE: {'queue'},
     Challenge.AlgorithmType.BFS: {'graph'},
     Challenge.AlgorithmType.DFS: {'graph'},
     Challenge.AlgorithmType.ASTAR: {'graph'},
@@ -114,6 +125,9 @@ ALGORITHM_TYPE_FILTER_MAP = {
 }
 
 FILTER_KEYWORDS = {
+    'linked_list': ('linked list', 'singly linked list', 'doubly linked list', 'circular linked list', 'node'),
+    'stack': ('stack', 'lifo', 'push', 'pop'),
+    'queue': ('queue', 'fifo', 'enqueue', 'dequeue'),
     'array': ('array', 'arrays', 'list', 'lists'),
     'string': ('string', 'strings', 'text'),
     'hashing': ('hash', 'hashing', 'hashmap', 'hash map', 'set', 'sets'),
@@ -149,6 +163,11 @@ for _algorithm_type, _category_keys in ALGORITHM_TYPE_FILTER_MAP.items():
         CATEGORY_TO_ALGORITHM_TYPES[_category_key].add(_algorithm_type)
 
 ALGORITHM_TYPE_ICON_MAP = {
+    Challenge.AlgorithmType.LINKED_LIST: 'bi-link-45deg',
+    Challenge.AlgorithmType.DOUBLY_LINKED_LIST: 'bi-link',
+    Challenge.AlgorithmType.CIRCULAR_LINKED_LIST: 'bi-arrow-repeat',
+    Challenge.AlgorithmType.STACK: 'bi-stack',
+    Challenge.AlgorithmType.QUEUE: 'bi-collection',
     Challenge.AlgorithmType.BFS: 'bi-diagram-3',
     Challenge.AlgorithmType.DFS: 'bi-diagram-3',
     Challenge.AlgorithmType.ASTAR: 'bi-signpost-split',
@@ -183,6 +202,11 @@ ALGORITHM_TYPE_ICON_MAP = {
 }
 
 ALGORITHM_PROMPT_ACTIONS = {
+    Challenge.AlgorithmType.LINKED_LIST: 'traverse linked nodes and report the required lookup/update result',
+    Challenge.AlgorithmType.DOUBLY_LINKED_LIST: 'use bidirectional links and report the required node/index result',
+    Challenge.AlgorithmType.CIRCULAR_LINKED_LIST: 'follow circular traversal rules and report the required node/index result',
+    Challenge.AlgorithmType.STACK: 'simulate push/pop operations and report the final stack outcome',
+    Challenge.AlgorithmType.QUEUE: 'simulate enqueue/dequeue operations and report the final queue outcome',
     Challenge.AlgorithmType.BFS: 'perform breadth-first traversal from the given start node and report traversal order',
     Challenge.AlgorithmType.DFS: 'perform depth-first traversal and report the visitation sequence',
     Challenge.AlgorithmType.ASTAR: 'find the best path using heuristic cost + path cost and report final path cost',
@@ -1397,6 +1421,245 @@ def _resolve_selected_search_index(action_payload):
     return _safe_int(selected_raw)
 
 
+def _evaluate_linked_list_action_payload(challenge, action_payload):
+    linked_algorithms = {
+        Challenge.AlgorithmType.LINKED_LIST,
+        Challenge.AlgorithmType.DOUBLY_LINKED_LIST,
+        Challenge.AlgorithmType.CIRCULAR_LINKED_LIST,
+    }
+    if challenge.algorithm_type not in linked_algorithms or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    values, _ = _normalize_numeric_list(payload.get('values'))
+    target = _safe_float(payload.get('target'))
+    selected_index = _resolve_selected_search_index(action_payload)
+    if not values or target is None or selected_index is None:
+        return None
+
+    if selected_index < -1 or selected_index >= len(values):
+        return {
+            'answer': '__invalid_linked_index__',
+            'feedback': 'Selected index is out of range.',
+            'diagnostics': {'linked_selection_valid': False},
+        }
+
+    expected_index = -1
+    if challenge.algorithm_type == Challenge.AlgorithmType.CIRCULAR_LINKED_LIST:
+        start_index = _safe_int(payload.get('start_index') or 0)
+        if start_index is None or start_index < 0 or start_index >= len(values):
+            start_index = 0
+        for step in range(len(values)):
+            idx = (start_index + step) % len(values)
+            if _is_close_number(values[idx], target):
+                expected_index = idx
+                break
+    elif challenge.algorithm_type == Challenge.AlgorithmType.DOUBLY_LINKED_LIST and payload.get('from_end') is True:
+        for idx in range(len(values) - 1, -1, -1):
+            if _is_close_number(values[idx], target):
+                expected_index = idx
+                break
+    else:
+        for idx, value in enumerate(values):
+            if _is_close_number(value, target):
+                expected_index = idx
+                break
+
+    if selected_index == -1:
+        feedback = None if expected_index == -1 else 'Target exists in the list. Choose the correct node index.'
+    else:
+        if not _is_close_number(values[selected_index], target):
+            return {
+                'answer': '__invalid_linked_pick__',
+                'feedback': 'Chosen node does not match target value.',
+                'diagnostics': {'linked_selection_valid': False},
+            }
+        feedback = None if selected_index == expected_index else 'Chosen node is valid for value but not the expected traversal result.'
+
+    return {
+        'answer': str(selected_index),
+        'feedback': feedback,
+        'diagnostics': {
+            'linked_selection_valid': True,
+            'linked_selected_index': selected_index,
+            'linked_expected_index': expected_index,
+            'linked_target': _format_number_token(target),
+        },
+    }
+
+
+def _normalize_operation_sequence(raw_operations):
+    if not isinstance(raw_operations, list):
+        return None
+
+    normalized = []
+    for entry in raw_operations:
+        if isinstance(entry, str):
+            op = entry.strip().lower()
+            value = None
+        elif isinstance(entry, dict):
+            op = str(entry.get('op', '')).strip().lower()
+            value = entry.get('value')
+        elif isinstance(entry, (list, tuple)) and entry:
+            op = str(entry[0]).strip().lower()
+            value = entry[1] if len(entry) > 1 else None
+        else:
+            return None
+
+        if op not in {'push', 'pop', 'enqueue', 'dequeue'}:
+            return None
+        if op in {'push', 'enqueue'}:
+            numeric = _safe_float(value)
+            if numeric is None:
+                return None
+            normalized.append({'op': op, 'value': numeric})
+        else:
+            normalized.append({'op': op, 'value': None})
+    return normalized
+
+
+def _simulate_stack(initial_values, operations):
+    stack = list(initial_values)
+    for entry in operations:
+        op = entry['op']
+        if op == 'push':
+            stack.append(entry['value'])
+        elif op == 'pop':
+            if stack:
+                stack.pop()
+        else:
+            return None
+    return stack
+
+
+def _simulate_queue(initial_values, operations):
+    queue = deque(initial_values)
+    for entry in operations:
+        op = entry['op']
+        if op == 'enqueue':
+            queue.append(entry['value'])
+        elif op == 'dequeue':
+            if queue:
+                queue.popleft()
+        else:
+            return None
+    return list(queue)
+
+
+def _evaluate_stack_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.STACK or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    initial_values, _ = _normalize_numeric_list(payload.get('initial') or [])
+    operations = _normalize_operation_sequence(payload.get('operations'))
+    if initial_values is None or operations is None:
+        return None
+
+    canonical_stack = _simulate_stack(initial_values, operations)
+    if canonical_stack is None:
+        return None
+
+    applied_count = _safe_int(action_payload.get('applied_count'))
+    if applied_count is None:
+        applied_count = len(operations)
+    if applied_count < 0 or applied_count > len(operations):
+        return {
+            'answer': '__invalid_stack_state__',
+            'feedback': 'Applied operation count is invalid.',
+            'diagnostics': {'stack_state_valid': False},
+        }
+    if applied_count < len(operations):
+        return {
+            'answer': '__stack_incomplete__',
+            'feedback': 'Apply all operations before submitting.',
+            'diagnostics': {'stack_state_valid': False, 'stack_applied_count': applied_count},
+        }
+
+    submitted_stack_raw = action_payload.get('final_stack')
+    submitted_stack, _ = _normalize_numeric_list(submitted_stack_raw if isinstance(submitted_stack_raw, list) else canonical_stack)
+    if submitted_stack is None:
+        return {
+            'answer': '__invalid_stack_state__',
+            'feedback': 'Final stack state is invalid.',
+            'diagnostics': {'stack_state_valid': False},
+        }
+    if len(submitted_stack) != len(canonical_stack) or any(not _is_close_number(submitted_stack[i], canonical_stack[i]) for i in range(len(canonical_stack))):
+        return {
+            'answer': '__invalid_stack_state__',
+            'feedback': 'Submitted stack state does not match operation result.',
+            'diagnostics': {'stack_state_valid': False},
+        }
+
+    top_value = 'empty' if not canonical_stack else (_format_number_token(canonical_stack[-1]) or 'empty')
+    return {
+        'answer': top_value,
+        'feedback': None,
+        'diagnostics': {
+            'stack_state_valid': True,
+            'stack_final_size': len(canonical_stack),
+            'stack_top': top_value,
+        },
+    }
+
+
+def _evaluate_queue_action_payload(challenge, action_payload):
+    if challenge.algorithm_type != Challenge.AlgorithmType.QUEUE or not action_payload:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    initial_values, _ = _normalize_numeric_list(payload.get('initial') or [])
+    operations = _normalize_operation_sequence(payload.get('operations'))
+    if initial_values is None or operations is None:
+        return None
+
+    canonical_queue = _simulate_queue(initial_values, operations)
+    if canonical_queue is None:
+        return None
+
+    applied_count = _safe_int(action_payload.get('applied_count'))
+    if applied_count is None:
+        applied_count = len(operations)
+    if applied_count < 0 or applied_count > len(operations):
+        return {
+            'answer': '__invalid_queue_state__',
+            'feedback': 'Applied operation count is invalid.',
+            'diagnostics': {'queue_state_valid': False},
+        }
+    if applied_count < len(operations):
+        return {
+            'answer': '__queue_incomplete__',
+            'feedback': 'Apply all operations before submitting.',
+            'diagnostics': {'queue_state_valid': False, 'queue_applied_count': applied_count},
+        }
+
+    submitted_queue_raw = action_payload.get('final_queue')
+    submitted_queue, _ = _normalize_numeric_list(submitted_queue_raw if isinstance(submitted_queue_raw, list) else canonical_queue)
+    if submitted_queue is None:
+        return {
+            'answer': '__invalid_queue_state__',
+            'feedback': 'Final queue state is invalid.',
+            'diagnostics': {'queue_state_valid': False},
+        }
+    if len(submitted_queue) != len(canonical_queue) or any(not _is_close_number(submitted_queue[i], canonical_queue[i]) for i in range(len(canonical_queue))):
+        return {
+            'answer': '__invalid_queue_state__',
+            'feedback': 'Submitted queue state does not match operation result.',
+            'diagnostics': {'queue_state_valid': False},
+        }
+
+    front_value = 'empty' if not canonical_queue else (_format_number_token(canonical_queue[0]) or 'empty')
+    return {
+        'answer': front_value,
+        'feedback': None,
+        'diagnostics': {
+            'queue_state_valid': True,
+            'queue_final_size': len(canonical_queue),
+            'queue_front': front_value,
+        },
+    }
+
+
 def _evaluate_linear_search_action_payload(challenge, action_payload):
     if challenge.algorithm_type != Challenge.AlgorithmType.LINEAR_SEARCH or not action_payload:
         return None
@@ -2180,6 +2443,9 @@ def _evaluate_action_payload(challenge, raw_payload):
         _evaluate_dijkstra_action_payload,
         _evaluate_astar_action_payload,
         _evaluate_minimax_action_payload,
+        _evaluate_linked_list_action_payload,
+        _evaluate_stack_action_payload,
+        _evaluate_queue_action_payload,
         _evaluate_linear_search_action_payload,
         _evaluate_binary_search_action_payload,
         _evaluate_string_algorithm_action_payload,

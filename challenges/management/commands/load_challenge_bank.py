@@ -73,29 +73,45 @@ class Command(BaseCommand):
                 topics_updated += 1
 
             for challenge_data in topic_data.get('challenges', []):
-                challenge, challenge_created = Challenge.objects.update_or_create(
-                    topic=topic,
-                    order_index=challenge_data['order_index'],
-                    defaults={
-                        'title': challenge_data['title'],
-                        'challenge_type': Challenge.ChallengeType.ALGORITHM,
-                        'algorithm_type': challenge_data['algorithm_type'],
-                        'difficulty': challenge_data['difficulty'],
-                        'description': challenge_data['description'],
-                        'prompt': challenge_data['prompt'],
-                        'expected_answer': challenge_data['expected_answer'],
-                        'starter_code': challenge_data.get('starter_code', ''),
-                        'visualization_payload': challenge_data.get('visualization_payload', {}),
-                        'xp_reward': challenge_data['xp_reward'],
-                        'is_active': challenge_data.get('is_active', True),
-                        'is_visual_supported': topic.visualization_type != 'conceptual',
-                    },
-                )
+                order_index = challenge_data['order_index']
+                defaults = {
+                    'title': challenge_data['title'],
+                    'challenge_type': Challenge.ChallengeType.ALGORITHM,
+                    'algorithm_type': challenge_data['algorithm_type'],
+                    'difficulty': challenge_data['difficulty'],
+                    'description': challenge_data['description'],
+                    'prompt': challenge_data['prompt'],
+                    'expected_answer': challenge_data['expected_answer'],
+                    'starter_code': challenge_data.get('starter_code', ''),
+                    'visualization_payload': challenge_data.get('visualization_payload', {}),
+                    'xp_reward': challenge_data['xp_reward'],
+                    'is_active': challenge_data.get('is_active', True),
+                    'is_visual_supported': topic.visualization_type != 'conceptual',
+                }
 
-                desired_slug = slugify(f'{topic.stable_id}-{challenge.title}')
-                if challenge.slug != desired_slug:
+                desired_slug = slugify(f"{topic.stable_id}-{challenge_data['title']}")
+                challenge = Challenge.objects.filter(topic=topic, order_index=order_index).first()
+                challenge_created = False
+
+                # If a stale/orphan row already owns desired slug, reclaim it instead of failing.
+                if challenge is None:
+                    challenge = Challenge.objects.filter(slug=desired_slug).first()
+                if challenge is None:
+                    challenge = Challenge(topic=topic, order_index=order_index)
+                    challenge_created = True
+
+                for field_name, value in defaults.items():
+                    setattr(challenge, field_name, value)
+                challenge.topic = topic
+                challenge.order_index = order_index
+
+                slug_in_use = Challenge.objects.filter(slug=desired_slug).exclude(pk=challenge.pk).exists()
+                if not slug_in_use:
                     challenge.slug = desired_slug
-                    challenge.save(update_fields=['slug'])
+                elif not challenge.slug:
+                    challenge.slug = slugify(f"{desired_slug}-{order_index}")
+
+                challenge.save()
 
                 if challenge_created:
                     challenges_created += 1

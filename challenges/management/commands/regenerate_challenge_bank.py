@@ -812,6 +812,187 @@ def _algorithm_payload(algorithm_type, difficulty, level_index):
             'visualization_payload': {'mode': 'array', 'algorithm': algorithm_type, 'decimal': value, 'binary': binary},
         }
 
+    if algorithm_type == 'linked_list':
+        values = [rnd.randint(1, max(12, v_max // 2)) for _ in range(max(5, n))]
+        if rnd.random() < 0.75:
+            target = rnd.choice(values)
+            expected = values.index(target)
+        else:
+            target = v_max + rnd.randint(3, 25)
+            expected = -1
+        prompt = _build_prompt(
+            "Find first index of target in a singly linked list traversal.",
+            f"values={values}, target={target}",
+            "Return first index (0-based) or -1 if not found.",
+            f"1 <= len(values) <= {max(5, n)}",
+            f"values={values}, target={target}",
+            str(expected),
+        )
+        return {
+            'title': f"Linked List Lookup {level_index + 1}",
+            'description': "Traverse node-by-node and report first target position.",
+            'prompt': prompt,
+            'expected_answer': str(expected),
+            'starter_code': "Hint: start at head and stop at the first node equal to target.",
+            'visualization_payload': {'mode': 'conceptual', 'algorithm': algorithm_type, 'values': values, 'target': target},
+        }
+
+    if algorithm_type == 'doubly_linked_list':
+        values = [rnd.randint(1, max(12, v_max // 2)) for _ in range(max(5, n))]
+        if rnd.random() < 0.75:
+            target = rnd.choice(values)
+            expected = -1
+            for idx in range(len(values) - 1, -1, -1):
+                if values[idx] == target:
+                    expected = idx
+                    break
+        else:
+            target = v_max + rnd.randint(3, 25)
+            expected = -1
+        prompt = _build_prompt(
+            "Traverse from tail in a doubly linked list and locate target.",
+            f"values={values}, target={target}, from_end=true",
+            "Return first index encountered from tail-side traversal, or -1.",
+            f"1 <= len(values) <= {max(5, n)}",
+            f"values={values}, target={target}, from_end=true",
+            str(expected),
+        )
+        return {
+            'title': f"Doubly Linked List Lookup {level_index + 1}",
+            'description': "Use reverse traversal through prev links to find target.",
+            'prompt': prompt,
+            'expected_answer': str(expected),
+            'starter_code': "Hint: walk from tail using prev pointers and stop on first match.",
+            'visualization_payload': {
+                'mode': 'conceptual',
+                'algorithm': algorithm_type,
+                'values': values,
+                'target': target,
+                'from_end': True,
+            },
+        }
+
+    if algorithm_type == 'circular_linked_list':
+        values = [rnd.randint(1, max(12, v_max // 2)) for _ in range(max(5, n))]
+        start_index = rnd.randint(0, len(values) - 1)
+        if rnd.random() < 0.75:
+            target = rnd.choice(values)
+            expected = -1
+            for step in range(len(values)):
+                idx = (start_index + step) % len(values)
+                if values[idx] == target:
+                    expected = idx
+                    break
+        else:
+            target = v_max + rnd.randint(3, 25)
+            expected = -1
+        prompt = _build_prompt(
+            "Traverse circular linked list from start index and find target.",
+            f"values={values}, start_index={start_index}, target={target}",
+            "Return first matching index in circular walk, or -1 if absent.",
+            "Complete at most one full cycle.",
+            f"values={values}, start_index={start_index}, target={target}",
+            str(expected),
+        )
+        return {
+            'title': f"Circular Linked List Lookup {level_index + 1}",
+            'description': "Follow circular next pointers with wrap-around awareness.",
+            'prompt': prompt,
+            'expected_answer': str(expected),
+            'starter_code': "Hint: stop after one full cycle to avoid infinite traversal.",
+            'visualization_payload': {
+                'mode': 'conceptual',
+                'algorithm': algorithm_type,
+                'values': values,
+                'target': target,
+                'start_index': start_index,
+            },
+        }
+
+    if algorithm_type == 'stack':
+        initial = [rnd.randint(1, v_max) for _ in range(3 if difficulty == 'easy' else 4 if difficulty == 'medium' else 5)]
+        ops_total = 5 if difficulty == 'easy' else 6 if difficulty == 'medium' else 8
+        state = list(initial)
+        operations = []
+        for _ in range(ops_total):
+            choose_push = rnd.random() < 0.6 or not state
+            if choose_push:
+                value = rnd.randint(1, v_max)
+                state.append(value)
+                operations.append({'op': 'push', 'value': value})
+            else:
+                if state:
+                    state.pop()
+                operations.append({'op': 'pop'})
+        top_value = 'empty' if not state else str(state[-1])
+        op_text = ', '.join(
+            f"push({entry['value']})" if entry['op'] == 'push' else 'pop()'
+            for entry in operations
+        )
+        prompt = _build_prompt(
+            "Simulate stack operations and report final top.",
+            f"initial={initial}, operations=[{op_text}]",
+            "Return final top value, or 'empty' if stack is empty.",
+            "Stack is LIFO. Ignore pop on empty stack.",
+            f"initial={initial}, operations=[{op_text}]",
+            top_value,
+        )
+        return {
+            'title': f"Stack Simulator {level_index + 1}",
+            'description': "Apply push/pop transitions and read final stack top.",
+            'prompt': prompt,
+            'expected_answer': top_value,
+            'starter_code': "Hint: push appends to top, pop removes top when available.",
+            'visualization_payload': {
+                'mode': 'conceptual',
+                'algorithm': algorithm_type,
+                'initial': initial,
+                'operations': operations,
+            },
+        }
+
+    if algorithm_type == 'queue':
+        initial = [rnd.randint(1, v_max) for _ in range(3 if difficulty == 'easy' else 4 if difficulty == 'medium' else 5)]
+        ops_total = 5 if difficulty == 'easy' else 6 if difficulty == 'medium' else 8
+        state = list(initial)
+        operations = []
+        for _ in range(ops_total):
+            choose_enqueue = rnd.random() < 0.6 or not state
+            if choose_enqueue:
+                value = rnd.randint(1, v_max)
+                state.append(value)
+                operations.append({'op': 'enqueue', 'value': value})
+            else:
+                if state:
+                    state.pop(0)
+                operations.append({'op': 'dequeue'})
+        front_value = 'empty' if not state else str(state[0])
+        op_text = ', '.join(
+            f"enqueue({entry['value']})" if entry['op'] == 'enqueue' else 'dequeue()'
+            for entry in operations
+        )
+        prompt = _build_prompt(
+            "Simulate queue operations and report final front.",
+            f"initial={initial}, operations=[{op_text}]",
+            "Return final front value, or 'empty' if queue is empty.",
+            "Queue is FIFO. Ignore dequeue on empty queue.",
+            f"initial={initial}, operations=[{op_text}]",
+            front_value,
+        )
+        return {
+            'title': f"Queue Simulator {level_index + 1}",
+            'description': "Apply enqueue/dequeue transitions and read final front.",
+            'prompt': prompt,
+            'expected_answer': front_value,
+            'starter_code': "Hint: dequeue removes from front while enqueue adds at rear.",
+            'visualization_payload': {
+                'mode': 'conceptual',
+                'algorithm': algorithm_type,
+                'initial': initial,
+                'operations': operations,
+            },
+        }
+
     if algorithm_type == 'array_algorithm':
         arr = [rnd.randint(-20, 20) for _ in range(n)]
         best = _max_subarray(arr)

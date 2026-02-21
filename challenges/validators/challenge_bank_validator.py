@@ -36,6 +36,11 @@ class ChallengeBankValidator:
     }
     VALID_DIFFICULTIES = {'easy', 'medium', 'hard'}
     VALID_ALGORITHM_TYPES = {
+        'linked_list',
+        'doubly_linked_list',
+        'circular_linked_list',
+        'stack',
+        'queue',
         'bfs',
         'dfs',
         'astar',

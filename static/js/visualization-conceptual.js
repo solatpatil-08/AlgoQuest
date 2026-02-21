@@ -11,6 +11,11 @@ const AlgorithmVizTypeMap = {
     heap_sort: 'sorting_process',
     linear_search: 'array',
     binary_search: 'array',
+    linked_list: 'linked_list',
+    doubly_linked_list: 'linked_list',
+    circular_linked_list: 'linked_list',
+    stack: 'stack',
+    queue: 'queue',
     bfs: 'binary_tree',
     dfs: 'binary_tree',
     astar: 'binary_tree',
@@ -39,6 +44,11 @@ const AlgorithmVizTypeMap = {
 const AlgorithmComplexityMap = {
     linear_search: 'O(n)',
     binary_search: 'O(log n)',
+    linked_list: 'O(n) traversal / O(1) insert-at-head',
+    doubly_linked_list: 'O(n) traversal / O(1) local splice',
+    circular_linked_list: 'O(n) traversal / O(1) cyclic next',
+    stack: 'O(1) push/pop',
+    queue: 'O(1) enqueue/dequeue',
     bubble_sort: 'O(n^2)',
     selection_sort: 'O(n^2)',
     insertion_sort: 'O(n^2)',
@@ -109,6 +119,26 @@ const AlgorithmTipsMap = {
     hashing_algorithm: [
         'While scanning x, check if (target - x) already exists.',
         'Hash set gives expected O(1) lookup.',
+    ],
+    linked_list: [
+        'Traverse node by node until the target condition is met.',
+        'Pointer updates must preserve list connectivity.',
+    ],
+    doubly_linked_list: [
+        'Use prev/next links to move in either direction.',
+        'When removing/inserting, update both neighboring pointers.',
+    ],
+    circular_linked_list: [
+        'There is no null tail; traversal can wrap to head.',
+        'Stop after a full cycle to avoid infinite loops.',
+    ],
+    stack: [
+        'Last-In-First-Out: only top is directly accessible.',
+        'Push adds to top, pop removes from top.',
+    ],
+    queue: [
+        'First-In-First-Out ordering is mandatory.',
+        'Enqueue at rear, dequeue from front.',
     ],
 };
 

@@ -48,6 +48,11 @@ class Challenge(models.Model):
         APTITUDE = 'aptitude', 'Placement Aptitude'
 
     class AlgorithmType(models.TextChoices):
+        LINKED_LIST = 'linked_list', 'Linked List'
+        DOUBLY_LINKED_LIST = 'doubly_linked_list', 'Doubly Linked List'
+        CIRCULAR_LINKED_LIST = 'circular_linked_list', 'Circular Linked List'
+        STACK = 'stack', 'Stack'
+        QUEUE = 'queue', 'Queue'
         BFS = 'bfs', 'BFS'
         DFS = 'dfs', 'DFS'
         ASTAR = 'astar', 'A*'
@@ -110,6 +115,11 @@ class Challenge(models.Model):
     is_visual_supported = models.BooleanField(default=False)
 
     ALGORITHM_CATEGORY_MAP = {
+        AlgorithmType.LINKED_LIST: 'linked_list',
+        AlgorithmType.DOUBLY_LINKED_LIST: 'linked_list',
+        AlgorithmType.CIRCULAR_LINKED_LIST: 'linked_list',
+        AlgorithmType.STACK: 'stack',
+        AlgorithmType.QUEUE: 'queue',
         AlgorithmType.BFS: 'graph',
         AlgorithmType.DFS: 'graph',
         AlgorithmType.ASTAR: 'graph',
@@ -144,6 +154,9 @@ class Challenge(models.Model):
     }
 
     ALGORITHM_CATEGORY_LABELS = {
+        'linked_list': 'Linked List',
+        'stack': 'Stack',
+        'queue': 'Queue',
         'graph': 'Graph/Traversal',
         'sorting': 'Sorting',
         'searching': 'Searching',

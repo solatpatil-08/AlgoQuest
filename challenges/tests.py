@@ -921,6 +921,122 @@ class HashingActionSubmissionTests(TestCase):
         self.assertIn('does not sum', payload['message'].lower())
 
 
+class LinkedStackQueueActionSubmissionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='linked-stack-queue-player', password='StrongPass123!')
+
+    def test_linked_list_action_payload_derives_first_match_index(self):
+        challenge = Challenge.objects.create(
+            title='Linked List Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LINKED_LIST,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='1',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'values': [8, 4, 9, 4], 'target': 4},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '-1', 'action_payload': json.dumps({'selected_index': 1})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['linked_expected_index'], 1)
+        attempt = ChallengeAttempt.objects.get(user=self.user, challenge=challenge)
+        self.assertEqual(attempt.submitted_answer, '1')
+
+    def test_circular_linked_list_respects_start_index(self):
+        challenge = Challenge.objects.create(
+            title='Circular Linked List Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.CIRCULAR_LINKED_LIST,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='3',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'values': [5, 2, 9, 2], 'target': 2, 'start_index': 2},
+        )
+        self.client.force_login(self.user)
+
+        wrong_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '3', 'action_payload': json.dumps({'selected_index': 1})},
+        )
+        wrong_payload = wrong_response.json()
+        self.assertFalse(wrong_payload['is_correct'])
+        self.assertIn('expected traversal result', wrong_payload['message'].lower())
+
+        correct_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '-1', 'action_payload': json.dumps({'selected_index': 3})},
+        )
+        correct_payload = correct_response.json()
+        self.assertTrue(correct_payload['is_correct'])
+        self.assertEqual(correct_payload['linked_expected_index'], 3)
+
+    def test_stack_action_payload_requires_full_simulation(self):
+        challenge = Challenge.objects.create(
+            title='Stack Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.STACK,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='3',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'initial': [1, 3], 'operations': [{'op': 'push', 'value': 7}, {'op': 'pop'}]},
+        )
+        self.client.force_login(self.user)
+
+        incomplete_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '3', 'action_payload': json.dumps({'applied_count': 1, 'final_stack': [1, 3, 7]})},
+        )
+        incomplete_payload = incomplete_response.json()
+        self.assertFalse(incomplete_payload['is_correct'])
+        self.assertIn('apply all operations', incomplete_payload['message'].lower())
+
+        correct_response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '-1', 'action_payload': json.dumps({'applied_count': 2, 'final_stack': [1, 3]})},
+        )
+        correct_payload = correct_response.json()
+        self.assertTrue(correct_payload['is_correct'])
+        self.assertEqual(correct_payload['stack_top'], '3')
+
+    def test_queue_action_payload_derives_final_front(self):
+        challenge = Challenge.objects.create(
+            title='Queue Action',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.QUEUE,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='20',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={
+                'initial': [10, 20],
+                'operations': [{'op': 'enqueue', 'value': 30}, {'op': 'dequeue'}],
+            },
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': '-1', 'action_payload': json.dumps({'applied_count': 2, 'final_queue': [20, 30]})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['queue_front'], '20')
+
+
 class AiMlActionSubmissionTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='ai-ml-player', password='StrongPass123!')
@@ -1482,6 +1598,26 @@ class ChallengeBankLoadCommandTests(TestCase):
         self.assertEqual(Topic.objects.count(), self.expected_topics)
         self.assertEqual(Challenge.objects.filter(topic__isnull=False).count(), self.expected_challenges)
 
+    def test_load_command_recovers_from_slug_collision_without_reset(self):
+        collision_slug = 'algo_bfs-bfs-traversal-1'
+        Challenge.objects.create(
+            title='Legacy Collision Holder',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='legacy',
+            prompt='legacy prompt',
+            expected_answer='legacy',
+            slug=collision_slug,
+        )
+
+        self._run_loader()
+
+        challenge = Challenge.objects.filter(topic__stable_id='algo_bfs', order_index=0).first()
+        self.assertIsNotNone(challenge)
+        self.assertEqual(challenge.slug, collision_slug)
+        self.assertEqual(challenge.algorithm_type, Challenge.AlgorithmType.BFS)
+
     def test_loaded_challenge_detail_route_is_accessible(self):
         self._run_loader('--reset')
         sample = Challenge.objects.filter(topic__isnull=False, is_active=True).first()
@@ -1692,6 +1828,33 @@ class CategoryCoverageAndQuickBarTests(TestCase):
             )
 
         Challenge.objects.create(
+            title='Linked List Legacy Challenge',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.LINKED_LIST,
+            difficulty=Challenge.Difficulty.EASY,
+            description='linked list legacy',
+            prompt='linked list',
+            expected_answer='node',
+        )
+        Challenge.objects.create(
+            title='Stack Legacy Challenge',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.STACK,
+            difficulty=Challenge.Difficulty.EASY,
+            description='stack legacy',
+            prompt='stack',
+            expected_answer='top',
+        )
+        Challenge.objects.create(
+            title='Queue Legacy Challenge',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.QUEUE,
+            difficulty=Challenge.Difficulty.EASY,
+            description='queue legacy',
+            prompt='queue',
+            expected_answer='front',
+        )
+        Challenge.objects.create(
             title='Sorting Legacy Challenge',
             challenge_type=Challenge.ChallengeType.ALGORITHM,
             algorithm_type=Challenge.AlgorithmType.QUICK_SORT,
@@ -1770,6 +1933,9 @@ class CategoryCoverageAndQuickBarTests(TestCase):
         category_values = {opt['value'] for opt in response.context['category_options']}
         required = {
             'ai_ml',
+            'linked_list',
+            'stack',
+            'queue',
             'sorting',
             'searching',
             'graph',
@@ -1815,6 +1981,9 @@ class CategoryCoverageAndQuickBarTests(TestCase):
     def test_filtering_works_for_each_required_algorithm_type(self):
         expected_titles = {
             'ai_ml': 'AI ML Topic Challenge',
+            'linked_list': 'Linked List Legacy Challenge',
+            'stack': 'Stack Legacy Challenge',
+            'queue': 'Queue Legacy Challenge',
             'sorting': 'Sorting Legacy Challenge',
             'searching': 'Searching Legacy Challenge',
             'graph': 'Graph Legacy Challenge',
@@ -1871,6 +2040,9 @@ class CategoryCoverageAndQuickBarTests(TestCase):
     def test_category_results_are_structurally_scoped(self):
         categories = (
             'ai_ml',
+            'linked_list',
+            'stack',
+            'queue',
             'sorting',
             'searching',
             'graph',
@@ -2155,6 +2327,9 @@ class AlgorithmTypeCoverageTests(TestCase):
     def test_algorithm_type_category_matching_is_consistent(self):
         algorithm_types = {choice[0] for choice in Challenge.AlgorithmType.choices}
         targets = {
+            'linked_list',
+            'stack',
+            'queue',
             'graph',
             'sorting',
             'searching',
