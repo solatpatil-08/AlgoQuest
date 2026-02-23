@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="aqTitle aqDesc">
+  <title id="aqTitle">AlgoQuest Favicon</title>
+  <desc id="aqDesc">Rounded square icon with AQ lettering</desc>
+  <defs>
+    <linearGradient id="aqBg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1d4ed8" />
+      <stop offset="1" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#aqBg)" />
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#93c5fd" stroke-width="2" opacity="0.8" />
+  <text
+    x="32"
+    y="40"
+    text-anchor="middle"
+    font-family="Inter, Arial, sans-serif"
+    font-size="23"
+    font-weight="800"
+    fill="#f8fafc"
+    letter-spacing="0.5"
+  >AQ</text>
+</svg>

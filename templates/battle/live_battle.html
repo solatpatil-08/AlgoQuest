@@ -52,10 +52,12 @@
     </div>
 
     <div class="row g-4">
-        <div class="col-lg-8">
+        <div class="col-lg-7 col-xl-7" id="question-section">
             {% if challenge %}
+                <!-- Challenge Header: Title + Metadata + Prompt -->
                 <div class="card border-0 mb-4">
                     <div class="card-body">
+                        <!-- Metadata Badges -->
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                             <span class="badge badge-primary">{{ challenge.get_challenge_type_display }}</span>
                             {% if challenge.algorithm_category_display %}
@@ -66,26 +68,47 @@
                                 <i class="bi bi-star-fill me-1"></i>{{ challenge.xp_reward }} XP
                             </span>
                         </div>
-                        <h2 class="h4 mb-3">{{ challenge.title }}</h2>
-                        <div class="p-3 rounded" style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
-                            <p class="mb-0" style="color: var(--aq-text); line-height: 1.8;">{{ challenge.prompt }}</p>
+                        
+                        <!-- Title -->
+                        <h2 class="h2 mb-3" style="color: var(--aq-text); font-weight: 700; line-height: 1.3;">{{ challenge.title }}</h2>
+                        
+                        <!-- Problem Statement -->
+                        <div style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-left: 4px solid var(--aq-primary); border-radius: var(--aq-radius-md); padding: 1.25rem;">
+                            <h5 class="h6 mb-2" style="color: var(--aq-text-secondary); text-transform: uppercase; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.05em;">Problem Statement</h5>
+                            <p class="mb-0" style="color: var(--aq-text); line-height: 1.8; font-size: 1rem;">{{ challenge.prompt }}</p>
                         </div>
+                        
+                        <!-- Starter Code Info -->
                         {% if challenge.starter_code %}
-                            <p class="mt-3 mb-0 text-muted" style="font-size: 0.875rem;">
-                                <i class="bi bi-info-circle me-1"></i>{{ challenge.starter_code }}
-                            </p>
+                            <div style="margin-top: 1rem; padding: 0.875rem; background: var(--aq-primary-soft-bg); border: 1px solid var(--aq-border); border-radius: var(--aq-radius-md);">
+                                <p class="mb-0 text-muted" style="font-size: 0.875rem;">
+                                    <i class="bi bi-code-square me-1"></i><strong>Reference:</strong> {{ challenge.starter_code }}
+                                </p>
+                            </div>
                         {% endif %}
                     </div>
                 </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>No challenge is currently available for this battle.
+                </div>
+            {% endif %}
+        </div>
 
-                <div class="card border-0 mb-4">
+        <!-- Sticky Right Panel: Visualization + Answer -->
+        <div class="col-lg-5 col-xl-5 challenge-viz-column" id="visualization-section">
+            {% if challenge %}
+                <!-- Visualization Player (Sticky on Desktop) -->
+                <div class="card border-0 mb-4 challenge-viz-card">
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between mb-3">
-                            <h3 class="h5 mb-0"><i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Interactive Visualization</h3>
+                            <h3 class="h5 mb-0" style="font-weight: 700;">
+                                <i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>Step-by-Step Execution
+                            </h3>
                             <span class="badge badge-primary">{{ challenge.get_algorithm_type_display|default:"ALGORITHM" }}</span>
                         </div>
 
-                        <div class="visualization-controls">
+                        <div class="visualization-controls" id="battleVisualizationControls">
                             <div class="control-group">
                                 <button class="viz-btn viz-btn-start" id="startBtn">
                                     <i class="bi bi-play-fill"></i> Start
@@ -111,51 +134,35 @@
                     </div>
                 </div>
 
+                <!-- Answer Submission -->
+                <div id="answer-section">
                 {% if user.is_authenticated %}
-                    <div class="card border-0">
+                    <div class="card border-0 challenge-answer-card">
                         <div class="card-body">
-                            <h3 class="h5 mb-3"><i class="bi bi-send me-2" style="color: var(--aq-accent);"></i>Submit Answer</h3>
+                            <h3 class="h5 mb-3" style="font-weight: 700;">
+                                <i class="bi bi-pencil-square me-2" style="color: var(--aq-accent);"></i>Your Answer
+                            </h3>
                             <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
                                 {% csrf_token %}
                                 <input type="hidden" name="battle_room_code" value="{{ match.room_code }}">
-                                <textarea class="form-control mb-3" name="answer" rows="4" placeholder="Type your answer here..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;" required></textarea>
-                                <button type="submit" class="btn btn-success px-4" id="submitAnswerBtn">
-                                    <i class="bi bi-check2-circle me-1"></i>Submit
+                                
+                                <div class="mb-3">
+                                    <label for="answerInput" class="form-label text-muted small">Enter your solution:</label>
+                                    <textarea id="answerInput" class="form-control" name="answer" rows="4" placeholder="Type or paste your answer..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-success px-4 fw-600" id="submitAnswerBtn">
+                                    <i class="bi bi-check2-circle me-1"></i>Submit Answer
                                 </button>
                             </form>
                             <div class="mt-3" id="attemptResult"></div>
                         </div>
                     </div>
                 {% endif %}
-            {% else %}
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>No challenge is currently available for this battle.
                 </div>
             {% endif %}
         </div>
-
-        <div class="col-lg-4">
-            <div class="card border-0">
-                <div class="card-body">
-                    <h2 class="h6 mb-3"><i class="bi bi-clock-history me-2" style="color: var(--aq-warning);"></i>Your Recent Attempts</h2>
-                    <ul class="list-group list-group-flush">
-                        {% for attempt in user_attempts %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <span style="font-size: 0.875rem;">
-                                    <i class="bi bi-calendar3 me-1" style="color: var(--aq-text-secondary);"></i>
-                                    {{ attempt.created_at|date:"M d, H:i" }}
-                                </span>
-                                <span class="badge badge-xp">{{ attempt.score }}</span>
-                            </li>
-                        {% empty %}
-                            <li class="list-group-item text-muted text-center py-3">
-                                <i class="bi bi-inbox me-1"></i>No attempts yet.
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-        </div>
+    </div>
     </div>
 </div>
 {% endblock %}
@@ -163,6 +170,13 @@
 {% block scripts %}
 <link href="{% static 'css/visualization.css' %}" rel="stylesheet">
 <script src="{% static 'js/visualization.js' %}"></script>
+<script src="{% static 'js/visualization-conceptual.js' %}"></script>
+<script src="{% static 'js/visualization-execution.js' %}"></script>
+{% if challenge %}
+{{ challenge.visualization_payload|json_script:"battleVisualizationPayload" }}
+{% else %}
+<script id="battleVisualizationPayload" type="application/json">{}</script>
+{% endif %}
 <script>
     window.BATTLE_ROOM_CODE = "{{ match.room_code }}";
     window.BATTLE_INITIAL_STATE = {
@@ -231,12 +245,27 @@
     }
 
     const algorithmType = "{{ challenge.algorithm_type|default:'' }}";
+    const challengeTopic = "{{ challenge.topic.stable_id|default:'' }}";
+    const visualizationType = "{{ challenge.topic.visualization_type|default:'conceptual' }}";
     const startBtn = document.getElementById('startBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const resetBtn = document.getElementById('resetBtn');
     const speedControl = document.getElementById('speedControl');
     const speedIndicator = document.getElementById('speedIndicator');
+    const battleVizControls = document.getElementById('battleVisualizationControls');
     let visualizationStatePoller = null;
+    const battlePayloadNode = document.getElementById('battleVisualizationPayload');
+    let battleVisualizationPayload = {};
+    if (battlePayloadNode) {
+        try {
+            battleVisualizationPayload = JSON.parse(battlePayloadNode.textContent || '{}');
+        } catch (error) {
+            battleVisualizationPayload = {};
+        }
+    }
+    if (window.VisualizationEngine && window.VisualizationEngine.setChallengeContext) {
+        window.VisualizationEngine.setChallengeContext(battleVisualizationPayload);
+    }
 
     function getVisualizationState() {
         if (!window.VisualizationEngine || !window.VisualizationEngine.getState) {
@@ -286,8 +315,11 @@
         }
     }
 
+    const isGraphVisualization = visualizationType === 'graph';
+
     if (startBtn) {
         startBtn.addEventListener('click', function () {
+            if (!isGraphVisualization) return;
             if (!window.VisualizationEngine || !algorithmType) return;
             window.VisualizationEngine.start(algorithmType);
             syncVisualizationButtons();
@@ -297,6 +329,7 @@
 
     if (pauseBtn) {
         pauseBtn.addEventListener('click', function () {
+            if (!isGraphVisualization) return;
             if (!window.VisualizationEngine) return;
             window.VisualizationEngine.pause();
             syncVisualizationButtons();
@@ -305,6 +338,7 @@
 
     if (resetBtn) {
         resetBtn.addEventListener('click', function () {
+            if (!isGraphVisualization) return;
             if (window.VisualizationEngine) {
                 window.VisualizationEngine.reset();
             }
@@ -315,6 +349,7 @@
 
     if (speedControl) {
         speedControl.addEventListener('input', function () {
+            if (!isGraphVisualization) return;
             const speed = parseInt(this.value, 10);
             if (window.VisualizationEngine) {
                 window.VisualizationEngine.setSpeed(speed);
@@ -323,7 +358,7 @@
         });
     }
 
-    if (speedControl && window.VisualizationEngine) {
+    if (isGraphVisualization && speedControl && window.VisualizationEngine) {
         const initialSpeed = parseInt(speedControl.value, 10);
         window.VisualizationEngine.setSpeed(initialSpeed);
         updateSpeedIndicator(initialSpeed);
@@ -332,17 +367,65 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         const vizOutput = document.getElementById('visualizationOutput');
-        if (vizOutput && algorithmType) {
-            vizOutput.innerHTML = `
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;text-align:center;">
-                    <i class="bi bi-play-circle" style="font-size:4rem;color:var(--aq-primary);margin-bottom:1rem;"></i>
-                    <h3 style="color:var(--aq-text);margin-bottom:0.5rem;">Interactive Algorithm Visualization</h3>
-                    <p style="color:var(--aq-text-secondary);max-width:500px;">
-                        Click <strong>Start</strong> to visualize <strong>${algorithmType.replace(/_/g, ' ').toUpperCase()}</strong>.
-                    </p>
-                </div>
-            `;
+        if (!vizOutput || !algorithmType) {
+            return;
         }
+
+        if (!isGraphVisualization) {
+            if (battleVizControls) {
+                battleVizControls.classList.add('d-none');
+            }
+
+            const canRenderExecution = (
+                typeof window.renderExecutionVisualization === 'function' &&
+                typeof window.hasExecutionVisualizationSupport === 'function' &&
+                window.hasExecutionVisualizationSupport(algorithmType)
+            );
+
+            if (canRenderExecution) {
+                vizOutput.innerHTML = '<div id="battleExecutionOutput"></div><div id="battleConceptOutput" class="mt-4"></div>';
+                const rendered = window.renderExecutionVisualization(
+                    'battleExecutionOutput',
+                    algorithmType,
+                    battleVisualizationPayload
+                );
+                if (rendered) {
+                    if (typeof window.showConceptualVisualization === 'function') {
+                        window.showConceptualVisualization(
+                            challengeTopic,
+                            'battleConceptOutput',
+                            algorithmType,
+                            visualizationType,
+                            battleVisualizationPayload
+                        );
+                    }
+                    return;
+                }
+                vizOutput.innerHTML = '';
+            }
+
+            if (typeof window.showConceptualVisualization === 'function') {
+                window.showConceptualVisualization(
+                    challengeTopic,
+                    'visualizationOutput',
+                    algorithmType,
+                    visualizationType,
+                    battleVisualizationPayload
+                );
+                return;
+            }
+
+            vizOutput.innerHTML = '<p class="text-muted mb-0">Visualization is unavailable for this challenge type.</p>';
+            return;
+        }
+
+        if (battleVizControls) {
+            battleVizControls.classList.remove('d-none');
+        }
+        if (window.VisualizationEngine && window.VisualizationEngine.renderPreview) {
+            window.VisualizationEngine.renderPreview(algorithmType);
+        }
+        syncVisualizationButtons();
     });
 </script>
 {% endblock %}

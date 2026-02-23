@@ -480,6 +480,71 @@ def _is_challenge_unlocked(user, challenge):
     return prog.is_unlocked if prog else False
 
 
+def _build_topic_unlock_metadata(topic_ids):
+    """Return topic-first and challenge-prev maps for active challenges in topics."""
+    if not topic_ids:
+        return {}, {}
+
+    rows = list(
+        Challenge.objects.filter(is_active=True, topic_id__in=topic_ids)
+        .only('id', 'topic_id', 'order_index')
+        .order_by('topic_id', 'order_index', 'id')
+    )
+
+    first_by_topic = {}
+    prev_by_challenge = {}
+
+    current_topic_id = None
+    last_lower_order = None
+    last_lower_id = None
+
+    for row in rows:
+        topic_id = row.topic_id
+        if topic_id != current_topic_id:
+            current_topic_id = topic_id
+            first_by_topic[topic_id] = row.id
+            last_lower_order = None
+            last_lower_id = None
+
+        prev_by_challenge[row.id] = last_lower_id
+
+        if last_lower_order is None or row.order_index > last_lower_order:
+            last_lower_order = row.order_index
+            last_lower_id = row.id
+
+    return first_by_topic, prev_by_challenge
+
+
+def _bulk_unlock_map(challenges, solved_ids, explicit_unlocked_ids):
+    """Compute unlock status for a challenge list with O(1) lookups and minimal DB hits."""
+    challenge_list = list(challenges)
+    topic_ids = {challenge.topic_id for challenge in challenge_list if challenge.topic_id}
+    first_by_topic, prev_by_challenge = _build_topic_unlock_metadata(topic_ids)
+
+    unlock_map = {}
+    for challenge in challenge_list:
+        if not challenge.topic_id:
+            unlock_map[challenge.id] = True
+            continue
+
+        if challenge.id == first_by_topic.get(challenge.topic_id):
+            unlock_map[challenge.id] = True
+            continue
+
+        is_unlocked = False
+        if challenge.order_index > 0:
+            prev_id = prev_by_challenge.get(challenge.id)
+            if prev_id and prev_id in solved_ids:
+                is_unlocked = True
+
+        if not is_unlocked:
+            is_unlocked = challenge.id in explicit_unlocked_ids
+
+        unlock_map[challenge.id] = is_unlocked
+
+    return unlock_map
+
+
 def _unlock_next_challenge(user, challenge):
     """Unlock next challenge in sequence when one is solved."""
     if not challenge.topic:
@@ -2481,6 +2546,7 @@ def challenge_list_view(request):
         'xp_reward',
         'order_index',
         'created_at',
+        'topic_id',
         'topic__id',
         'topic__label',
         'topic__category',
@@ -2488,7 +2554,7 @@ def challenge_list_view(request):
     )
 
     solved_ids = set()
-    unlocked_ids = set()
+    explicit_unlocked_ids = set()
     if request.user.is_authenticated:
         user_progress_rows = UserChallengeProg.objects.filter(user=request.user, challenge__is_active=True).values_list(
             'challenge_id',
@@ -2499,7 +2565,7 @@ def challenge_list_view(request):
             if is_solved:
                 solved_ids.add(challenge_id)
             if is_unlocked:
-                unlocked_ids.add(challenge_id)
+                explicit_unlocked_ids.add(challenge_id)
 
     selected_kind = request.GET.get('kind', 'all')
     selected_difficulty = request.GET.get('difficulty', 'all')
@@ -2572,18 +2638,19 @@ def challenge_list_view(request):
 
     challenges = list(challenges)
 
-    if request.user.is_authenticated and selected_unlocked != 'all':
-        if selected_unlocked == 'unlocked':
-            challenges = [c for c in challenges if _is_challenge_unlocked(request.user, c)]
-        elif selected_unlocked == 'locked':
-            challenges = [c for c in challenges if not _is_challenge_unlocked(request.user, c)]
-        else:
-            selected_unlocked = 'all'
+    unlocked_ids = set()
+    if request.user.is_authenticated:
+        unlock_map = _bulk_unlock_map(challenges, solved_ids, explicit_unlocked_ids)
+        if selected_unlocked != 'all':
+            if selected_unlocked == 'unlocked':
+                challenges = [challenge for challenge in challenges if unlock_map.get(challenge.id, False)]
+            elif selected_unlocked == 'locked':
+                challenges = [challenge for challenge in challenges if not unlock_map.get(challenge.id, False)]
+            else:
+                selected_unlocked = 'all'
+        unlocked_ids = {challenge.id for challenge in challenges if unlock_map.get(challenge.id, False)}
     elif selected_unlocked != 'all':
         selected_unlocked = 'all'
-
-    if request.user.is_authenticated:
-        unlocked_ids = {challenge.id for challenge in challenges if _is_challenge_unlocked(request.user, challenge)}
 
     for challenge in challenges:
         effective_category = _effective_category_for_challenge(challenge)

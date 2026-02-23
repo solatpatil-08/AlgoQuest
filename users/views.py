@@ -15,7 +15,8 @@ from django.urls import reverse_lazy
 from rest_framework import generics, permissions
 
 from analytics.services import recommend_next_challenges
-from challenges.models import ChallengeAttempt
+from battle.models import BattleMatch
+from challenges.models import Challenge, ChallengeAttempt
 from leaderboard.models import Leaderboard, Reward
 
 from .forms import (
@@ -33,7 +34,29 @@ XP_PER_LEVEL = 250
 
 
 def home(request):
-    return render(request, 'home.html')
+    total_challenges = Challenge.objects.filter(is_active=True).count()
+    algorithm_types = (
+        Challenge.objects.filter(
+            is_active=True,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+        )
+        .exclude(algorithm_type='')
+        .values('algorithm_type')
+        .distinct()
+        .count()
+    )
+    live_battles = BattleMatch.objects.filter(status=BattleMatch.Status.LIVE).count()
+    total_learners = User.objects.count()
+
+    context = {
+        'home_stats': {
+            'total_challenges': total_challenges,
+            'algorithm_types': algorithm_types,
+            'live_battles': live_battles,
+            'total_learners': total_learners,
+        }
+    }
+    return render(request, 'home.html', context)
 
 
 def signup_view(request):

@@ -79,8 +79,8 @@
             <div class="stat-icon mx-auto mb-2 feature-icon-blue">
                 <i class="bi bi-code-square"></i>
             </div>
-            <div class="stat-value">4+</div>
-            <div class="stat-label">Algorithm Types</div>
+            <div class="stat-value">{{ home_stats.total_challenges|default:"0" }}</div>
+            <div class="stat-label">Total Challenges</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
@@ -88,8 +88,8 @@
             <div class="stat-icon mx-auto mb-2" style="background: var(--aq-danger-soft-bg); color: var(--aq-danger);">
                 <i class="bi bi-lightning"></i>
             </div>
-            <div class="stat-value">Live</div>
-            <div class="stat-label">Real-time Battles</div>
+            <div class="stat-value">{{ home_stats.algorithm_types|default:"0" }}</div>
+            <div class="stat-label">Algorithm Types</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
@@ -97,8 +97,8 @@
             <div class="stat-icon mx-auto mb-2 feature-icon-green">
                 <i class="bi bi-award"></i>
             </div>
-            <div class="stat-value">XP</div>
-            <div class="stat-label">Progression System</div>
+            <div class="stat-value">{{ home_stats.live_battles|default:"0" }}</div>
+            <div class="stat-label">Real-time Battles</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
@@ -106,8 +106,8 @@
             <div class="stat-icon mx-auto mb-2 feature-icon-purple">
                 <i class="bi bi-bar-chart-line"></i>
             </div>
-            <div class="stat-value">Weekly</div>
-            <div class="stat-label">Leaderboard Resets</div>
+            <div class="stat-value">{{ home_stats.total_learners|default:"0" }}</div>
+            <div class="stat-label">Learners</div>
         </div>
     </div>
 </section>
