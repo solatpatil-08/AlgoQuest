@@ -157,9 +157,12 @@
 
 {% block scripts %}
 <link href="{% static 'css/visualization.css' %}" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="{% static 'js/visualization.js' %}"></script>
 <script src="{% static 'js/visualization-conceptual.js' %}"></script>
 <script src="{% static 'js/visualization-execution.js' %}"></script>
+<script src="{% static 'js/visualization-3d.js' %}"></script>
 {{ challenge.visualization_payload|json_script:"challengeVisualizationPayload" }}
 <script>
     // Check if this is a graph or conceptual visualization
@@ -183,6 +186,16 @@
     document.addEventListener('DOMContentLoaded', function() {
         const vizOutput = document.getElementById('visualizationOutput');
         const vizTitle = document.getElementById('visualizationTitle');
+
+        if (algorithmTypeValue === 'bfs' && visualizationType === 'graph') {
+            if (window.Visualization3D && window.Visualization3D.init) {
+                window.Visualization3D.init('visualizationOutput');
+                if (vizTitle) {
+                    vizTitle.innerHTML = '<i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>3D Interactive Execution';
+                }
+                return;
+            }
+        }
         
         if (visualizationType !== 'graph') {
             if (!vizOutput) {
@@ -3437,6 +3450,9 @@
     }
 
     function supportsEntryExecution(entry) {
+        if (entry && entry.isUnlocked === false) {
+            return false;
+        }
         if (!entry || !entry.algorithmType || typeof window.hasExecutionVisualizationSupport !== 'function') {
             return true;
         }
@@ -3480,7 +3496,8 @@
         }
 
         state.index = currentIndex;
-        state.autoplay = state.autoplay === true;
+        // Never auto-start sequence on detail page load.
+        state.autoplay = false;
         writeSequenceState(state);
 
         host.classList.remove('d-none');
@@ -3503,7 +3520,12 @@
             const currentEntry = state.entries[state.index];
             const prevIndex = findSequenceIndex(state.entries, state.index - 1, -1);
             const nextIndex = findSequenceIndex(state.entries, state.index + 1, 1);
-            const executionNote = supportsEntryExecution(currentEntry) ? '' : ' (skipped: no execution model)';
+            let executionNote = '';
+            if (currentEntry && currentEntry.isUnlocked === false) {
+                executionNote = ' (locked; skipped)';
+            } else if (!supportsEntryExecution(currentEntry)) {
+                executionNote = ' (skipped: no execution model)';
+            }
             statusNode.textContent = `${state.index + 1}/${state.entries.length} - ${currentEntry.label}${executionNote}`;
             prevBtn.disabled = prevIndex < 0;
             nextBtn.disabled = nextIndex < 0;

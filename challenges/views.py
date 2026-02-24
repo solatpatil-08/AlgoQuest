@@ -24,24 +24,16 @@ GENERIC_LEVEL_PROMPT_RE = re.compile(r'^solve\s+.+\s+problem at level\s+\d+\s+\(
 
 
 CATEGORY_OPTIONS = (
-    ('advanced_dsa', 'Advanced DSA'),
-    ('ai_ml', 'AI/ML'),
+    ('dsa_core', 'DSA Core'),
     ('linked_list', 'Linked List'),
     ('stack', 'Stack'),
     ('queue', 'Queue'),
-    ('sorting', 'Sorting'),
-    ('searching', 'Searching'),
-    ('graph', 'Graph'),
+    ('sorting_searching', 'Sorting & Searching'),
+    ('trees_graphs', 'Trees & Graphs'),
+    ('advanced_dsa', 'Advanced DSA'),
     ('dynamic_programming', 'Dynamic Programming'),
     ('greedy', 'Greedy'),
-    ('backtracking', 'Backtracking'),
-    ('recursion', 'Recursion'),
-    ('string', 'String'),
-    ('math', 'Math'),
-    ('bit_manipulation', 'Bit Manipulation'),
-    ('array', 'Array'),
-    ('hashing', 'Hashing'),
-    ('tree', 'Tree'),
+    ('ai_ml', 'AI/ML'),
 )
 
 CATEGORY_FILTER_EQUIVALENTS = {
@@ -57,6 +49,18 @@ CATEGORY_ALIASES = {
     'advance_dsa': 'advanced_dsa',
     'dynamic_programmin': 'dynamic_programming',
     'bit_conversion': 'bit_manipulation',
+    # Backward compatibility for older category URLs.
+    'array': 'dsa_core',
+    'hashing': 'dsa_core',
+    'string': 'dsa_core',
+    'math': 'dsa_core',
+    'bit_manipulation': 'advanced_dsa',
+    'sorting': 'sorting_searching',
+    'searching': 'sorting_searching',
+    'tree': 'trees_graphs',
+    'graph': 'trees_graphs',
+    'backtracking': 'advanced_dsa',
+    'recursion': 'advanced_dsa',
 }
 
 CATEGORY_ICON_MAP = {
@@ -457,6 +461,33 @@ def _is_challenge_unlocked(user, challenge):
         return False
 
     if not challenge.topic:
+        if challenge.algorithm_type:
+            algorithm_challenges = Challenge.objects.filter(
+                is_active=True,
+                topic_id__isnull=True,
+                algorithm_type=challenge.algorithm_type,
+            )
+            first_in_algorithm = algorithm_challenges.order_by('order_index', 'id').first()
+            if first_in_algorithm and challenge.id == first_in_algorithm.id:
+                return True
+
+            prev_challenge = (
+                algorithm_challenges.filter(order_index__lt=challenge.order_index)
+                .order_by('-order_index', '-id')
+                .first()
+            )
+            if prev_challenge:
+                prev_prog = UserChallengeProg.objects.filter(
+                    user=user,
+                    challenge=prev_challenge,
+                    is_solved=True,
+                ).first()
+                if prev_prog:
+                    return True
+
+            prog = _get_user_challenge_progress(user, challenge)
+            return prog.is_unlocked if prog else False
+
         return True
 
     topic_challenges = challenge.topic.challenges.filter(is_active=True)
@@ -515,16 +546,74 @@ def _build_topic_unlock_metadata(topic_ids):
     return first_by_topic, prev_by_challenge
 
 
+def _build_algorithm_unlock_metadata(algorithm_types):
+    """Return first/previous maps for topic-less algorithm sequences."""
+    if not algorithm_types:
+        return {}, {}
+
+    rows = list(
+        Challenge.objects.filter(
+            is_active=True,
+            topic_id__isnull=True,
+            algorithm_type__in=algorithm_types,
+        )
+        .exclude(algorithm_type='')
+        .only('id', 'algorithm_type', 'order_index')
+        .order_by('algorithm_type', 'order_index', 'id')
+    )
+
+    first_by_algorithm = {}
+    prev_by_challenge = {}
+    current_algorithm_type = None
+    last_lower_order = None
+    last_lower_id = None
+
+    for row in rows:
+        algorithm_type = row.algorithm_type
+        if algorithm_type != current_algorithm_type:
+            current_algorithm_type = algorithm_type
+            first_by_algorithm[algorithm_type] = row.id
+            last_lower_order = None
+            last_lower_id = None
+
+        prev_by_challenge[row.id] = last_lower_id
+
+        if last_lower_order is None or row.order_index > last_lower_order:
+            last_lower_order = row.order_index
+            last_lower_id = row.id
+
+    return first_by_algorithm, prev_by_challenge
+
+
 def _bulk_unlock_map(challenges, solved_ids, explicit_unlocked_ids):
     """Compute unlock status for a challenge list with O(1) lookups and minimal DB hits."""
     challenge_list = list(challenges)
     topic_ids = {challenge.topic_id for challenge in challenge_list if challenge.topic_id}
     first_by_topic, prev_by_challenge = _build_topic_unlock_metadata(topic_ids)
+    algorithm_types = {
+        challenge.algorithm_type
+        for challenge in challenge_list
+        if not challenge.topic_id and challenge.algorithm_type
+    }
+    first_by_algorithm, prev_by_algorithm_challenge = _build_algorithm_unlock_metadata(algorithm_types)
 
     unlock_map = {}
     for challenge in challenge_list:
         if not challenge.topic_id:
-            unlock_map[challenge.id] = True
+            if not challenge.algorithm_type:
+                unlock_map[challenge.id] = True
+                continue
+
+            if challenge.id == first_by_algorithm.get(challenge.algorithm_type):
+                unlock_map[challenge.id] = True
+                continue
+
+            prev_id = prev_by_algorithm_challenge.get(challenge.id)
+            is_unlocked = bool(prev_id and prev_id in solved_ids)
+            if not is_unlocked:
+                is_unlocked = challenge.id in explicit_unlocked_ids
+
+            unlock_map[challenge.id] = is_unlocked
             continue
 
         if challenge.id == first_by_topic.get(challenge.topic_id):
@@ -547,14 +636,27 @@ def _bulk_unlock_map(challenges, solved_ids, explicit_unlocked_ids):
 
 def _unlock_next_challenge(user, challenge):
     """Unlock next challenge in sequence when one is solved."""
-    if not challenge.topic:
-        return
+    if challenge.topic:
+        next_challenge = (
+            challenge.topic.challenges.filter(is_active=True, order_index__gt=challenge.order_index)
+            .order_by('order_index', 'id')
+            .first()
+        )
+    elif challenge.algorithm_type:
+        # Topic-less legacy sequences unlock by algorithm type + order index.
+        next_challenge = (
+            Challenge.objects.filter(
+                is_active=True,
+                topic_id__isnull=True,
+                algorithm_type=challenge.algorithm_type,
+                order_index__gt=challenge.order_index,
+            )
+            .order_by('order_index', 'id')
+            .first()
+        )
+    else:
+        next_challenge = None
 
-    next_challenge = (
-        challenge.topic.challenges.filter(is_active=True, order_index__gt=challenge.order_index)
-        .order_by('order_index')
-        .first()
-    )
     if next_challenge:
         prog, _ = UserChallengeProg.objects.get_or_create(
             user=user,
@@ -2917,7 +3019,7 @@ def submit_attempt_view(request, slug):
     if is_correct and challenge.topic:
         next_challenge = (
             challenge.topic.challenges.filter(is_active=True, order_index__gt=challenge.order_index)
-            .order_by('order_index')
+            .order_by('order_index', 'id')
             .first()
         )
 
@@ -2941,6 +3043,39 @@ def submit_attempt_view(request, slug):
         else:
             response_data['message'] = (
                 f"Round {challenge.order_index + 1} completed! You've finished all rounds in {challenge.topic.label}!"
+            )
+    elif is_correct and challenge.algorithm_type and not challenge.topic:
+        next_challenge = (
+            Challenge.objects.filter(
+                is_active=True,
+                topic_id__isnull=True,
+                algorithm_type=challenge.algorithm_type,
+                order_index__gt=challenge.order_index,
+            )
+            .order_by('order_index', 'id')
+            .first()
+        )
+        if next_challenge:
+            if hasattr(next_challenge, 'get_absolute_url'):
+                response_data['next_challenge_url'] = next_challenge.get_absolute_url()
+            else:
+                response_data['next_challenge_url'] = f'/challenges/{next_challenge.slug}/'
+
+        total_rounds = Challenge.objects.filter(
+            is_active=True,
+            topic_id__isnull=True,
+            algorithm_type=challenge.algorithm_type,
+        ).count()
+        response_data['next_round_index'] = challenge.order_index + 2
+        response_data['current_round_index'] = challenge.order_index + 1
+        response_data['total_rounds_in_topic'] = total_rounds
+
+        label = ALGORITHM_TYPE_LABELS.get(challenge.algorithm_type, 'this type')
+        if next_challenge:
+            response_data['message'] = f'Round {challenge.order_index + 1} completed! Next: {next_challenge.title}'
+        else:
+            response_data['message'] = (
+                f"Round {challenge.order_index + 1} completed! You've finished all rounds in {label}."
             )
 
     return JsonResponse(response_data)

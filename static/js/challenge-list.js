@@ -115,6 +115,21 @@ document.addEventListener('DOMContentLoaded', function () {
         return '';
     }
 
+    function extractUnlockState(cardEl) {
+        if (!cardEl) {
+            return true;
+        }
+        var lockBadge = cardEl.querySelector('.badge.badge-secondary');
+        if (!lockBadge) {
+            return true;
+        }
+        var icon = lockBadge.querySelector('i');
+        if (!icon) {
+            return true;
+        }
+        return !icon.classList.contains('bi-lock');
+    }
+
     function collectCategoryEntries(category) {
         var sections = document.querySelectorAll('.category-section');
         var unique = {};
@@ -161,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     label: label,
                     url: href,
                     algorithmType: algorithmType,
+                    isUnlocked: extractUnlockState(card),
                 });
             });
         });
@@ -182,6 +198,16 @@ document.addEventListener('DOMContentLoaded', function () {
         return window.hasExecutionVisualizationSupport(entry.algorithmType);
     }
 
+    function isEntryPlayable(entry) {
+        if (!entry) {
+            return false;
+        }
+        if (entry.isUnlocked === false) {
+            return false;
+        }
+        return supportsExecution(entry);
+    }
+
     function findPlayableIndex(entries, startIndex, direction) {
         if (!entries.length) {
             return -1;
@@ -189,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var index = startIndex;
         for (var step = 0; step < entries.length; step += 1) {
             var clamped = Math.max(0, Math.min(index, entries.length - 1));
-            if (supportsExecution(entries[clamped])) {
+            if (isEntryPlayable(entries[clamped])) {
                 return clamped;
             }
             index += direction;
@@ -277,7 +303,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             var entry = entries[state.index];
-            var playableLabel = supportsExecution(entry) ? '' : ' (no execution model; will skip)';
+            var playableLabel = '';
+            if (entry && entry.isUnlocked === false) {
+                playableLabel = ' (locked; will skip)';
+            } else if (!supportsExecution(entry)) {
+                playableLabel = ' (no execution model; will skip)';
+            }
             statusNode.textContent = (state.index + 1) + '/' + entries.length + ' - ' + entry.label + playableLabel;
             prevBtn.disabled = findPlayableIndex(entries, state.index - 1, -1) < 0;
             nextBtn.disabled = findPlayableIndex(entries, state.index + 1, 1) < 0;

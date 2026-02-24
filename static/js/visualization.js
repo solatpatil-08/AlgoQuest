@@ -214,6 +214,7 @@ function initCanvas(containerId = 'visualizationOutput') {
     
     container.innerHTML = '';
     const canvas = document.createElement('canvas');
+    canvas.setAttribute('data-viz-canvas', '2d');
     applyResponsiveCanvasSize(container, canvas);
     
     canvas.style.border = '2px solid var(--aq-border)';
@@ -1498,6 +1499,7 @@ function startVisualization(algorithmType) {
         'bfs': runBFS,
         'dfs': runDFS,
         'dijkstra': runDijkstra,
+        'astar': runDijkstra,
         'stack': runStackDemo,
         'queue': runQueueDemo,
         'bst': runBSTDemo

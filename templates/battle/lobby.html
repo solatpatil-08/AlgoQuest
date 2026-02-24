@@ -57,12 +57,21 @@
                         {% for match in active_matches %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span class="fw-semibold">{{ match.room_code }}</span>
+                                    <span class="fw-semibold">Match #{{ match.id }}</span>
                                     <span class="badge badge-accent ms-2" style="font-size: 0.7rem;">{{ match.status }}</span>
+                                    <div class="text-muted small mt-1">
+                                        {{ match.player_one.username }} vs {{ match.player_two.username|default:"Waiting..." }}
+                                    </div>
                                 </div>
-                                <a href="{% url 'battle-live' match.room_code %}" class="btn btn-outline-primary btn-sm px-3">
-                                    <i class="bi bi-box-arrow-up-right me-1"></i>Open
-                                </a>
+                                {% if user.id == match.player_one_id or user.id == match.player_two_id %}
+                                    <a href="{% url 'battle-live' match.room_code %}" class="btn btn-outline-primary btn-sm px-3">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>Open
+                                    </a>
+                                {% else %}
+                                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" disabled aria-disabled="true">
+                                        <i class="bi bi-lock me-1"></i>Private Match
+                                    </button>
+                                {% endif %}
                             </li>
                         {% empty %}
                             <li class="list-group-item text-center py-4">
@@ -102,7 +111,7 @@
                                     {% endif %}
                                     <div>
                                         <h3 class="h6 mb-0">{{ item.topic.label }}</h3>
-                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">{{ item.topic.category|title }}</p>
+                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">{{ item.topic.get_category_display }}</p>
                                     </div>
                                 </div>
                                 <p class="text-muted small mb-3">{{ item.topic.description|truncatewords:15 }}</p>
@@ -235,7 +244,7 @@
             }
 
             if (data.is_waiting) {
-                setStatus(`<i class="bi bi-clock me-1"></i>Room <strong>${data.room_code}</strong> created. Waiting for opponent...`, 'info');
+                setStatus('<i class="bi bi-clock me-1"></i>Battle room created. Waiting for opponent...', 'info');
             } else {
                 setStatus('<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...', 'success');
             }

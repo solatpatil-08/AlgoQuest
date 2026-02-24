@@ -14,10 +14,19 @@ def resolve_topic_preference(topic_preference):
     if not topic_preference:
         return None
     try:
-        return Topic.objects.get(stable_id=topic_preference, is_active=True)
+        topic = Topic.objects.get(stable_id=topic_preference, is_active=True)
     except Topic.DoesNotExist:
         logger.info("Ignoring stale battle topic preference: %s", topic_preference)
         return None
+    has_battle_challenges = Challenge.objects.filter(
+        topic=topic,
+        is_active=True,
+        challenge_type=Challenge.ChallengeType.ALGORITHM,
+    ).exists()
+    if not has_battle_challenges:
+        logger.info("Ignoring topic preference without battle-ready challenges: %s", topic_preference)
+        return None
+    return topic
 
 
 def select_challenge_for_match(topic=None):
@@ -62,6 +71,12 @@ def find_or_create_match(user, topic_preference=None):
             if (
                 abs(opponent_profile.level - profile.level) > 2
                 or abs(opponent_profile.xp - profile.xp) > 400
+            ):
+                continue
+            if (
+                preferred_topic is not None
+                and match.preferred_topic_id is not None
+                and match.preferred_topic_id != preferred_topic.id
             ):
                 continue
 

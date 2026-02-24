@@ -12,6 +12,12 @@ let battleFinished = false;
 
 function renderStatus(message, type = 'info') {
     if (!battleStatusEl) return;
+    const alertClassMap = {
+        success: 'alert-success',
+        warning: 'alert-warning',
+        error: 'alert-danger',
+        info: 'alert-info',
+    };
     const icon = type === 'success'
         ? 'trophy-fill'
         : type === 'error'
@@ -19,8 +25,9 @@ function renderStatus(message, type = 'info') {
             : type === 'warning'
                 ? 'wifi-off'
                 : 'broadcast';
+    const alertClass = alertClassMap[type] || alertClassMap.info;
     battleStatusEl.innerHTML = `
-        <div class="alert alert-${type} mb-0">
+        <div class="alert ${alertClass} mb-0">
             <i class="bi bi-${icon} me-2"></i>${message}
         </div>
     `;

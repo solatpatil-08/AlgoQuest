@@ -8,7 +8,7 @@
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
                     <h1 class="h4 mb-1"><i class="bi bi-lightning-charge-fill me-2 text-gradient"></i>Live Battle Room</h1>
-                    <p class="text-muted mb-0">Room Code: <strong>{{ match.room_code }}</strong></p>
+                    <p class="text-muted mb-0">Match ID: <strong>#{{ match.id }}</strong></p>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span id="battleConnectionBadge" class="badge badge-accent">Connecting...</span>
@@ -163,7 +163,6 @@
             {% endif %}
         </div>
     </div>
-    </div>
 </div>
 {% endblock %}
 
@@ -206,7 +205,16 @@
                     body: formData,
                     headers: {'X-Requested-With': 'XMLHttpRequest'}
                 });
-                const data = await response.json();
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    throw new Error('Server returned an invalid response. Please try again.');
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'Unable to submit answer. Please try again.');
+                }
 
                 const alertClass = data.is_correct ? 'success' : 'warning';
                 const iconClass = data.is_correct ? 'check-circle-fill' : 'exclamation-triangle-fill';
@@ -220,6 +228,9 @@
                 if (data.current_level !== undefined) {
                     messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
                 }
+                if (data.is_score_eligible === false) {
+                    messageContent += ' &middot; <strong>First-attempt scoring already consumed</strong>';
+                }
 
                 attemptResult.innerHTML = `<div class="alert alert-${alertClass} fade-in">
                     <div class="d-flex align-items-center gap-2">
@@ -229,16 +240,21 @@
                 </div>`;
 
                 if (data.is_correct && data.battle_score_token && window.BattleClient && typeof window.BattleClient.sendScoreIncrement === 'function') {
-                    window.BattleClient.sendScoreIncrement(data.battle_score_token);
+                    const sent = window.BattleClient.sendScoreIncrement(data.battle_score_token);
+                    if (!sent) {
+                        attemptResult.innerHTML += `<div class="alert alert-warning mt-2 mb-0">
+                            <i class="bi bi-wifi-off me-2"></i>Answer is saved, but realtime score sync failed because battle socket is disconnected.
+                        </div>`;
+                    }
                 }
             } catch (error) {
                 attemptResult.innerHTML = `<div class="alert alert-danger fade-in">
-                    <i class="bi bi-exclamation-triangle me-2"></i>An error occurred. Please try again.
+                    <i class="bi bi-exclamation-triangle me-2"></i>${error.message || 'An error occurred. Please try again.'}
                 </div>`;
             } finally {
                 if (submitBtn) {
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Submit';
+                    submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Submit Answer';
                 }
             }
         });

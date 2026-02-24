@@ -1,6 +1,8 @@
 import json
+from pathlib import Path
 
 from asgiref.sync import async_to_sync
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import connection
 from django.test import TestCase, TransactionTestCase
@@ -63,7 +65,7 @@ class MatchmakingTests(TestCase):
         self.assertIsNone(match.player_two)
         self.assertEqual(match.preferred_topic, self.topic_arrays)
 
-    def test_find_or_create_joins_compatible_waiting_match(self):
+    def test_find_or_create_does_not_join_waiting_match_with_conflicting_topic(self):
         user_one = User.objects.create_user(username='p1', password='StrongPass123!')
         user_two = User.objects.create_user(username='p2', password='StrongPass123!')
 
@@ -83,13 +85,12 @@ class MatchmakingTests(TestCase):
         match, waiting = find_or_create_match(user_two, topic_preference='graphs')
         waiting_match.refresh_from_db()
 
-        self.assertFalse(waiting)
-        self.assertEqual(match.id, waiting_match.id)
-        self.assertEqual(waiting_match.player_two, user_two)
-        self.assertEqual(waiting_match.status, BattleMatch.Status.LIVE)
-        self.assertIsNotNone(waiting_match.started_at)
+        self.assertTrue(waiting)
+        self.assertNotEqual(match.id, waiting_match.id)
+        self.assertIsNone(waiting_match.player_two)
+        self.assertEqual(waiting_match.status, BattleMatch.Status.WAITING)
+        self.assertIsNone(waiting_match.started_at)
         self.assertEqual(waiting_match.preferred_topic, self.topic_arrays)
-        self.assertEqual(waiting_match.challenge, self.array_challenge)
 
     def test_matchmaking_topic_preference_honored(self):
         creator = User.objects.create_user(username='creator', password='StrongPass123!')
@@ -102,10 +103,10 @@ class MatchmakingTests(TestCase):
         joined_match.refresh_from_db()
 
         self.assertTrue(first_waiting)
-        self.assertFalse(second_waiting)
-        self.assertEqual(first_match.id, joined_match.id)
-        self.assertEqual(joined_match.preferred_topic, self.topic_graphs)
-        self.assertEqual(joined_match.challenge, self.graph_challenge)
+        self.assertTrue(second_waiting)
+        self.assertNotEqual(first_match.id, joined_match.id)
+        self.assertEqual(first_match.preferred_topic, self.topic_graphs)
+        self.assertEqual(joined_match.preferred_topic, self.topic_arrays)
 
 
 class BattleApiAndAccessTests(TestCase):
@@ -238,6 +239,38 @@ class BattleApiAndAccessTests(TestCase):
             response = self.client.get(reverse('battle-lobby'))
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(context), 8)
+
+    def test_lobby_hides_open_link_for_non_participants(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+        )
+        self.client.force_login(self.third)
+        response = self.client.get(reverse('battle-lobby'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'Match #{match.id}')
+        self.assertNotContains(response, reverse('battle-live', args=[match.room_code]))
+        self.assertContains(response, 'Private Match')
+
+    def test_lobby_shows_open_link_for_participants(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+        )
+        self.client.force_login(self.first)
+        response = self.client.get(reverse('battle-lobby'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('battle-live', args=[match.room_code]))
+
+    def test_battle_client_uses_safe_alert_mapping(self):
+        script_path = Path(settings.BASE_DIR) / 'static' / 'js' / 'battle-client.js'
+        script = script_path.read_text(encoding='utf-8')
+        self.assertNotIn('alert-${type}', script)
+        self.assertIn("error: 'alert-danger'", script)
 
 
 class BattleConsumerSecurityTests(TransactionTestCase):

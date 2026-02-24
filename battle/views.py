@@ -31,16 +31,21 @@ def _assign_match_challenge_if_needed(match):
 
 @login_required
 def battle_lobby_view(request):
+    battle_challenge_filter = Q(
+        challenges__is_active=True,
+        challenges__challenge_type=Challenge.ChallengeType.ALGORITHM,
+    )
     active_matches = BattleMatch.objects.filter(
-        status__in=[BattleMatch.Status.WAITING, BattleMatch.Status.LIVE]
+        status=BattleMatch.Status.LIVE
     ).select_related('player_one', 'player_two')[:10]
 
     topics = Topic.objects.filter(is_active=True).annotate(
-        challenge_count=Count('challenges', filter=Q(challenges__is_active=True), distinct=True),
+        challenge_count=Count('challenges', filter=battle_challenge_filter, distinct=True),
         easy_count=Count(
             'challenges',
             filter=Q(
                 challenges__is_active=True,
+                challenges__challenge_type=Challenge.ChallengeType.ALGORITHM,
                 challenges__difficulty=Challenge.Difficulty.EASY,
             ),
             distinct=True,
@@ -49,6 +54,7 @@ def battle_lobby_view(request):
             'challenges',
             filter=Q(
                 challenges__is_active=True,
+                challenges__challenge_type=Challenge.ChallengeType.ALGORITHM,
                 challenges__difficulty=Challenge.Difficulty.MEDIUM,
             ),
             distinct=True,
@@ -57,11 +63,12 @@ def battle_lobby_view(request):
             'challenges',
             filter=Q(
                 challenges__is_active=True,
+                challenges__challenge_type=Challenge.ChallengeType.ALGORITHM,
                 challenges__difficulty=Challenge.Difficulty.HARD,
             ),
             distinct=True,
         ),
-    )
+    ).filter(challenge_count__gt=0)
 
     topic_data = [
         {
