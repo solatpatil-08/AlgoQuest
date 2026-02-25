@@ -9,7 +9,7 @@ from itertools import groupby
 from django.contrib.auth.decorators import login_required
 from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Q, Value, When
 from django.http import JsonResponse, HttpResponseForbidden
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from rest_framework import generics, permissions
@@ -21,6 +21,8 @@ from .serializers import ChallengeAttemptSerializer, ChallengeSerializer
 
 HINT_REMAINING_RATIO = 0.25
 GENERIC_LEVEL_PROMPT_RE = re.compile(r'^solve\s+.+\s+problem at level\s+\d+\s+\((easy|medium|hard)\)\.?$', re.IGNORECASE)
+PLACEHOLDER_PROMPT_RE = re.compile(r'^(prompt|test|todo|tbd|n/?a|null|none|sample)$', re.IGNORECASE)
+CANONICAL_TOPIC_PREFIX = 'algo_'
 
 
 CATEGORY_OPTIONS = (
@@ -760,6 +762,75 @@ def _effective_category_for_challenge(challenge):
     return challenge.algorithm_category or 'general'
 
 
+def _is_canonical_bank_topic(topic):
+    stable_id = (getattr(topic, 'stable_id', '') or '').strip().lower()
+    return bool(topic and stable_id.startswith(CANONICAL_TOPIC_PREFIX))
+
+
+def _challenge_row_preference(challenge):
+    topic = getattr(challenge, 'topic', None)
+    stable_id = (getattr(topic, 'stable_id', '') or '').strip().lower()
+    visualization_type = (getattr(topic, 'visualization_type', '') or '').strip().lower()
+    return (
+        1 if stable_id.startswith(CANONICAL_TOPIC_PREFIX) else 0,
+        1 if visualization_type == 'graph' else 0,
+        1 if topic else 0,
+        challenge.id or 0,
+    )
+
+
+def _dedupe_algorithm_level_rows(challenges):
+    passthrough = []
+    by_level = {}
+
+    for idx, challenge in enumerate(challenges):
+        if not challenge.algorithm_type:
+            passthrough.append((idx, challenge))
+            continue
+
+        key = (challenge.algorithm_type, challenge.order_index)
+        candidate_score = _challenge_row_preference(challenge)
+        current = by_level.get(key)
+        if current is None:
+            by_level[key] = {
+                'first_pos': idx,
+                'challenge': challenge,
+                'score': candidate_score,
+            }
+            continue
+
+        if candidate_score > current['score']:
+            current['challenge'] = challenge
+            current['score'] = candidate_score
+
+    merged = passthrough + [
+        (entry['first_pos'], entry['challenge'])
+        for entry in by_level.values()
+    ]
+    merged.sort(key=lambda item: item[0])
+    return [challenge for _, challenge in merged]
+
+
+def _resolve_best_challenge_variant(challenge):
+    if not challenge.algorithm_type:
+        return challenge
+
+    siblings = Challenge.objects.filter(
+        is_active=True,
+        algorithm_type=challenge.algorithm_type,
+        order_index=challenge.order_index,
+    ).select_related('topic')
+
+    best = challenge
+    best_score = _challenge_row_preference(challenge)
+    for candidate in siblings:
+        candidate_score = _challenge_row_preference(candidate)
+        if candidate_score > best_score:
+            best = candidate
+            best_score = candidate_score
+    return best
+
+
 def _build_subtype_query_string(request_querydict, subtype):
     query_params = request_querydict.copy()
     query_params['subtype'] = subtype
@@ -769,10 +840,69 @@ def _build_subtype_query_string(request_querydict, subtype):
     return f'?{urlencode({"subtype": subtype})}'
 
 
+def _is_placeholder_prompt(prompt):
+    normalized = (prompt or '').strip()
+    if not normalized:
+        return True
+    collapsed = re.sub(r'\s+', ' ', normalized)
+    if PLACEHOLDER_PROMPT_RE.match(collapsed):
+        return True
+    return len(collapsed) < 12
+
+
+def _build_graph_traversal_prompt(challenge):
+    if challenge.algorithm_type not in {Challenge.AlgorithmType.BFS, Challenge.AlgorithmType.DFS}:
+        return None
+
+    payload = challenge.visualization_payload or {}
+    raw_edges = payload.get('edges')
+    start = _safe_int(payload.get('start'))
+    if not isinstance(raw_edges, list) or not raw_edges or start is None or start < 0:
+        return None
+
+    edges = []
+    node_set = {start}
+    for edge in raw_edges:
+        if not isinstance(edge, (list, tuple)) or len(edge) < 2:
+            return None
+        left = _safe_int(edge[0])
+        right = _safe_int(edge[1])
+        if left is None or right is None or left < 0 or right < 0:
+            return None
+        edges.append((left, right))
+        node_set.add(left)
+        node_set.add(right)
+
+    if not edges:
+        return None
+
+    nodes = sorted(node_set)
+    if nodes == list(range(nodes[-1] + 1)):
+        node_text = f"0..{nodes[-1]}"
+    else:
+        node_text = ', '.join(str(node) for node in nodes)
+    edge_text = ', '.join(f"({left},{right})" for left, right in edges)
+    traversal_name = (
+        'Breadth-First Search (BFS)'
+        if challenge.algorithm_type == Challenge.AlgorithmType.BFS
+        else 'Depth-First Search (DFS)'
+    )
+    return (
+        f"Problem: Perform {traversal_name} from the given start node.\n"
+        f"Input: nodes={node_text}, edges={edge_text}, start={start}\n"
+        "Output: Return visitation order as space-separated node ids.\n"
+        "Constraints: Traverse only reachable nodes; when choices exist, visit lower-numbered neighbors first."
+    )
+
+
 def _display_prompt_for_challenge(challenge):
     prompt = (challenge.prompt or '').strip()
-    if prompt and not GENERIC_LEVEL_PROMPT_RE.match(prompt):
+    if prompt and not GENERIC_LEVEL_PROMPT_RE.match(prompt) and not _is_placeholder_prompt(prompt):
         return prompt
+
+    graph_prompt = _build_graph_traversal_prompt(challenge)
+    if graph_prompt:
+        return graph_prompt
 
     level = (challenge.order_index + 1) if challenge.order_index is not None else 1
     difficulty_label = challenge.get_difficulty_display() if hasattr(challenge, 'get_difficulty_display') else challenge.difficulty
@@ -2653,6 +2783,8 @@ def challenge_list_view(request):
         'topic__label',
         'topic__category',
         'topic__stable_id',
+        'topic__visualization_type',
+        'topic__is_active',
     )
 
     solved_ids = set()
@@ -2739,6 +2871,7 @@ def challenge_list_view(request):
     challenges = _apply_queryset_sort(challenges, sort_by, request.user)
 
     challenges = list(challenges)
+    challenges = _dedupe_algorithm_level_rows(challenges)
 
     unlocked_ids = set()
     if request.user.is_authenticated:
@@ -2822,6 +2955,9 @@ def challenge_list_view(request):
 def challenge_detail_view(request, slug):
     """Challenge detail view with unlock enforcement."""
     challenge = get_object_or_404(Challenge, slug=slug, is_active=True)
+    preferred_variant = _resolve_best_challenge_variant(challenge)
+    if preferred_variant.id != challenge.id:
+        return redirect('challenge-detail', slug=preferred_variant.slug)
 
     is_unlocked = True
     user_progress = None

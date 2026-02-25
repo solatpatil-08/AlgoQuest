@@ -2282,6 +2282,60 @@ class ChallengeCategorySubtypeNavigationTests(TestCase):
         self.assertEqual(min(levels), 0)
         self.assertEqual(max(levels), 29)
 
+    def test_subtype_ignores_legacy_duplicates_for_same_algorithm_level(self):
+        Challenge.objects.create(
+            title='Legacy BFS Duplicate',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='legacy duplicate',
+            prompt='test',
+            expected_answer='queue',
+            order_index=0,
+        )
+        Challenge.objects.create(
+            title='Legacy BFS Duplicate 2',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            description='legacy duplicate',
+            prompt='test',
+            expected_answer='queue',
+            order_index=1,
+        )
+
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'trees_graphs', 'subtype': 'bfs'},
+        )
+        self.assertEqual(response.status_code, 200)
+        returned = response.context['challenges']
+        self.assertEqual(len(returned), 30)
+        self.assertTrue(all(ch.topic_id == self.graph_topic.id for ch in returned))
+
+    def test_challenge_detail_redirects_duplicate_level_to_preferred_variant(self):
+        canonical = Challenge.objects.filter(
+            topic=self.graph_topic,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            order_index=0,
+        ).first()
+        self.assertIsNotNone(canonical)
+
+        duplicate = Challenge.objects.create(
+            title='Legacy BFS Redirect Candidate',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='legacy duplicate',
+            prompt='test',
+            expected_answer='queue',
+            order_index=0,
+        )
+
+        response = self.client.get(reverse('challenge-detail', args=[duplicate.slug]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('challenge-detail', args=[canonical.slug]))
+
     def test_alias_compatibility(self):
         alias_cases = [
             ('advance_dsa', 'advanced_dsa'),

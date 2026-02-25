@@ -57,6 +57,27 @@
     }
 }
 
+@keyframes execSceneFloat {
+    0% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-2px);
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes execSceneSheen {
+    0% {
+        transform: translateX(-130%);
+    }
+    100% {
+        transform: translateX(140%);
+    }
+}
+
 /* ============================================
    Challenge Page Layout
    ============================================ */
@@ -836,6 +857,44 @@
     filter: drop-shadow(0 8px 12px rgba(15, 23, 42, 0.12));
 }
 
+.exec-diagram-wrap.exec-3d-scene {
+    position: relative;
+    border-color: color-mix(in srgb, var(--aq-primary-light) 40%, var(--aq-border) 60%);
+    background:
+        radial-gradient(circle at 14% 18%, rgba(59, 130, 246, 0.18), transparent 42%),
+        radial-gradient(circle at 82% 16%, rgba(16, 185, 129, 0.14), transparent 40%),
+        linear-gradient(160deg, color-mix(in srgb, var(--aq-card) 90%, #dbeafe 10%), color-mix(in srgb, var(--aq-surface) 88%, #e0f2fe 12%));
+    perspective: 1200px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 14px 28px -22px rgba(30, 64, 175, 0.45);
+}
+
+.exec-diagram-wrap.exec-3d-scene::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -45%;
+    width: 38%;
+    pointer-events: none;
+    background: linear-gradient(108deg, transparent 10%, rgba(255, 255, 255, 0.38) 48%, transparent 90%);
+    animation: execSceneSheen 5.8s linear infinite;
+}
+
+.exec-svg.exec-svg-3d {
+    position: relative;
+    transform: translateZ(0);
+    width: max(100%, 460px);
+    filter: drop-shadow(0 16px 18px rgba(15, 23, 42, 0.22));
+    animation: execSceneFloat 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .exec-diagram-wrap.exec-3d-scene::before,
+    .exec-svg.exec-svg-3d {
+        animation: none !important;
+    }
+}
+
 .exec-legend {
     display: flex;
     flex-wrap: wrap;
@@ -962,6 +1021,14 @@
     background: color-mix(in srgb, var(--aq-surface) 74%, var(--aq-card) 26%);
 }
 
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene {
+    border-color: rgba(96, 165, 250, 0.34);
+    background:
+        radial-gradient(circle at 14% 18%, rgba(37, 99, 235, 0.24), transparent 42%),
+        radial-gradient(circle at 82% 16%, rgba(16, 185, 129, 0.16), transparent 40%),
+        linear-gradient(160deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.9));
+}
+
 [data-theme="dark"] .exec-score-track,
 [data-theme="dark"] .exec-xp-track,
 [data-theme="dark"] .exec-stat,
@@ -1050,6 +1117,14 @@
     .exec-score-value {
         grid-column: 1 / -1;
         padding-left: 52px;
+    }
+
+    .exec-diagram-wrap.exec-3d-scene {
+        padding: 0.62rem;
+    }
+
+    .exec-svg.exec-svg-3d {
+        width: max(100%, 430px);
     }
 
     .concept-kv-row {

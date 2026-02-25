@@ -100,15 +100,323 @@
         return String(rounded.toFixed(decimals).replace(/\.?0+$/, ''));
     }
 
-    function renderIndexedStrip(values, highlightSet = new Set()) {
+    function render3DScene(svgBody, width, height, ariaLabel) {
         return `
-            <div class="exec-strip">
-                ${values.map((value, idx) => `
-                    <div class="exec-cell${highlightSet.has(idx) ? ' active' : ''}">
-                        <span class="exec-cell-value">${escapeHtml(value)}</span>
-                        <span class="exec-cell-index">idx ${idx}</span>
-                    </div>
-                `).join('')}
+            <div class="exec-diagram-wrap exec-3d-scene">
+                <svg class="exec-svg exec-svg-3d" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ariaLabel || '3D execution visualization')}">
+                    ${svgBody}
+                </svg>
+            </div>
+        `;
+    }
+
+    function renderIndexedStrip3D(values, highlightSet = new Set(), currentSet = new Set(), indexLabel = 'idx') {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const cellWidth = 64;
+        const gap = 10;
+        const leftPad = 24;
+        const topPad = 24;
+        const baseY = 66;
+        const height = 140;
+        const width = Math.max(420, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const depth = 10;
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const isHighlight = highlightSet.has(idx);
+            const isCurrent = currentSet.has(idx);
+            const front = isCurrent ? '#facc15' : (isHighlight ? '#86efac' : '#dbeafe');
+            const top = isCurrent ? '#fde68a' : (isHighlight ? '#bbf7d0' : '#eff6ff');
+            const side = isCurrent ? '#ca8a04' : (isHighlight ? '#16a34a' : '#3b82f6');
+            const stroke = isCurrent ? '#92400e' : '#1e3a8a';
+            return `
+                <g>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${top}" opacity="0.95"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + 38 - depth} ${x + cellWidth},${baseY + 38}" fill="${side}" opacity="0.92"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="38" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${isCurrent ? '2.8' : '1.7'}"></rect>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + 23}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + 56}" text-anchor="middle" font-size="10.5" fill="#64748b">${escapeHtml(indexLabel)} ${idx}</text>
+                </g>
+            `;
+        }).join('');
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="18" font-size="10.5" fill="#64748b">3D state board</text>
+            </g>
+        `;
+        return render3DScene(`${legend}${cells}`, width, height, '3D array strip');
+    }
+
+    function renderEuclidState3D(a, b, remainder = null) {
+        const values = [a, b];
+        const labels = ['a', 'b'];
+        if (Number.isFinite(remainder)) {
+            values.push(remainder);
+            labels.push('r');
+        }
+        const cardWidth = 98;
+        const gap = 16;
+        const left = 36;
+        const top = 36;
+        const depth = 12;
+        const width = Math.max(420, left * 2 + (values.length * (cardWidth + gap)) - gap);
+        const height = 164;
+        const cards = values.map((value, idx) => {
+            const x = left + (idx * (cardWidth + gap));
+            const palette = idx === 2
+                ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e' }
+                : idx === 1
+                    ? { front: '#bfdbfe', top: '#dbeafe', side: '#2563eb', stroke: '#1e3a8a' }
+                    : { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534' };
+            return `
+                <g>
+                    <polygon points="${x},${top} ${x + depth},${top - depth} ${x + cardWidth + depth},${top - depth} ${x + cardWidth},${top}" fill="${palette.top}"></polygon>
+                    <polygon points="${x + cardWidth},${top} ${x + cardWidth + depth},${top - depth} ${x + cardWidth + depth},${top + 64 - depth} ${x + cardWidth},${top + 64}" fill="${palette.side}" opacity="0.94"></polygon>
+                    <rect x="${x}" y="${top}" width="${cardWidth}" height="64" rx="12" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="2"></rect>
+                    <text x="${x + (cardWidth / 2)}" y="${top + 22}" text-anchor="middle" font-size="11" fill="#334155">${labels[idx]}</text>
+                    <text x="${x + (cardWidth / 2)}" y="${top + 44}" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                </g>
+            `;
+        }).join('');
+        return render3DScene(cards, width, height, 'Euclidean algorithm state');
+    }
+
+    function renderWordRail3D(words, activeIndex = -1, prefix = '') {
+        if (!Array.isArray(words) || !words.length) {
+            return '<p class="concept-muted mb-0">Words unavailable.</p>';
+        }
+        const cardWidth = 150;
+        const rowHeight = 52;
+        const left = 24;
+        const top = 26;
+        const depth = 8;
+        const width = Math.max(480, left * 2 + cardWidth);
+        const height = Math.max(180, top * 2 + (words.length * (rowHeight + 10)) + 30);
+        const rows = words.map((word, idx) => {
+            const y = top + (idx * (rowHeight + 10));
+            const isActive = idx === activeIndex;
+            const base = isActive ? '#fef3c7' : '#e2e8f0';
+            const side = isActive ? '#d97706' : '#64748b';
+            const topColor = isActive ? '#fde68a' : '#f8fafc';
+            const stroke = isActive ? '#92400e' : '#334155';
+            const safeWord = escapeHtml(word);
+            return `
+                <g>
+                    <polygon points="${left},${y} ${left + depth},${y - depth} ${left + cardWidth + depth},${y - depth} ${left + cardWidth},${y}" fill="${topColor}"></polygon>
+                    <polygon points="${left + cardWidth},${y} ${left + cardWidth + depth},${y - depth} ${left + cardWidth + depth},${y + rowHeight - depth} ${left + cardWidth},${y + rowHeight}" fill="${side}" opacity="0.95"></polygon>
+                    <rect x="${left}" y="${y}" width="${cardWidth}" height="${rowHeight}" rx="10" fill="${base}" stroke="${stroke}" stroke-width="${isActive ? '2.4' : '1.6'}"></rect>
+                    <text x="${left + 10}" y="${y + 20}" font-size="11" fill="#475569">W${idx + 1}</text>
+                    <text x="${left + 10}" y="${y + 38}" font-size="13" font-weight="700" fill="#0f172a">${safeWord}</text>
+                </g>
+            `;
+        }).join('');
+        const prefixBadge = `
+            <g>
+                <rect x="${left + cardWidth + 44}" y="${top + 8}" width="210" height="48" rx="12" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"></rect>
+                <text x="${left + cardWidth + 56}" y="${top + 28}" font-size="11" fill="#1e3a8a">Candidate Prefix</text>
+                <text x="${left + cardWidth + 56}" y="${top + 44}" font-size="14" font-weight="700" fill="#0f172a">${escapeHtml(prefix || '(empty)')}</text>
+            </g>
+        `;
+        return render3DScene(`${rows}${prefixBadge}`, width, height, 'Word comparison rail');
+    }
+
+    function renderStackState3D(state, activeIndex = null) {
+        if (!Array.isArray(state) || !state.length) {
+            return '<div class="exec-summary">Stack: [empty]</div>';
+        }
+        const cardWidth = 136;
+        const cardHeight = 34;
+        const depth = 8;
+        const gap = 8;
+        const left = 72;
+        const baseY = 176;
+        const width = 300;
+        const height = 220;
+        const cards = state.map((value, idx) => {
+            const visualOrder = state.length - 1 - idx;
+            const y = baseY - ((visualOrder + 1) * (cardHeight + gap));
+            const isActive = activeIndex === idx;
+            const front = isActive ? '#fde68a' : '#dbeafe';
+            const top = isActive ? '#fef3c7' : '#eff6ff';
+            const side = isActive ? '#ca8a04' : '#2563eb';
+            const stroke = isActive ? '#92400e' : '#1e3a8a';
+            return `
+                <g>
+                    <polygon points="${left},${y} ${left + depth},${y - depth} ${left + cardWidth + depth},${y - depth} ${left + cardWidth},${y}" fill="${top}"></polygon>
+                    <polygon points="${left + cardWidth},${y} ${left + cardWidth + depth},${y - depth} ${left + cardWidth + depth},${y + cardHeight - depth} ${left + cardWidth},${y + cardHeight}" fill="${side}"></polygon>
+                    <rect x="${left}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.3' : '1.6'}"></rect>
+                    <text x="${left + 12}" y="${y + 20}" font-size="10.5" fill="#475569">${idx === state.length - 1 ? 'TOP' : `idx ${idx}`}</text>
+                    <text x="${left + (cardWidth / 2)}" y="${y + 21}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                </g>
+            `;
+        }).join('');
+        return render3DScene(cards, width, height, '3D stack state');
+    }
+
+    function renderQueueState3D(state, activeIndex = null) {
+        if (!Array.isArray(state) || !state.length) {
+            return '<div class="exec-summary">Queue: [empty]</div>';
+        }
+        const cellWidth = 84;
+        const cellHeight = 40;
+        const gap = 12;
+        const depth = 8;
+        const left = 24;
+        const top = 64;
+        const width = Math.max(420, left * 2 + (state.length * (cellWidth + gap)));
+        const height = 170;
+        const cells = state.map((value, idx) => {
+            const x = left + (idx * (cellWidth + gap));
+            const isActive = activeIndex === idx;
+            const front = isActive ? '#fde68a' : '#dbeafe';
+            const topColor = isActive ? '#fef3c7' : '#eff6ff';
+            const side = isActive ? '#ca8a04' : '#2563eb';
+            const stroke = isActive ? '#92400e' : '#1e3a8a';
+            return `
+                <g>
+                    <polygon points="${x},${top} ${x + depth},${top - depth} ${x + cellWidth + depth},${top - depth} ${x + cellWidth},${top}" fill="${topColor}"></polygon>
+                    <polygon points="${x + cellWidth},${top} ${x + cellWidth + depth},${top - depth} ${x + cellWidth + depth},${top + cellHeight - depth} ${x + cellWidth},${top + cellHeight}" fill="${side}" opacity="0.95"></polygon>
+                    <rect x="${x}" y="${top}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.3' : '1.6'}"></rect>
+                    <text x="${x + (cellWidth / 2)}" y="${top + 23}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${top + 56}" text-anchor="middle" font-size="10.5" fill="#64748b">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+        const tags = `
+            <text x="${left}" y="${top - 18}" font-size="11" fill="#64748b">FRONT</text>
+            <text x="${left + ((state.length - 1) * (cellWidth + gap)) + (cellWidth - 32)}" y="${top - 18}" font-size="11" fill="#64748b">REAR</text>
+        `;
+        return render3DScene(`${tags}${cells}`, width, height, '3D queue state');
+    }
+
+    function renderHashBuckets3D(seenMap, highlightValue = null) {
+        const buckets = Array.from({ length: 6 }, () => []);
+        if (seenMap instanceof Map) {
+            seenMap.forEach((idx, value) => {
+                const bucketIndex = Math.abs(Math.floor(Number(value))) % buckets.length;
+                buckets[bucketIndex].push({ value, idx });
+            });
+        }
+        const bucketWidth = 146;
+        const bucketHeight = 34;
+        const left = 24;
+        const top = 28;
+        const gapY = 14;
+        const depth = 8;
+        const width = 420;
+        const height = 330;
+        const rows = buckets.map((bucket, bucketIndex) => {
+            const y = top + (bucketIndex * (bucketHeight + gapY));
+            const line = bucket.length
+                ? bucket.map((entry) => `${formatNumber(entry.value)}@${entry.idx}`).join(', ')
+                : '-';
+            const hasHighlight = highlightValue !== null && bucket.some((entry) => entry.value === highlightValue);
+            const front = hasHighlight ? '#fde68a' : '#e2e8f0';
+            const topColor = hasHighlight ? '#fef3c7' : '#f8fafc';
+            const side = hasHighlight ? '#ca8a04' : '#64748b';
+            const stroke = hasHighlight ? '#92400e' : '#334155';
+            return `
+                <g>
+                    <polygon points="${left},${y} ${left + depth},${y - depth} ${left + bucketWidth + depth},${y - depth} ${left + bucketWidth},${y}" fill="${topColor}"></polygon>
+                    <polygon points="${left + bucketWidth},${y} ${left + bucketWidth + depth},${y - depth} ${left + bucketWidth + depth},${y + bucketHeight - depth} ${left + bucketWidth},${y + bucketHeight}" fill="${side}"></polygon>
+                    <rect x="${left}" y="${y}" width="${bucketWidth}" height="${bucketHeight}" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${hasHighlight ? '2.2' : '1.5'}"></rect>
+                    <text x="${left + 10}" y="${y + 21}" font-size="11" fill="#334155">b${bucketIndex}</text>
+                    <text x="${left + 42}" y="${y + 21}" font-size="11.5" fill="#0f172a">${escapeHtml(line)}</text>
+                </g>
+            `;
+        }).join('');
+        return render3DScene(rows, width, height, 'Hash bucket state');
+    }
+
+    function renderIndexedStrip(values, highlightSet = new Set()) {
+        return renderIndexedStrip3D(values, highlightSet, new Set());
+    }
+
+    function renderLinkedListDiagram3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Linked list unavailable.</p>';
+        }
+        const mode = String(options.mode || 'singly');
+        const currentIndex = Number.isInteger(options.currentIndex) ? options.currentIndex : null;
+        const matchedIndex = Number.isInteger(options.matchedIndex) ? options.matchedIndex : null;
+        const startIndex = Number.isInteger(options.startIndex) ? options.startIndex : null;
+        const visitedSet = options.visitedSet instanceof Set ? options.visitedSet : new Set();
+        const spacing = 102;
+        const nodeWidth = 74;
+        const nodeHeight = 38;
+        const depth = 9;
+        const pad = 30;
+        const width = Math.max(420, pad * 2 + (values.length * spacing));
+        const baseY = mode === 'circular' ? 92 : 64;
+        const height = mode === 'circular' ? 206 : 154;
+
+        function paletteFor(idx) {
+            if (idx === matchedIndex) {
+                return { front: '#86efac', top: '#bbf7d0', side: '#16a34a', stroke: '#166534' };
+            }
+            if (idx === currentIndex) {
+                return { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e' };
+            }
+            if (visitedSet.has(idx)) {
+                return { front: '#bfdbfe', top: '#dbeafe', side: '#2563eb', stroke: '#1e3a8a' };
+            }
+            return { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#334155' };
+        }
+
+        const markers = `
+            <defs>
+                <marker id="exec3d-next" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#2563EB"></path>
+                </marker>
+                <marker id="exec3d-prev" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto">
+                    <path d="M10,0 L0,5 L10,10 z" fill="#10B981"></path>
+                </marker>
+            </defs>
+        `;
+
+        const edges = [];
+        for (let idx = 0; idx < values.length - 1; idx += 1) {
+            const fromX = pad + (idx * spacing) + nodeWidth;
+            const toX = pad + ((idx + 1) * spacing);
+            if (mode === 'doubly') {
+                edges.push(`<line x1="${fromX}" y1="${baseY + 9}" x2="${toX}" y2="${baseY + 9}" stroke="#2563eb" stroke-width="2.1" marker-end="url(#exec3d-next)"></line>`);
+                edges.push(`<line x1="${toX}" y1="${baseY + 29}" x2="${fromX}" y2="${baseY + 29}" stroke="#10b981" stroke-width="2.1" marker-end="url(#exec3d-prev)"></line>`);
+            } else {
+                edges.push(`<line x1="${fromX}" y1="${baseY + 20}" x2="${toX}" y2="${baseY + 20}" stroke="#2563eb" stroke-width="2.4" marker-end="url(#exec3d-next)"></line>`);
+            }
+        }
+        if (mode === 'circular' && values.length > 1) {
+            const firstX = pad + (nodeWidth / 2);
+            const lastX = pad + ((values.length - 1) * spacing) + (nodeWidth / 2);
+            edges.push(`
+                <path d="M ${lastX} ${baseY + nodeHeight + 2} C ${lastX + 42} ${baseY + 70}, ${firstX - 42} ${baseY + 70}, ${firstX} ${baseY + nodeHeight + 2}"
+                    fill="none" stroke="#7c3aed" stroke-width="2.4" marker-end="url(#exec3d-next)"></path>
+            `);
+        }
+
+        const nodes = values.map((value, idx) => {
+            const x = pad + (idx * spacing);
+            const y = baseY;
+            const palette = paletteFor(idx);
+            return `
+                <g>
+                    <polygon points="${x},${y} ${x + depth},${y - depth} ${x + nodeWidth + depth},${y - depth} ${x + nodeWidth},${y}" fill="${palette.top}"></polygon>
+                    <polygon points="${x + nodeWidth},${y} ${x + nodeWidth + depth},${y - depth} ${x + nodeWidth + depth},${y + nodeHeight - depth} ${x + nodeWidth},${y + nodeHeight}" fill="${palette.side}"></polygon>
+                    <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="8" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${idx === currentIndex ? '2.6' : '1.6'}"></rect>
+                    <text x="${x + (nodeWidth / 2)}" y="${y + 23}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (nodeWidth / 2)}" y="${y + 52}" text-anchor="middle" font-size="10.5" fill="#64748b">idx ${idx}</text>
+                    ${startIndex === idx ? `<text x="${x + (nodeWidth / 2)}" y="${y - 16}" text-anchor="middle" font-size="11" fill="#7c3aed">start</text>` : ''}
+                </g>
+            `;
+        }).join('');
+
+        return `
+            ${render3DScene(`${markers}${edges.join('')}${nodes}`, width, height, '3D linked list diagram')}
+            <div class="exec-legend">
+                <span class="exec-legend-chip"><span class="exec-dot exec-dot-current"></span>Current</span>
+                <span class="exec-legend-chip"><span class="exec-dot exec-dot-visited"></span>Visited</span>
+                <span class="exec-legend-chip"><span class="exec-dot exec-dot-match"></span>Matched</span>
             </div>
         `;
     }
@@ -119,31 +427,117 @@
         if (!rows || !cols) {
             return '<p class="concept-muted mb-0">Matrix unavailable.</p>';
         }
+        const cell = 42;
+        const gap = 8;
+        const depth = 7;
+        const left = 86;
+        const top = 34;
+        const width = Math.max(520, left + (cols * (cell + gap)) + 34);
+        const height = Math.max(220, top + (rows * (cell + gap)) + 30);
 
-        const header = [' ', ' '].concat(s2.split(''));
-        return `
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0 exec-table">
-                    <thead>
-                        <tr>${header.map((item) => `<th>${escapeHtml(item)}</th>`).join('')}</tr>
-                    </thead>
-                    <tbody>
-                        ${dp.map((row, i) => {
-                            const rowLabel = i === 0 ? ' ' : s1[i - 1];
-                            return `
-                                <tr>
-                                    <th>${escapeHtml(rowLabel)}</th>
-                                    ${row.map((value, j) => {
-                                        const isActive = i === activeI && j === activeJ;
-                                        return `<td class="${isActive ? 'exec-active-td' : ''}">${escapeHtml(value)}</td>`;
-                                    }).join('')}
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
+        const colLabels = [''].concat(s2.split(''));
+        const rowLabels = [''].concat(s1.split(''));
+
+        const headers = colLabels
+            .map((label, col) => {
+                if (col === 0) {
+                    return '';
+                }
+                const x = left + ((col - 1) * (cell + gap)) + (cell / 2);
+                return `<text x="${x}" y="20" text-anchor="middle" font-size="11" fill="#475569">${escapeHtml(label)}</text>`;
+            })
+            .join('');
+
+        const rowHeader = rowLabels
+            .map((label, row) => {
+                const y = top + (row * (cell + gap)) + (cell / 2) + 4;
+                return `<text x="${left - 26}" y="${y}" text-anchor="middle" font-size="11" fill="#475569">${escapeHtml(label)}</text>`;
+            })
+            .join('');
+
+        const cells = dp
+            .map((row, i) =>
+                row
+                    .map((value, j) => {
+                        const x = left + (j * (cell + gap));
+                        const y = top + (i * (cell + gap));
+                        const isActive = i === activeI && j === activeJ;
+                        const front = isActive ? '#fde68a' : '#dbeafe';
+                        const topColor = isActive ? '#fef3c7' : '#eff6ff';
+                        const side = isActive ? '#ca8a04' : '#2563eb';
+                        const stroke = isActive ? '#92400e' : '#1e3a8a';
+                        return `
+                            <g>
+                                <polygon points="${x},${y} ${x + depth},${y - depth} ${x + cell + depth},${y - depth} ${x + cell},${y}" fill="${topColor}"></polygon>
+                                <polygon points="${x + cell},${y} ${x + cell + depth},${y - depth} ${x + cell + depth},${y + cell - depth} ${x + cell},${y + cell}" fill="${side}" opacity="0.93"></polygon>
+                                <rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.2' : '1.4'}"></rect>
+                                <text x="${x + (cell / 2)}" y="${y + 24}" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">${escapeHtml(value)}</text>
+                            </g>
+                        `;
+                    })
+                    .join('')
+            )
+            .join('');
+
+        return render3DScene(`
+            ${headers}
+            ${rowHeader}
+            ${cells}
+        `, width, height, '3D dynamic programming matrix');
+    }
+
+    function renderActivityTimeline3D(intervals, selectedSet = new Set(), currentRow = -1) {
+        if (!Array.isArray(intervals) || !intervals.length) {
+            return '<p class="concept-muted mb-0">Activity timeline unavailable.</p>';
+        }
+
+        const starts = intervals.map((entry) => asFiniteNumber(entry.start, 0));
+        const ends = intervals.map((entry) => asFiniteNumber(entry.end, 0));
+        const minStart = Math.min(...starts);
+        const maxEnd = Math.max(...ends);
+        const range = Math.max(1, maxEnd - minStart);
+
+        const left = 96;
+        const right = 24;
+        const top = 28;
+        const rowHeight = 34;
+        const barHeight = 18;
+        const depth = 7;
+        const width = 560;
+        const height = Math.max(220, top + (intervals.length * rowHeight) + 20);
+        const chartWidth = width - left - right;
+
+        const bars = intervals
+            .map((entry, row) => {
+                const start = asFiniteNumber(entry.start, 0);
+                const end = asFiniteNumber(entry.end, start);
+                const x = left + (((start - minStart) / range) * chartWidth);
+                const w = Math.max(22, ((Math.max(start, end) - minStart) / range) * chartWidth - ((start - minStart) / range) * chartWidth);
+                const y = top + (row * rowHeight);
+                const isCurrent = row === currentRow;
+                const isSelected = selectedSet.has(row);
+                const front = isCurrent ? '#fde68a' : isSelected ? '#86efac' : '#dbeafe';
+                const topColor = isCurrent ? '#fef3c7' : isSelected ? '#bbf7d0' : '#eff6ff';
+                const side = isCurrent ? '#ca8a04' : isSelected ? '#16a34a' : '#2563eb';
+                const stroke = isCurrent ? '#92400e' : '#1e3a8a';
+                return `
+                    <g>
+                        <text x="18" y="${y + 13}" font-size="10.5" fill="#475569">A${entry.index + 1}</text>
+                        <text x="36" y="${y + 26}" font-size="10.5" fill="#64748b">[${formatNumber(start)}, ${formatNumber(end)})</text>
+                        <polygon points="${x},${y} ${x + depth},${y - depth} ${x + w + depth},${y - depth} ${x + w},${y}" fill="${topColor}"></polygon>
+                        <polygon points="${x + w},${y} ${x + w + depth},${y - depth} ${x + w + depth},${y + barHeight - depth} ${x + w},${y + barHeight}" fill="${side}" opacity="0.94"></polygon>
+                        <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" rx="7" fill="${front}" stroke="${stroke}" stroke-width="${isCurrent ? '2.1' : '1.3'}"></rect>
+                    </g>
+                `;
+            })
+            .join('');
+
+        return render3DScene(`
+            <line x1="${left}" y1="${height - 20}" x2="${width - right}" y2="${height - 20}" stroke="#94a3b8" stroke-width="1.2"></line>
+            <text x="${left}" y="${height - 6}" font-size="10.5" fill="#64748b">${formatNumber(minStart)}</text>
+            <text x="${width - right - 12}" y="${height - 6}" text-anchor="end" font-size="10.5" fill="#64748b">${formatNumber(maxEnd)}</text>
+            ${bars}
+        `, width, height, '3D activity selection timeline');
     }
 
     // Graphical renderer for arrays with animated cells
@@ -151,34 +545,56 @@
         if (!values.length) {
             return '<p class="concept-muted mb-0">Array unavailable.</p>';
         }
-        const width = Math.max(400, values.length * 50);
-        const height = 100;
-        const cellWidth = Math.min(50, (width - 40) / values.length);
-        const startX = 20;
-        const startY = 30;
+        let minVal = Math.min(...values);
+        let maxVal = Math.max(...values);
+        if (minVal === maxVal) {
+            minVal -= 1;
+            maxVal += 1;
+        }
+        const width = Math.max(440, values.length * 58);
+        const height = 188;
+        const chartTop = 28;
+        const chartBottom = 126;
+        const axisY = chartBottom + 12;
+        const barWidth = Math.min(36, ((width - 54) / Math.max(1, values.length)) - 8);
+        const gap = 14;
+        const left = 28;
+        const depth = 8;
 
-        const cells = values.map((value, idx) => {
-            const x = startX + (idx * (cellWidth + 4));
+        function scaleY(value) {
+            const ratio = (value - minVal) / (maxVal - minVal);
+            return chartBottom - (ratio * (chartBottom - chartTop));
+        }
+
+        const zeroY = (minVal <= 0 && maxVal >= 0) ? scaleY(0) : chartBottom;
+        const bars = values.map((value, idx) => {
+            const x = left + (idx * (barWidth + gap));
+            const yValue = scaleY(value);
+            const y = Math.min(yValue, zeroY);
+            const barHeight = Math.max(3, Math.abs(zeroY - yValue));
             const isHighlighted = highlightSet.has(idx);
             const isComparing = comparingSet.has(idx);
-            const fill = isComparing ? '#FCD34D' : isHighlighted ? '#86EFAC' : '#E2E8F0';
-            const strokeWidth = isComparing ? '2.8' : isHighlighted ? '2.4' : '1.6';
+            const front = isComparing ? '#fde68a' : isHighlighted ? '#86efac' : '#dbeafe';
+            const top = isComparing ? '#fef3c7' : isHighlighted ? '#bbf7d0' : '#eff6ff';
+            const side = isComparing ? '#ca8a04' : isHighlighted ? '#16a34a' : '#2563eb';
+            const stroke = isComparing ? '#92400e' : '#1e3a8a';
             return `
                 <g>
-                    <rect x="${x}" y="${startY}" width="${cellWidth}" height="40" fill="${fill}" stroke="#1E293B" stroke-width="${strokeWidth}" rx="4"></rect>
-                    <text x="${x + cellWidth / 2}" y="${startY + 24}" text-anchor="middle" font-size="13" font-weight="700" fill="#0F172A">${escapeHtml(formatNumber(value))}</text>
-                    <text x="${x + cellWidth / 2}" y="${startY + 48}" text-anchor="middle" font-size="10" fill="#64748B">[${idx}]</text>
+                    <polygon points="${x},${y} ${x + depth},${y - depth} ${x + barWidth + depth},${y - depth} ${x + barWidth},${y}" fill="${top}"></polygon>
+                    <polygon points="${x + barWidth},${y} ${x + barWidth + depth},${y - depth} ${x + barWidth + depth},${y + barHeight - depth} ${x + barWidth},${y + barHeight}" fill="${side}" opacity="0.95"></polygon>
+                    <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="6" fill="${front}" stroke="${stroke}" stroke-width="${isComparing ? '2.6' : '1.7'}"></rect>
+                    <text x="${x + (barWidth / 2)}" y="${axisY + 17}" text-anchor="middle" font-size="10.5" fill="#64748b">${idx}</text>
+                    <text x="${x + (barWidth / 2)}" y="${Math.max(18, y - 6)}" text-anchor="middle" font-size="10.5" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
                 </g>
             `;
         }).join('');
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Array visualization">
-                    ${cells}
-                </svg>
-            </div>
+        const axis = `
+            <line x1="${left - 8}" y1="${zeroY}" x2="${width - 20}" y2="${zeroY}" stroke="#94a3b8" stroke-width="1.4"></line>
+            <text x="${left - 12}" y="${zeroY - 6}" font-size="10" fill="#64748b">0</text>
         `;
+
+        return render3DScene(`${axis}${bars}`, width, height, '3D array bar visualization');
     }
 
     // Stack visualization (LIFO - Last In First Out)
@@ -257,16 +673,18 @@
         }
 
         // Calculate positions for binary tree
-        const nodeRadius = 24;
-        const levelHeight = 80;
+        const nodeWidth = 46;
+        const nodeHeight = 30;
+        const depth = 7;
+        const levelHeight = 84;
         const width = 500;
-        const height = Math.max(250, (Math.ceil(Math.log2(heapArray.length + 1)) + 1) * levelHeight);
+        const height = Math.max(260, (Math.ceil(Math.log2(heapArray.length + 1)) + 1) * levelHeight);
 
         function getNodePosition(index) {
             const level = Math.floor(Math.log2(index + 1));
             const positionInLevel = index - (Math.pow(2, level) - 1);
             const levelWidth = Math.pow(2, level) * 60;
-            const y = 30 + level * levelHeight;
+            const y = 34 + level * levelHeight;
             const x = (width - levelWidth) / 2 + positionInLevel * 60 + 30;
             return { x, y };
         }
@@ -282,7 +700,7 @@
             const parentPos = getNodePosition(parentIdx);
             const childPos = getNodePosition(i);
             edges.push(
-                `<line x1="${parentPos.x}" y1="${parentPos.y + nodeRadius}" x2="${childPos.x}" y2="${childPos.y - nodeRadius}" stroke="#94A3B8" stroke-width="1.6"></line>`
+                `<line x1="${parentPos.x + (nodeWidth / 2)}" y1="${parentPos.y + nodeHeight}" x2="${childPos.x + (nodeWidth / 2)}" y2="${childPos.y}" stroke="#94A3B8" stroke-width="1.6"></line>`
             );
         }
 
@@ -290,24 +708,22 @@
         const nodes = heapArray.map((value, idx) => {
             const pos = getNodePosition(idx);
             const isHighlighted = idx === highlightIndex;
-            const fill = isHighlighted ? '#86EFAC' : '#E2E8F0';
-            const strokeWidth = isHighlighted ? '2.4' : '1.6';
+            const fill = isHighlighted ? '#fde68a' : '#dbeafe';
+            const top = isHighlighted ? '#fef3c7' : '#eff6ff';
+            const side = isHighlighted ? '#ca8a04' : '#2563eb';
+            const stroke = isHighlighted ? '#92400e' : '#1e3a8a';
+            const strokeWidth = isHighlighted ? '2.4' : '1.5';
             return `
                 <g>
-                    <circle cx="${pos.x}" cy="${pos.y}" r="${nodeRadius}" fill="${fill}" stroke="#1E293B" stroke-width="${strokeWidth}"></circle>
-                    <text x="${pos.x}" y="${pos.y + 5}" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">${escapeHtml(formatNumber(value))}</text>
+                    <polygon points="${pos.x},${pos.y} ${pos.x + depth},${pos.y - depth} ${pos.x + nodeWidth + depth},${pos.y - depth} ${pos.x + nodeWidth},${pos.y}" fill="${top}"></polygon>
+                    <polygon points="${pos.x + nodeWidth},${pos.y} ${pos.x + nodeWidth + depth},${pos.y - depth} ${pos.x + nodeWidth + depth},${pos.y + nodeHeight - depth} ${pos.x + nodeWidth},${pos.y + nodeHeight}" fill="${side}" opacity="0.96"></polygon>
+                    <rect x="${pos.x}" y="${pos.y}" width="${nodeWidth}" height="${nodeHeight}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"></rect>
+                    <text x="${pos.x + (nodeWidth / 2)}" y="${pos.y + 20}" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">${escapeHtml(formatNumber(value))}</text>
                 </g>
             `;
         }).join('');
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Heap visualization">
-                    ${edges.join('')}
-                    ${nodes}
-                </svg>
-            </div>
-        `;
+        return render3DScene(`${edges.join('')}${nodes}`, width, height, '3D heap visualization');
     }
 
     // Hash table visualization with buckets
@@ -572,12 +988,13 @@
             minY -= 1;
             maxY += 1;
         }
-        const width = 470;
-        const height = 250;
-        const leftPad = 46;
-        const rightPad = 22;
-        const topPad = 18;
-        const bottomPad = 34;
+        const width = 500;
+        const height = 264;
+        const leftPad = 56;
+        const rightPad = 24;
+        const topPad = 24;
+        const bottomPad = 40;
+        const depth = 10;
 
         const scaleX = (x) => {
             const ratio = (x - minX) / (maxX - minX);
@@ -591,43 +1008,71 @@
         const lineStart = { x: minX, y: (slope * minX) + intercept };
         const lineEnd = { x: maxX, y: (slope * maxX) + intercept };
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Linear regression chart">
-                    <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="#94A3B8" stroke-width="1.4"></line>
-                    <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="#94A3B8" stroke-width="1.4"></line>
-                    ${showLine ? `<line x1="${scaleX(lineStart.x)}" y1="${scaleY(lineStart.y)}" x2="${scaleX(lineEnd.x)}" y2="${scaleY(lineEnd.y)}" stroke="#2563EB" stroke-width="2.4"></line>` : ''}
-                    ${points.map((point) => `
-                        <g>
-                            <circle cx="${scaleX(point.x)}" cy="${scaleY(point.y)}" r="${highlightSet.has(point.index) ? '6.4' : '4.8'}" fill="${highlightSet.has(point.index) ? '#10B981' : '#0EA5E9'}"></circle>
-                            <text x="${scaleX(point.x) + 8}" y="${scaleY(point.y) - 8}" font-size="11" fill="#334155">P${point.index + 1}</text>
-                        </g>
-                    `).join('')}
-                    ${showQuery ? `
-                        <line x1="${scaleX(queryX)}" y1="${height - bottomPad}" x2="${scaleX(queryX)}" y2="${scaleY(queryY)}" stroke="#9333EA" stroke-width="1.8" stroke-dasharray="5 4"></line>
-                        <circle cx="${scaleX(queryX)}" cy="${scaleY(queryY)}" r="6.2" fill="#9333EA"></circle>
-                        <text x="${scaleX(queryX) + 8}" y="${scaleY(queryY) - 9}" font-size="11" fill="#6D28D9">Query</text>
-                    ` : ''}
-                    <text x="${leftPad}" y="${height - 9}" font-size="11" fill="#64748B">x</text>
-                    <text x="${12}" y="${topPad + 2}" font-size="11" fill="#64748B">y</text>
-                </svg>
-            </div>
+        const floor = `
+            <polygon
+                points="${leftPad},${height - bottomPad} ${leftPad + depth},${height - bottomPad - depth} ${width - rightPad + depth},${height - bottomPad - depth} ${width - rightPad},${height - bottomPad}"
+                fill="#f1f5f9"
+                stroke="#cbd5e1"
+                stroke-width="1"
+            ></polygon>
         `;
+
+        const grid = Array.from({ length: 5 }, (_, idx) => {
+            const ratio = idx / 4;
+            const y = topPad + (ratio * (height - topPad - bottomPad));
+            return `<line x1="${leftPad}" y1="${y}" x2="${width - rightPad}" y2="${y}" stroke="#e2e8f0" stroke-width="1"></line>`;
+        }).join('');
+
+        const pointsSvg = points.map((point) => {
+            const cx = scaleX(point.x);
+            const cy = scaleY(point.y);
+            const active = highlightSet.has(point.index);
+            const radius = active ? 7 : 5.2;
+            const fill = active ? '#34d399' : '#38bdf8';
+            const side = active ? '#059669' : '#0284c7';
+            return `
+                <g>
+                    <circle cx="${cx + (depth * 0.35)}" cy="${cy - (depth * 0.35)}" r="${radius}" fill="${side}" opacity="0.94"></circle>
+                    <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="#0f172a" stroke-width="${active ? '1.6' : '1.2'}"></circle>
+                    <text x="${cx + 9}" y="${cy - 10}" font-size="11" fill="#334155">P${point.index + 1}</text>
+                </g>
+            `;
+        }).join('');
+
+        return render3DScene(`
+            ${floor}
+            ${grid}
+            <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.7"></line>
+            <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.7"></line>
+            ${showLine ? `
+                <line x1="${scaleX(lineStart.x)}" y1="${scaleY(lineStart.y)}" x2="${scaleX(lineEnd.x)}" y2="${scaleY(lineEnd.y)}" stroke="#bfdbfe" stroke-width="5" opacity="0.42"></line>
+                <line x1="${scaleX(lineStart.x)}" y1="${scaleY(lineStart.y)}" x2="${scaleX(lineEnd.x)}" y2="${scaleY(lineEnd.y)}" stroke="#2563eb" stroke-width="2.7"></line>
+            ` : ''}
+            ${pointsSvg}
+            ${showQuery ? `
+                <line x1="${scaleX(queryX)}" y1="${height - bottomPad}" x2="${scaleX(queryX)}" y2="${scaleY(queryY)}" stroke="#9333ea" stroke-width="1.8" stroke-dasharray="5 4"></line>
+                <circle cx="${scaleX(queryX)}" cy="${scaleY(queryY)}" r="6.7" fill="#c084fc" stroke="#6b21a8" stroke-width="1.4"></circle>
+                <text x="${scaleX(queryX) + 10}" y="${scaleY(queryY) - 10}" font-size="11" fill="#6d28d9">Query</text>
+            ` : ''}
+            <text x="${leftPad}" y="${height - 10}" font-size="11" fill="#64748b">x</text>
+            <text x="16" y="${topPad + 2}" font-size="11" fill="#64748b">y</text>
+        `, width, height, '3D linear regression chart');
     }
 
     function renderLogisticCurve(z, options = {}) {
         const showPoint = options.showPoint === true;
         const probability = 1 / (1 + Math.exp(-z));
-        const width = 470;
-        const height = 240;
-        const leftPad = 40;
-        const rightPad = 20;
-        const topPad = 20;
-        const bottomPad = 28;
+        const width = 500;
+        const height = 252;
+        const leftPad = 48;
+        const rightPad = 22;
+        const topPad = 22;
+        const bottomPad = 34;
         const minX = -6;
         const maxX = 6;
         const minY = 0;
         const maxY = 1;
+        const depth = 10;
 
         const scaleX = (x) => leftPad + (((x - minX) / (maxX - minX)) * (width - leftPad - rightPad));
         const scaleY = (y) => height - bottomPad - (((y - minY) / (maxY - minY)) * (height - topPad - bottomPad));
@@ -638,33 +1083,37 @@
             curvePath.push(`${scaleX(x)} ${scaleY(y)}`);
         }
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Sigmoid curve">
-                    <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="#94A3B8" stroke-width="1.3"></line>
-                    <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="#94A3B8" stroke-width="1.3"></line>
-                    <polyline points="${curvePath.join(' ')}" fill="none" stroke="#2563EB" stroke-width="2.4"></polyline>
-                    <line x1="${scaleX(0)}" y1="${topPad}" x2="${scaleX(0)}" y2="${height - bottomPad}" stroke="#CBD5E1" stroke-width="1" stroke-dasharray="4 4"></line>
-                    <line x1="${leftPad}" y1="${scaleY(0.5)}" x2="${width - rightPad}" y2="${scaleY(0.5)}" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="4 4"></line>
-                    ${showPoint ? `
-                        <line x1="${scaleX(z)}" y1="${height - bottomPad}" x2="${scaleX(z)}" y2="${scaleY(probability)}" stroke="#9333EA" stroke-width="1.8" stroke-dasharray="5 4"></line>
-                        <circle cx="${scaleX(z)}" cy="${scaleY(probability)}" r="6.2" fill="#9333EA"></circle>
-                        <text x="${scaleX(z) + 8}" y="${scaleY(probability) - 8}" font-size="11" fill="#6D28D9">sigma(z)</text>
-                    ` : ''}
-                    <text x="${leftPad}" y="${height - 8}" font-size="11" fill="#64748B">z</text>
-                    <text x="${10}" y="${topPad + 2}" font-size="11" fill="#64748B">p</text>
-                </svg>
-            </div>
-        `;
+        return render3DScene(`
+            <polygon
+                points="${leftPad},${height - bottomPad} ${leftPad + depth},${height - bottomPad - depth} ${width - rightPad + depth},${height - bottomPad - depth} ${width - rightPad},${height - bottomPad}"
+                fill="#f1f5f9"
+                stroke="#cbd5e1"
+                stroke-width="1"
+            ></polygon>
+            <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.6"></line>
+            <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.6"></line>
+            <polyline points="${curvePath.join(' ')}" fill="none" stroke="#bfdbfe" stroke-width="5" opacity="0.5"></polyline>
+            <polyline points="${curvePath.join(' ')}" fill="none" stroke="#2563eb" stroke-width="2.7"></polyline>
+            <line x1="${scaleX(0)}" y1="${topPad}" x2="${scaleX(0)}" y2="${height - bottomPad}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"></line>
+            <line x1="${leftPad}" y1="${scaleY(0.5)}" x2="${width - rightPad}" y2="${scaleY(0.5)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"></line>
+            ${showPoint ? `
+                <line x1="${scaleX(z)}" y1="${height - bottomPad}" x2="${scaleX(z)}" y2="${scaleY(probability)}" stroke="#9333ea" stroke-width="1.8" stroke-dasharray="5 4"></line>
+                <circle cx="${scaleX(z)}" cy="${scaleY(probability)}" r="6.6" fill="#d8b4fe" stroke="#6b21a8" stroke-width="1.3"></circle>
+                <text x="${scaleX(z) + 8}" y="${scaleY(probability) - 9}" font-size="11" fill="#6d28d9">sigma(z)</text>
+            ` : ''}
+            <text x="${leftPad}" y="${height - 10}" font-size="11" fill="#64748b">z</text>
+            <text x="14" y="${topPad + 2}" font-size="11" fill="#64748b">p</text>
+        `, width, height, '3D sigmoid curve');
     }
 
     function renderOneDimClusterPlot(points, centroids, assignments = [], options = {}) {
         const currentIndex = Number.isInteger(options.currentIndex) ? options.currentIndex : null;
-        const width = 520;
-        const height = 168;
-        const leftPad = 30;
-        const rightPad = 24;
-        const axisY = 108;
+        const width = 540;
+        const height = 186;
+        const leftPad = 34;
+        const rightPad = 26;
+        const axisY = 118;
+        const depth = 8;
         const allValues = points.concat(centroids).filter((value) => Number.isFinite(value));
         let minValue = Math.min(...allValues);
         let maxValue = Math.max(...allValues);
@@ -675,38 +1124,54 @@
         const scaleX = (value) => leftPad + (((value - minValue) / (maxValue - minValue)) * (width - leftPad - rightPad));
 
         function clusterColor(clusterIndex) {
-            if (clusterIndex === 0) return '#2563EB';
-            if (clusterIndex === 1) return '#F97316';
-            return '#94A3B8';
+            if (clusterIndex === 0) return { top: '#93c5fd', side: '#2563eb', stroke: '#1d4ed8' };
+            if (clusterIndex === 1) return { top: '#fdba74', side: '#ea580c', stroke: '#c2410c' };
+            return { top: '#cbd5e1', side: '#64748b', stroke: '#475569' };
         }
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="K-means 1D plot">
-                    <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="#64748B" stroke-width="1.8"></line>
-                    ${points.map((value, idx) => `
-                        <g>
-                            <circle cx="${scaleX(value)}" cy="${axisY}" r="${idx === currentIndex ? '7.2' : '5.1'}" fill="${clusterColor(assignments[idx])}" stroke="#0F172A" stroke-width="${idx === currentIndex ? '1.8' : '1.1'}"></circle>
-                            <text x="${scaleX(value)}" y="${axisY + 20}" text-anchor="middle" font-size="10.5" fill="#334155">${formatNumber(value)}</text>
-                        </g>
-                    `).join('')}
-                    ${centroids.map((value, idx) => `
-                        <g>
-                            <path d="M ${scaleX(value)} ${axisY - 26} l -8 12 h 16 z" fill="${idx === 0 ? '#1D4ED8' : '#EA580C'}"></path>
-                            <text x="${scaleX(value)}" y="${axisY - 32}" text-anchor="middle" font-size="11" fill="#1E293B">C${idx + 1}</text>
-                        </g>
-                    `).join('')}
-                </svg>
-            </div>
-        `;
+        const pointMarks = points.map((value, idx) => {
+            const x = scaleX(value);
+            const palette = clusterColor(assignments[idx]);
+            const r = idx === currentIndex ? 7.4 : 5.4;
+            return `
+                <g>
+                    <circle cx="${x + (depth * 0.42)}" cy="${axisY - (depth * 0.42)}" r="${r}" fill="${palette.side}" opacity="0.95"></circle>
+                    <circle cx="${x}" cy="${axisY}" r="${r}" fill="${palette.top}" stroke="${idx === currentIndex ? '#0f172a' : palette.stroke}" stroke-width="${idx === currentIndex ? '1.8' : '1.1'}"></circle>
+                    <text x="${x}" y="${axisY + 22}" text-anchor="middle" font-size="10.5" fill="#334155">${formatNumber(value)}</text>
+                </g>
+            `;
+        }).join('');
+
+        const centroidMarks = centroids.map((value, idx) => {
+            const x = scaleX(value);
+            const front = idx === 0 ? '#bfdbfe' : '#fed7aa';
+            const side = idx === 0 ? '#2563eb' : '#ea580c';
+            const stroke = idx === 0 ? '#1d4ed8' : '#c2410c';
+            return `
+                <g>
+                    <polygon points="${x - 7},${axisY - 30} ${x + 4},${axisY - 38} ${x + 18},${axisY - 38} ${x + 7},${axisY - 30}" fill="${front}" stroke="${stroke}" stroke-width="1"></polygon>
+                    <polygon points="${x + 7},${axisY - 30} ${x + 18},${axisY - 38} ${x + 18},${axisY - 18} ${x + 7},${axisY - 10}" fill="${side}" opacity="0.9"></polygon>
+                    <rect x="${x - 7}" y="${axisY - 30}" width="14" height="20" rx="3" fill="${front}" stroke="${stroke}" stroke-width="1.4"></rect>
+                    <text x="${x + 21}" y="${axisY - 31}" font-size="11" fill="#334155">C${idx + 1}</text>
+                </g>
+            `;
+        }).join('');
+
+        return render3DScene(`
+            <polygon points="${leftPad},${axisY} ${leftPad + depth},${axisY - depth} ${width - rightPad + depth},${axisY - depth} ${width - rightPad},${axisY}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"></polygon>
+            <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="#475569" stroke-width="2"></line>
+            ${pointMarks}
+            ${centroidMarks}
+        `, width, height, '3D K-means 1D plot');
     }
 
     function renderKnnPlot(train, queryX, consideredSet = new Set(), topSet = new Set()) {
-        const width = 520;
-        const height = 190;
-        const leftPad = 30;
-        const rightPad = 24;
-        const axisY = 116;
+        const width = 540;
+        const height = 206;
+        const leftPad = 34;
+        const rightPad = 26;
+        const axisY = 124;
+        const depth = 8;
         const values = train.map((row) => row.x).concat([queryX]);
         let minValue = Math.min(...values);
         let maxValue = Math.max(...values);
@@ -716,107 +1181,131 @@
         }
         const scaleX = (value) => leftPad + (((value - minValue) / (maxValue - minValue)) * (width - leftPad - rightPad));
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="KNN neighbor plot">
-                    <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="#64748B" stroke-width="1.8"></line>
-                    ${train.map((row) => `
-                        <g>
-                            <circle cx="${scaleX(row.x)}" cy="${axisY}" r="${topSet.has(row.index) ? '7.4' : '5.2'}" fill="${row.label === 'A' ? '#2563EB' : '#F97316'}" stroke="${consideredSet.has(row.index) ? '#0F172A' : 'transparent'}" stroke-width="1.8"></circle>
-                            <text x="${scaleX(row.x)}" y="${axisY + 20}" text-anchor="middle" font-size="10.5" fill="#334155">${formatNumber(row.x)}</text>
-                            <text x="${scaleX(row.x)}" y="${axisY - 13}" text-anchor="middle" font-size="10.5" fill="#334155">${row.label}</text>
-                        </g>
-                    `).join('')}
-                    <g>
-                        <path d="M ${scaleX(queryX)} ${axisY - 20} l 8 8 l -8 8 l -8 -8 z" fill="#9333EA"></path>
-                        <text x="${scaleX(queryX)}" y="${axisY - 29}" text-anchor="middle" font-size="11" fill="#6D28D9">Query</text>
-                    </g>
-                </svg>
-            </div>
-        `;
+        const pointMarks = train.map((row) => {
+            const x = scaleX(row.x);
+            const isTop = topSet.has(row.index);
+            const side = row.label === 'A' ? '#1d4ed8' : '#c2410c';
+            const top = row.label === 'A' ? '#93c5fd' : '#fdba74';
+            const stroke = consideredSet.has(row.index) ? '#0f172a' : 'transparent';
+            return `
+                <g>
+                    <circle cx="${x + (depth * 0.42)}" cy="${axisY - (depth * 0.42)}" r="${isTop ? '7.7' : '5.6'}" fill="${side}" opacity="0.95"></circle>
+                    <circle cx="${x}" cy="${axisY}" r="${isTop ? '7.7' : '5.6'}" fill="${top}" stroke="${stroke}" stroke-width="${consideredSet.has(row.index) ? '1.8' : '0'}"></circle>
+                    <text x="${x}" y="${axisY + 21}" text-anchor="middle" font-size="10.5" fill="#334155">${formatNumber(row.x)}</text>
+                    <text x="${x}" y="${axisY - 13}" text-anchor="middle" font-size="10.5" fill="#334155">${row.label}</text>
+                </g>
+            `;
+        }).join('');
+
+        return render3DScene(`
+            <polygon points="${leftPad},${axisY} ${leftPad + depth},${axisY - depth} ${width - rightPad + depth},${axisY - depth} ${width - rightPad},${axisY}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"></polygon>
+            <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="#475569" stroke-width="2"></line>
+            ${pointMarks}
+            <g>
+                <path d="M ${scaleX(queryX)} ${axisY - 22} l 9 9 l -9 9 l -9 -9 z" fill="#d8b4fe" stroke="#6b21a8" stroke-width="1.3"></path>
+                <text x="${scaleX(queryX)}" y="${axisY - 33}" text-anchor="middle" font-size="11" fill="#6d28d9">Query</text>
+            </g>
+        `, width, height, '3D KNN neighbor plot');
     }
 
     function renderEntropyBars(positive, negative, pPos, pNeg) {
-        const width = 430;
-        const height = 220;
-        const chartBaseY = 182;
-        const barWidth = 64;
-        const gap = 88;
-        const firstX = 118;
+        const width = 450;
+        const height = 232;
+        const chartBaseY = 188;
+        const barWidth = 66;
+        const gap = 92;
+        const firstX = 120;
         const secondX = firstX + barWidth + gap;
-        const maxBarHeight = 130;
+        const maxBarHeight = 132;
+        const depth = 9;
         const posH = Math.max(2, pPos * maxBarHeight);
         const negH = Math.max(2, pNeg * maxBarHeight);
 
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Class distribution">
-                    <line x1="62" y1="${chartBaseY}" x2="362" y2="${chartBaseY}" stroke="#64748B" stroke-width="1.6"></line>
-                    <rect x="${firstX}" y="${chartBaseY - posH}" width="${barWidth}" height="${posH}" rx="8" fill="#22C55E"></rect>
-                    <rect x="${secondX}" y="${chartBaseY - negH}" width="${barWidth}" height="${negH}" rx="8" fill="#F97316"></rect>
-                    <text x="${firstX + (barWidth / 2)}" y="${chartBaseY + 18}" text-anchor="middle" font-size="12" fill="#334155">Positive</text>
-                    <text x="${secondX + (barWidth / 2)}" y="${chartBaseY + 18}" text-anchor="middle" font-size="12" fill="#334155">Negative</text>
-                    <text x="${firstX + (barWidth / 2)}" y="${chartBaseY - posH - 8}" text-anchor="middle" font-size="12" fill="#166534">${formatNumber(pPos, 3, true)}</text>
-                    <text x="${secondX + (barWidth / 2)}" y="${chartBaseY - negH - 8}" text-anchor="middle" font-size="12" fill="#9A3412">${formatNumber(pNeg, 3, true)}</text>
-                    <text x="12" y="24" font-size="11" fill="#64748B">counts: +${formatNumber(positive)}, -${formatNumber(negative)}</text>
-                </svg>
-            </div>
-        `;
+        function bar3D(x, h, front, side, top, label, valueColor, valueText) {
+            return `
+                <g>
+                    <polygon points="${x},${chartBaseY - h} ${x + depth},${chartBaseY - h - depth} ${x + barWidth + depth},${chartBaseY - h - depth} ${x + barWidth},${chartBaseY - h}" fill="${top}"></polygon>
+                    <polygon points="${x + barWidth},${chartBaseY - h} ${x + barWidth + depth},${chartBaseY - h - depth} ${x + barWidth + depth},${chartBaseY - depth} ${x + barWidth},${chartBaseY}" fill="${side}" opacity="0.92"></polygon>
+                    <rect x="${x}" y="${chartBaseY - h}" width="${barWidth}" height="${h}" rx="8" fill="${front}" stroke="#334155" stroke-width="1.1"></rect>
+                    <text x="${x + (barWidth / 2)}" y="${chartBaseY + 18}" text-anchor="middle" font-size="12" fill="#334155">${label}</text>
+                    <text x="${x + (barWidth / 2)}" y="${chartBaseY - h - 10}" text-anchor="middle" font-size="12" fill="${valueColor}">${valueText}</text>
+                </g>
+            `;
+        }
+
+        return render3DScene(`
+            <polygon points="62,${chartBaseY} 71,${chartBaseY - depth} 370,${chartBaseY - depth} 362,${chartBaseY}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"></polygon>
+            <line x1="62" y1="${chartBaseY}" x2="362" y2="${chartBaseY}" stroke="#475569" stroke-width="1.8"></line>
+            ${bar3D(firstX, posH, '#86efac', '#16a34a', '#bbf7d0', 'Positive', '#166534', formatNumber(pPos, 3, true))}
+            ${bar3D(secondX, negH, '#fdba74', '#ea580c', '#fed7aa', 'Negative', '#9a3412', formatNumber(pNeg, 3, true))}
+            <text x="12" y="24" font-size="11" fill="#64748b">counts: +${formatNumber(positive)}, -${formatNumber(negative)}</text>
+        `, width, height, '3D class distribution');
     }
 
     function renderScoreBars(spamScore, hamScore) {
+        const width = 500;
+        const height = 190;
+        const trackX = 116;
+        const trackWidth = 292;
+        const trackHeight = 18;
+        const topY = 58;
+        const rowGap = 58;
+        const depth = 7;
         const maxScore = Math.max(spamScore, hamScore, 1e-9);
-        const spamWidth = (spamScore / maxScore) * 100;
-        const hamWidth = (hamScore / maxScore) * 100;
-        return `
-            <div class="exec-score-bars">
-                <div class="exec-score-row">
-                    <span class="exec-score-label">Spam</span>
-                    <span class="exec-score-track">
-                        <span class="exec-score-fill spam" style="width:${spamWidth}%;"></span>
-                    </span>
-                    <span class="exec-score-value">${formatNumber(spamScore, 6, true)}</span>
-                </div>
-                <div class="exec-score-row">
-                    <span class="exec-score-label">Ham</span>
-                    <span class="exec-score-track">
-                        <span class="exec-score-fill ham" style="width:${hamWidth}%;"></span>
-                    </span>
-                    <span class="exec-score-value">${formatNumber(hamScore, 6, true)}</span>
-                </div>
-            </div>
-        `;
+        const spamWidth = Math.max(8, (spamScore / maxScore) * trackWidth);
+        const hamWidth = Math.max(8, (hamScore / maxScore) * trackWidth);
+
+        function scoreRow(label, y, widthValue, front, side, top, score) {
+            return `
+                <g>
+                    <text x="32" y="${y + 12}" font-size="12" fill="#334155">${label}</text>
+                    <rect x="${trackX}" y="${y}" width="${trackWidth}" height="${trackHeight}" rx="8" fill="#e2e8f0"></rect>
+                    <polygon points="${trackX},${y} ${trackX + depth},${y - depth} ${trackX + widthValue + depth},${y - depth} ${trackX + widthValue},${y}" fill="${top}"></polygon>
+                    <polygon points="${trackX + widthValue},${y} ${trackX + widthValue + depth},${y - depth} ${trackX + widthValue + depth},${y + trackHeight - depth} ${trackX + widthValue},${y + trackHeight}" fill="${side}" opacity="0.9"></polygon>
+                    <rect x="${trackX}" y="${y}" width="${widthValue}" height="${trackHeight}" rx="8" fill="${front}"></rect>
+                    <text x="${trackX + trackWidth + 14}" y="${y + 12}" font-size="12" fill="#0f172a">${formatNumber(score, 6, true)}</text>
+                </g>
+            `;
+        }
+
+        return render3DScene(`
+            ${scoreRow('Spam', topY, spamWidth, '#fda4af', '#e11d48', '#fecdd3', spamScore)}
+            ${scoreRow('Ham', topY + rowGap, hamWidth, '#93c5fd', '#2563eb', '#bfdbfe', hamScore)}
+        `, width, height, '3D posterior score bars');
     }
 
     function renderNeuronDiagram(x1, x2, w1, w2, b, z, output, stage = 'input') {
-        const w1Stroke = stage === 'term1' || stage === 'linear' || stage === 'output' ? '#2563EB' : '#94A3B8';
-        const w2Stroke = stage === 'term2' || stage === 'linear' || stage === 'output' ? '#10B981' : '#94A3B8';
-        const zStroke = stage === 'linear' || stage === 'output' ? '#F97316' : '#94A3B8';
-        const outStroke = stage === 'output' ? '#9333EA' : '#94A3B8';
-        return `
-            <div class="exec-diagram-wrap">
-                <svg class="exec-svg" viewBox="0 0 500 210" role="img" aria-label="Single neuron network">
-                    <line x1="122" y1="64" x2="250" y2="102" stroke="${w1Stroke}" stroke-width="2.4"></line>
-                    <line x1="122" y1="146" x2="250" y2="102" stroke="${w2Stroke}" stroke-width="2.4"></line>
-                    <line x1="286" y1="102" x2="390" y2="102" stroke="${outStroke}" stroke-width="2.4"></line>
+        const w1Stroke = stage === 'term1' || stage === 'linear' || stage === 'output' ? '#2563eb' : '#94a3b8';
+        const w2Stroke = stage === 'term2' || stage === 'linear' || stage === 'output' ? '#10b981' : '#94a3b8';
+        const zStroke = stage === 'linear' || stage === 'output' ? '#f97316' : '#94a3b8';
+        const outStroke = stage === 'output' ? '#9333ea' : '#94a3b8';
+        const width = 520;
+        const height = 224;
+        const depth = 8;
 
-                    <circle cx="92" cy="64" r="24" fill="#DBEAFE" stroke="#1E3A8A" stroke-width="1.8"></circle>
-                    <circle cx="92" cy="146" r="24" fill="#DCFCE7" stroke="#166534" stroke-width="1.8"></circle>
-                    <circle cx="268" cy="102" r="30" fill="#FFEDD5" stroke="${zStroke}" stroke-width="2.1"></circle>
-                    <circle cx="414" cy="102" r="28" fill="#F3E8FF" stroke="${outStroke}" stroke-width="2.1"></circle>
+        function nodeBubble(cx, cy, r, front, side, stroke, label, fontSize) {
+            return `
+                <g>
+                    <circle cx="${cx + (depth * 0.45)}" cy="${cy - (depth * 0.45)}" r="${r}" fill="${side}" opacity="0.95"></circle>
+                    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${front}" stroke="${stroke}" stroke-width="1.8"></circle>
+                    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#0f172a">${label}</text>
+                </g>
+            `;
+        }
 
-                    <text x="92" y="64" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#0F172A">x1=${formatNumber(x1)}</text>
-                    <text x="92" y="146" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#0F172A">x2=${formatNumber(x2)}</text>
-                    <text x="268" y="102" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#0F172A">z=${formatNumber(z, 3, true)}</text>
-                    <text x="414" y="102" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#0F172A">${formatNumber(output, 3, true)}</text>
-
-                    <text x="168" y="74" font-size="11" fill="#1D4ED8">w1=${formatNumber(w1, 3, true)}</text>
-                    <text x="168" y="144" font-size="11" fill="#047857">w2=${formatNumber(w2, 3, true)}</text>
-                    <text x="236" y="52" font-size="11" fill="#9A3412">b=${formatNumber(b, 3, true)}</text>
-                    <text x="396" y="64" font-size="11" fill="#6D28D9">sigma(z)</text>
-                </svg>
-            </div>
-        `;
+        return render3DScene(`
+            <line x1="126" y1="68" x2="262" y2="106" stroke="${w1Stroke}" stroke-width="2.6"></line>
+            <line x1="126" y1="152" x2="262" y2="106" stroke="${w2Stroke}" stroke-width="2.6"></line>
+            <line x1="302" y1="106" x2="410" y2="106" stroke="${outStroke}" stroke-width="2.6"></line>
+            ${nodeBubble(94, 68, 25, '#dbeafe', '#2563eb', '#1d4ed8', `x1=${formatNumber(x1)}`, 12)}
+            ${nodeBubble(94, 152, 25, '#dcfce7', '#10b981', '#15803d', `x2=${formatNumber(x2)}`, 12)}
+            ${nodeBubble(278, 106, 31, '#ffedd5', '#f97316', zStroke, `z=${formatNumber(z, 3, true)}`, 11)}
+            ${nodeBubble(430, 106, 29, '#f3e8ff', '#a855f7', outStroke, `${formatNumber(output, 3, true)}`, 11)}
+            <text x="172" y="78" font-size="11" fill="#1d4ed8">w1=${formatNumber(w1, 3, true)}</text>
+            <text x="172" y="148" font-size="11" fill="#047857">w2=${formatNumber(w2, 3, true)}</text>
+            <text x="242" y="54" font-size="11" fill="#9a3412">b=${formatNumber(b, 3, true)}</text>
+            <text x="412" y="66" font-size="11" fill="#6d28d9">sigma(z)</text>
+        `, width, height, '3D single neuron network');
     }
 
     function buildVisualizationPrompt(algorithmType, payload) {
@@ -1020,14 +1509,13 @@
             end: ends[idx],
         }));
         const sorted = intervals.slice().sort((a, b) => (a.end - b.end) || (a.start - b.start));
+        const selectedRows = new Set();
         const steps = [
             makeStep(
                 'Sort by Finish Time',
                 'Greedy starts by earliest finishing activity.',
                 `
-                    <div class="exec-list">
-                        ${sorted.map((item) => `<div class="exec-list-row">A${item.index + 1}: [${item.start}, ${item.end})</div>`).join('')}
-                    </div>
+                    ${renderActivityTimeline3D(sorted, selectedRows, -1)}
                 `,
                 '<code>Sort activities by end ascending</code>'
             ),
@@ -1035,10 +1523,11 @@
 
         const selected = [];
         let lastEnd = -Infinity;
-        sorted.forEach((item) => {
+        sorted.forEach((item, rowIdx) => {
             const compatible = item.start >= lastEnd;
             if (compatible) {
                 selected.push(item);
+                selectedRows.add(rowIdx);
                 lastEnd = item.end;
             }
             steps.push(
@@ -1048,11 +1537,8 @@
                         ? `Compatible (${item.start} >= ${selected.length > 1 ? selected[selected.length - 2].end : '-inf'}), select it.`
                         : `Overlaps with last selected finish (${lastEnd}), skip.`,
                     `
-                        <div class="exec-list">
-                            ${selected.length
-                                ? selected.map((it) => `<div class="exec-list-row active">A${it.index + 1}: [${it.start}, ${it.end})</div>`).join('')
-                                : '<div class="concept-muted">No selected activity yet.</div>'}
-                        </div>
+                        ${renderActivityTimeline3D(sorted, selectedRows, rowIdx)}
+                        <div class="exec-summary">Selected: [${selected.map((it) => `A${it.index + 1}`).join(', ') || '-'}]</div>
                     `,
                     `<code>Select if start >= last_end</code>`
                 )
@@ -1064,9 +1550,8 @@
                 'Final Answer',
                 `Maximum non-overlapping activities selected: ${selected.length}.`,
                 `
-                    <div class="exec-list">
-                        ${selected.map((it) => `<div class="exec-list-row active">A${it.index + 1}: [${it.start}, ${it.end})</div>`).join('')}
-                    </div>
+                    ${renderActivityTimeline3D(sorted, selectedRows, -1)}
+                    <div class="exec-summary">Chosen activities: [${selected.map((it) => `A${it.index + 1}`).join(', ') || '-'}]</div>
                 `,
                 '<code>Greedy by earliest finish gives optimal count</code>'
             )
@@ -1096,30 +1581,34 @@
             }
         }
 
-        function dfs(index, sum, chosen) {
+        function dfs(index, sum, chosenIndices) {
             if (steps.length >= stepLimit) {
                 return;
             }
+            const chosenValues = chosenIndices.map((entry) => values[entry]);
 
             pushStep(
                 makeStep(
                     `Explore index ${index}`,
-                    `Current subset [${chosen.join(', ')}], sum=${sum}.`,
+                    `Current subset [${chosenValues.join(', ')}], sum=${sum}.`,
                     `
-                        ${renderIndexedStrip(values, new Set(chosen.map((v) => values.indexOf(v))))}
-                        <div class="exec-summary">Chosen: [${chosen.join(', ')}] | Sum: ${sum} | Target: ${target}</div>
+                        ${renderIndexedStrip3D(values, new Set(chosenIndices), index < values.length ? new Set([index]) : new Set())}
+                        <div class="exec-summary">Chosen: [${chosenValues.join(', ')}] | Sum: ${sum} | Target: ${target}</div>
                     `,
                     '<code>branch(i, sum) => include(values[i]) or exclude(values[i])</code>'
                 )
             );
 
             if (sum === target) {
-                validKeys.add(chosen.slice().sort((a, b) => a - b).join(','));
+                validKeys.add(chosenValues.slice().sort((a, b) => a - b).join(','));
                 pushStep(
                     makeStep(
                         'Valid subset found',
-                        `[${chosen.join(', ')}] hits target ${target}.`,
-                        `<div class="exec-summary success">Valid subsets found: ${validKeys.size}</div>`,
+                        `[${chosenValues.join(', ')}] hits target ${target}.`,
+                        `
+                            ${renderIndexedStrip3D(values, new Set(chosenIndices), new Set(chosenIndices))}
+                            <div class="exec-summary success">Valid subsets found: ${validKeys.size}</div>
+                        `,
                         '<code>if sum == target: count += 1</code>'
                     )
                 );
@@ -1129,8 +1618,8 @@
                 return;
             }
 
-            dfs(index + 1, sum + values[index], chosen.concat(values[index]));
-            dfs(index + 1, sum, chosen);
+            dfs(index + 1, sum + values[index], chosenIndices.concat(index));
+            dfs(index + 1, sum, chosenIndices);
         }
 
         dfs(0, 0, []);
@@ -1138,7 +1627,10 @@
             makeStep(
                 'Final Answer',
                 `Unique valid subsets counted: ${validKeys.size}.`,
-                `<div class="exec-summary">Total valid subsets: ${validKeys.size}</div>`,
+                `
+                    ${renderIndexedStrip3D(values)}
+                    <div class="exec-summary">Total valid subsets: ${validKeys.size}</div>
+                `,
                 '<code>Count all unique subsets with sum == target</code>'
             )
         );
@@ -1160,7 +1652,10 @@
             makeStep(
                 'Base Cases',
                 'Start with F0=0 and F1=1.',
-                `<div class="exec-summary">Sequence: [0, 1]</div>`,
+                `
+                    ${renderIndexedStrip3D([0, 1], new Set([0, 1]))}
+                    <div class="exec-summary">Sequence: [0, 1]</div>
+                `,
                 '<code>F(0)=0, F(1)=1</code>'
             ),
         ];
@@ -1172,7 +1667,7 @@
                 makeStep(
                     `Compute F${i}`,
                     `F${i} = F${i - 1} + F${i - 2} = ${seq[i - 1]} + ${seq[i - 2]} = ${next}`,
-                    renderIndexedStrip(seq, new Set([i])),
+                    renderIndexedStrip3D(seq, new Set([i - 1, i - 2]), new Set([i])),
                     `<code>F(${i}) = F(${i - 1}) + F(${i - 2})</code>`
                 )
             );
@@ -1181,7 +1676,7 @@
             makeStep(
                 'Final Answer',
                 `F${n} = ${seq[n]}`,
-                renderIndexedStrip(seq, new Set([n])),
+                renderIndexedStrip3D(seq, new Set([n]), new Set([n])),
                 '<code>Answer is final sequence element</code>'
             )
         );
@@ -1207,7 +1702,10 @@
                     makeStep(
                         'Special Case',
                         'Decimal 0 directly maps to binary 0.',
-                        '<div class="exec-summary">Binary: 0</div>',
+                        `
+                            ${renderIndexedStrip3D([0], new Set([0]), new Set([0]), 'bit')}
+                            <div class="exec-summary">Binary: 0</div>
+                        `,
                         '<code>0 -> 0</code>'
                     ),
                 ],
@@ -1225,18 +1723,25 @@
                 makeStep(
                     `Divide ${current} by 2`,
                     `Quotient=${quotient}, remainder=${remainder}.`,
-                    `<div class="exec-summary">Remainders so far (LSB->MSB): [${remainders.join(', ')}]</div>`,
+                    `
+                        ${renderIndexedStrip3D(remainders, new Set([remainders.length - 1]), new Set(), 'bit')}
+                        <div class="exec-summary">Remainders so far (LSB->MSB): [${remainders.join(', ')}]</div>
+                    `,
                     `<code>${current} = 2 * ${quotient} + ${remainder}</code>`
                 )
             );
             current = quotient;
         }
         const binary = remainders.slice().reverse().join('');
+        const finalBits = remainders.slice().reverse();
         steps.push(
             makeStep(
                 'Reverse remainders',
                 `Binary result is ${binary}.`,
-                `<div class="exec-summary success">Binary: ${binary}</div>`,
+                `
+                    ${renderIndexedStrip3D(finalBits, new Set(Array.from({ length: finalBits.length }, (_, idx) => idx)), new Set([0]), 'bit')}
+                    <div class="exec-summary success">Binary: ${binary}</div>
+                `,
                 '<code>Read remainders in reverse order</code>'
             )
         );
@@ -1259,7 +1764,10 @@
             makeStep(
                 'Initialize',
                 `Find gcd(${a}, ${b}) using Euclid algorithm.`,
-                `<div class="exec-summary">Start: a=${a}, b=${b}</div>`,
+                `
+                    ${renderEuclidState3D(a, b)}
+                    <div class="exec-summary">Start: a=${a}, b=${b}</div>
+                `,
                 '<code>while b != 0: (a, b) = (b, a % b)</code>'
             ),
         ];
@@ -1270,7 +1778,10 @@
                 makeStep(
                     `Euclid Step`,
                     `a=${a}, b=${b}, remainder=${r}`,
-                    `<div class="exec-summary">Next pair: (${b}, ${r})</div>`,
+                    `
+                        ${renderEuclidState3D(a, b, r)}
+                        <div class="exec-summary">Next pair: (${b}, ${r})</div>
+                    `,
                     `<code>${a} = ${b} * floor(${a}/${b}) + ${r}</code>`
                 )
             );
@@ -1282,7 +1793,10 @@
             makeStep(
                 'Final Answer',
                 `gcd is ${a}.`,
-                `<div class="exec-summary success">GCD: ${a}</div>`,
+                `
+                    ${renderEuclidState3D(a, 0)}
+                    <div class="exec-summary success">GCD: ${a}</div>
+                `,
                 '<code>When b=0, gcd=a</code>'
             )
         );
@@ -1306,7 +1820,7 @@
             makeStep(
                 'Start at Head',
                 `Traverse nodes left-to-right to find target ${formatNumber(target)}.`,
-                renderLinkedListDiagram(values, { mode: 'singly', currentIndex: 0, visitedSet: visited }),
+                renderLinkedListDiagram3D(values, { mode: 'singly', currentIndex: 0, visitedSet: visited }),
                 '<code>idx = 0; while idx &lt; n: check node[idx], idx += 1</code>'
             ),
         ];
@@ -1322,7 +1836,7 @@
                         ? `Node value ${formatNumber(values[idx])} matches target.`
                         : `Node value ${formatNumber(values[idx])} does not match target.`,
                     `
-                        ${renderLinkedListDiagram(values, {
+                        ${renderLinkedListDiagram3D(values, {
                             mode: 'singly',
                             currentIndex: idx,
                             matchedIndex: matched ? idx : null,
@@ -1346,13 +1860,13 @@
                     ? `First matching index is ${answerIndex}.`
                     : 'Target not found in list, answer is -1.',
                 answerIndex >= 0
-                    ? renderLinkedListDiagram(values, {
+                    ? renderLinkedListDiagram3D(values, {
                         mode: 'singly',
                         currentIndex: answerIndex,
                         matchedIndex: answerIndex,
                         visitedSet: visited,
                     })
-                    : renderLinkedListDiagram(values, { mode: 'singly', visitedSet: visited }),
+                    : renderLinkedListDiagram3D(values, { mode: 'singly', visitedSet: visited }),
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -1390,7 +1904,7 @@
                 traverseFromTail
                     ? `Use prev pointers from tail to find target ${formatNumber(target)}.`
                     : `Use next pointers from head to find target ${formatNumber(target)}.`,
-                renderLinkedListDiagram(values, {
+                renderLinkedListDiagram3D(values, {
                     mode: 'doubly',
                     currentIndex: order[0],
                     visitedSet: visited,
@@ -1413,7 +1927,7 @@
                         ? `Node value ${formatNumber(values[idx])} matches target.`
                         : `Node value ${formatNumber(values[idx])} does not match target.`,
                     `
-                        ${renderLinkedListDiagram(values, {
+                        ${renderLinkedListDiagram3D(values, {
                             mode: 'doubly',
                             currentIndex: idx,
                             matchedIndex: matched ? idx : null,
@@ -1437,13 +1951,13 @@
                     ? `Traversal result index is ${answerIndex}.`
                     : 'Target not found, answer is -1.',
                 answerIndex >= 0
-                    ? renderLinkedListDiagram(values, {
+                    ? renderLinkedListDiagram3D(values, {
                         mode: 'doubly',
                         currentIndex: answerIndex,
                         matchedIndex: answerIndex,
                         visitedSet: visited,
                     })
-                    : renderLinkedListDiagram(values, { mode: 'doubly', visitedSet: visited }),
+                    : renderLinkedListDiagram3D(values, { mode: 'doubly', visitedSet: visited }),
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -1479,7 +1993,7 @@
             makeStep(
                 'Start Circular Walk',
                 `Begin at index ${startIndex}, stop after one full cycle, target ${formatNumber(target)}.`,
-                renderLinkedListDiagram(values, {
+                renderLinkedListDiagram3D(values, {
                     mode: 'circular',
                     currentIndex: startIndex,
                     visitedSet: visited,
@@ -1501,7 +2015,7 @@
                         ? `Node value ${formatNumber(values[idx])} matches target.`
                         : `Node value ${formatNumber(values[idx])} does not match target.`,
                     `
-                        ${renderLinkedListDiagram(values, {
+                        ${renderLinkedListDiagram3D(values, {
                             mode: 'circular',
                             currentIndex: idx,
                             matchedIndex: matched ? idx : null,
@@ -1526,14 +2040,14 @@
                     ? `First match in circular traversal is index ${answerIndex}.`
                     : 'Completed one cycle with no match, answer is -1.',
                 answerIndex >= 0
-                    ? renderLinkedListDiagram(values, {
+                    ? renderLinkedListDiagram3D(values, {
                         mode: 'circular',
                         currentIndex: answerIndex,
                         matchedIndex: answerIndex,
                         visitedSet: visited,
                         startIndex,
                     })
-                    : renderLinkedListDiagram(values, { mode: 'circular', visitedSet: visited, startIndex }),
+                    : renderLinkedListDiagram3D(values, { mode: 'circular', visitedSet: visited, startIndex }),
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -1566,18 +2080,7 @@
         }
 
         function renderStackState(state, activeIndex = null) {
-            if (!state.length) {
-                return '<div class="exec-summary">Stack: [empty]</div>';
-            }
-            const rows = state
-                .map((value, idx) => ({ value, idx }))
-                .reverse()
-                .map((entry) => {
-                    const isActive = activeIndex !== null && activeIndex === entry.idx;
-                    return `<div class="exec-list-row${isActive ? ' active' : ''}">${entry.idx === state.length - 1 ? 'TOP -> ' : ''}${formatNumber(entry.value)}</div>`;
-                })
-                .join('');
-            return `<div class="exec-list">${rows}</div>`;
+            return renderStackState3D(state, activeIndex);
         }
 
         const state = initial.slice();
@@ -1680,18 +2183,7 @@
         }
 
         function renderQueueState(state, activeIndex = null) {
-            if (!state.length) {
-                return '<div class="exec-summary">Queue: [empty]</div>';
-            }
-            const rows = state
-                .map((value, idx) => {
-                    const isActive = activeIndex !== null && activeIndex === idx;
-                    const front = idx === 0 ? 'FRONT -> ' : '';
-                    const rear = idx === state.length - 1 ? ' <- REAR' : '';
-                    return `<div class="exec-list-row${isActive ? ' active' : ''}">${front}${formatNumber(value)}${rear}</div>`;
-                })
-                .join('');
-            return `<div class="exec-list">${rows}</div>`;
+            return renderQueueState3D(state, activeIndex);
         }
 
         const state = initial.slice();
@@ -1790,7 +2282,7 @@
                 'Initialize Kadane State',
                 `Start with first value ${formatNumber(values[0])}.`,
                 `
-                    ${renderIndexedStrip(values, new Set([0]))}
+                    ${renderIndexedStrip3D(values, new Set([0]), new Set([0]))}
                     <div class="exec-summary">current=${formatNumber(currentSum)}, best=${formatNumber(bestSum)}</div>
                 `,
                 '<code>current = best = arr[0]</code>'
@@ -1832,7 +2324,7 @@
                         ? `Restart at arr[${idx}] = ${formatNumber(value)}.`
                         : `Extend previous segment with arr[${idx}] = ${formatNumber(value)}.`,
                     `
-                        ${renderIndexedStrip(values, currentIndices)}
+                        ${renderIndexedStrip3D(values, currentIndices, new Set(bestIndices))}
                         <div class="exec-summary">current range: [${currentStart}..${idx}] sum=${formatNumber(currentSum)}</div>
                         <div class="exec-summary">best range: [${bestStart}..${bestEnd}] sum=${formatNumber(bestSum)} (idx: ${bestIndices.join(', ')})</div>
                     `,
@@ -1846,7 +2338,7 @@
                 'Final Answer',
                 `Maximum contiguous subarray sum is ${formatNumber(bestSum)}.`,
                 `
-                    ${renderIndexedStrip(values, new Set(Array.from({ length: bestEnd - bestStart + 1 }, (_, offset) => bestStart + offset)))}
+                    ${renderIndexedStrip3D(values, new Set(Array.from({ length: bestEnd - bestStart + 1 }, (_, offset) => bestStart + offset)), new Set([bestStart, bestEnd]))}
                     <div class="exec-summary success">Best range: [${bestStart}..${bestEnd}], sum=${formatNumber(bestSum)}</div>
                 `,
                 '<code>answer = best</code>'
@@ -1873,7 +2365,11 @@
             makeStep(
                 'Initialize Hash Set',
                 `Scan values once and check if complement (target - value) was seen before. Target=${formatNumber(target)}.`,
-                `${renderIndexedStrip(values)}<div class="exec-summary">Seen set: []</div>`,
+                `
+                    ${renderIndexedStrip3D(values)}
+                    ${renderHashBuckets3D(seenIndexByValue)}
+                    <div class="exec-summary">Seen set: []</div>
+                `,
                 '<code>for x in arr: if (target-x) in seen -> pair exists; else add x to seen</code>'
             ),
         ];
@@ -1899,7 +2395,8 @@
                     `Process index ${idx}`,
                     `x=${formatNumber(value)}. ${statusText}`,
                     `
-                        ${renderIndexedStrip(values, new Set([idx]))}
+                        ${renderIndexedStrip3D(values, new Set([idx]), complementSeen ? new Set([complementIndex, idx]) : new Set([idx]))}
+                        ${renderHashBuckets3D(seenIndexByValue, complementSeen ? complement : null)}
                         <div class="exec-summary">Need: ${formatNumber(complement)} | Seen before step: [${seenTokens}]</div>
                         ${complementSeen ? `<div class="exec-summary success">Pair candidate: (${complementIndex}, ${idx}) -> ${formatNumber(values[complementIndex])} + ${formatNumber(value)} = ${formatNumber(target)}</div>` : ''}
                     `,
@@ -1925,7 +2422,8 @@
                     ? `Pair exists. Answer is true.`
                     : 'No valid pair found. Answer is false.',
                 `
-                    ${renderIndexedStrip(values, hasPair ? new Set(discoveredPair) : new Set())}
+                    ${renderIndexedStrip3D(values, hasPair ? new Set(discoveredPair) : new Set(), hasPair ? new Set(discoveredPair) : new Set())}
+                    ${renderHashBuckets3D(seenIndexByValue)}
                     <div class="exec-summary">Seen set: [${finalSeenValues}]</div>
                     <div class="exec-summary success">Answer: ${hasPair ? 'true' : 'false'}</div>
                 `,
@@ -2015,7 +2513,7 @@
                 'Initialize BST',
                 'Start with an empty BST and insert values one by one.',
                 `
-                    ${renderIndexedStrip(insertSequence)}
+                    ${renderIndexedStrip3D(insertSequence)}
                     <div class="exec-summary">BST is empty.</div>
                 `,
                 '<code>For each value: if value &lt; node go left, else go right</code>'
@@ -2032,7 +2530,7 @@
                     `Insert ${formatNumber(value)}`,
                     result.trace.join(' '),
                     `
-                        ${renderIndexedStrip(insertSequence, new Set([idx]))}
+                        ${renderIndexedStrip3D(insertSequence, new Set([idx]), new Set([idx]))}
                         ${describeTree(root)}
                         <div class="exec-summary">Inorder so far: ${inorder.map((entry) => formatNumber(entry)).join(' ')}</div>
                     `,
@@ -2083,17 +2581,36 @@
             makeStep(
                 'Load Array',
                 `Run ${labels[algorithmType] || 'Sorting'} in non-decreasing order.`,
-                renderIndexedStrip(arr),
+                `
+                    ${renderArrayVisualization(arr)}
+                    ${renderIndexedStrip3D(arr)}
+                `,
                 '<code>Goal: arr[i] <= arr[i+1] for all i</code>'
             ),
         ];
 
-        function pushStep(title, details, highlights, formula) {
+        function renderSortingState(highlights = new Set(), focusSet = null) {
+            const active = focusSet || highlights;
+            const firstActive = active && active.size ? Array.from(active)[0] : -1;
+            const baseState = `
+                ${renderArrayVisualization(arr, highlights, active)}
+                ${renderIndexedStrip3D(arr, highlights, active)}
+            `;
+            if (algorithmType === 'heap_sort') {
+                return `
+                    ${renderHeapVisualization(arr, Number.isInteger(firstActive) ? firstActive : -1)}
+                    ${baseState}
+                `;
+            }
+            return baseState;
+        }
+
+        function pushStep(title, details, highlights, formula, focusSet = null) {
             steps.push(
                 makeStep(
                     title,
                     details,
-                    renderIndexedStrip(arr, highlights || new Set()),
+                    renderSortingState(highlights || new Set(), focusSet),
                     formula
                 )
             );
@@ -2376,7 +2893,7 @@
             makeStep(
                 'Final Answer',
                 `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
-                renderIndexedStrip(arr),
+                renderSortingState(),
                 '<code>array is sorted in non-decreasing order</code>'
             )
         );
@@ -2438,6 +2955,7 @@
                 `${mode.toUpperCase()} Setup`,
                 `Start traversal from node ${start}.`,
                 `
+                    ${renderArrayVisualization(nodes, new Set([nodeIndex.get(start)]), new Set([nodeIndex.get(start)]))}
                     ${renderIndexedStrip(nodes, new Set([nodeIndex.get(start)]))}
                     <div class="exec-summary">Edges: ${parsedEdges.map(([u, v]) => `(${u}-${v})`).join(', ')}</div>
                 `,
@@ -2467,6 +2985,7 @@
                         `Visit ${current}`,
                         `Enqueue new neighbors: [${enqueued.join(', ') || '-'}].`,
                         `
+                            ${renderArrayVisualization(nodes, new Set([nodeIndex.get(current)]), new Set([nodeIndex.get(current)]))}
                             ${renderIndexedStrip(nodes, new Set([nodeIndex.get(current)]))}
                             <div class="exec-summary">Order: ${order.join(' -> ')}</div>
                             <div class="exec-summary">Queue: [${queue.join(', ')}]</div>
@@ -2498,6 +3017,7 @@
                         `Visit ${current}`,
                         `Push neighbors (reverse order for deterministic DFS): [${pushed.join(', ') || '-'}].`,
                         `
+                            ${renderArrayVisualization(nodes, new Set([nodeIndex.get(current)]), new Set([nodeIndex.get(current)]))}
                             ${renderIndexedStrip(nodes, new Set([nodeIndex.get(current)]))}
                             <div class="exec-summary">Order: ${order.join(' -> ')}</div>
                             <div class="exec-summary">Stack: [${stack.join(', ')}]</div>
@@ -2512,7 +3032,7 @@
             makeStep(
                 'Final Answer',
                 `${mode.toUpperCase()} traversal order: ${order.join(' ')}.`,
-                renderIndexedStrip(nodes),
+                `${renderArrayVisualization(nodes)}${renderIndexedStrip(nodes)}`,
                 `<code>answer = "${order.join(' ')}"</code>`
             )
         );
@@ -2566,16 +3086,39 @@
         const settled = new Set();
 
         function distanceTable(activeNode = null) {
-            return `
-                <div class="exec-list">
-                    ${nodes.map((node) => {
-                        const d = dist.get(node);
-                        const token = Number.isFinite(d) ? formatNumber(d) : 'inf';
-                        const cls = activeNode === node ? ' active' : '';
-                        return `<div class="exec-list-row${cls}">node ${node}: dist=${token}</div>`;
-                    }).join('')}
-                </div>
-            `;
+            const cardWidth = 122;
+            const cardHeight = 38;
+            const gap = 10;
+            const left = 24;
+            const top = 34;
+            const depth = 8;
+            const width = Math.max(460, left * 2 + (nodes.length * (cardWidth + gap)) - gap);
+            const height = 130;
+            const cards = nodes
+                .map((node, idx) => {
+                    const d = dist.get(node);
+                    const token = Number.isFinite(d) ? formatNumber(d) : 'inf';
+                    const x = left + (idx * (cardWidth + gap));
+                    const y = top;
+                    const isActive = activeNode === node;
+                    const isSettled = settled.has(node);
+                    const front = isActive ? '#fde68a' : isSettled ? '#86efac' : '#dbeafe';
+                    const topColor = isActive ? '#fef3c7' : isSettled ? '#bbf7d0' : '#eff6ff';
+                    const side = isActive ? '#ca8a04' : isSettled ? '#16a34a' : '#2563eb';
+                    const stroke = isActive ? '#92400e' : '#1e3a8a';
+                    return `
+                        <g>
+                            <polygon points="${x},${y} ${x + depth},${y - depth} ${x + cardWidth + depth},${y - depth} ${x + cardWidth},${y}" fill="${topColor}"></polygon>
+                            <polygon points="${x + cardWidth},${y} ${x + cardWidth + depth},${y - depth} ${x + cardWidth + depth},${y + cardHeight - depth} ${x + cardWidth},${y + cardHeight}" fill="${side}" opacity="0.93"></polygon>
+                            <rect x="${x}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.3' : '1.5'}"></rect>
+                            <text x="${x + 12}" y="${y + 15}" font-size="10.5" fill="#334155">node ${node}</text>
+                            <text x="${x + 12}" y="${y + 29}" font-size="12.5" font-weight="700" fill="#0f172a">dist=${token}</text>
+                        </g>
+                    `;
+                })
+                .join('');
+
+            return render3DScene(cards, width, height, '3D Dijkstra distance table');
         }
 
         const steps = [
@@ -2697,6 +3240,84 @@
         const goal = [rows - 1, cols - 1];
         const startKey = `${start[0]},${start[1]}`;
         const goalKey = `${goal[0]},${goal[1]}`;
+
+        function heuristic(row, col) {
+            return Math.abs(goal[0] - row) + Math.abs(goal[1] - col);
+        }
+
+        function renderGrid(currentKey = null, pathSet = new Set(), openSet = new Set(), closedSet = new Set()) {
+            const cell = 34;
+            const gap = 7;
+            const depth = 6;
+            const left = 24;
+            const top = 26;
+            const width = Math.max(420, left * 2 + (cols * (cell + gap)) - gap);
+            const height = Math.max(220, top * 2 + (rows * (cell + gap)) - gap);
+
+            const cells = [];
+            for (let row = 0; row < rows; row += 1) {
+                for (let col = 0; col < cols; col += 1) {
+                    const key = `${row},${col}`;
+                    const x = left + (col * (cell + gap));
+                    const y = top + (row * (cell + gap));
+
+                    let front = '#e2e8f0';
+                    let topColor = '#f8fafc';
+                    let side = '#64748b';
+                    let stroke = '#334155';
+                    let label = '';
+
+                    if (blocked.has(key)) {
+                        front = '#cbd5e1';
+                        topColor = '#e2e8f0';
+                        side = '#475569';
+                        label = '#';
+                    } else if (key === startKey) {
+                        front = '#86efac';
+                        topColor = '#bbf7d0';
+                        side = '#16a34a';
+                        label = 'S';
+                    } else if (key === goalKey) {
+                        front = '#fda4af';
+                        topColor = '#fecdd3';
+                        side = '#e11d48';
+                        label = 'G';
+                    } else if (key === currentKey) {
+                        front = '#fde68a';
+                        topColor = '#fef3c7';
+                        side = '#ca8a04';
+                        label = 'C';
+                    } else if (pathSet.has(key)) {
+                        front = '#d8b4fe';
+                        topColor = '#e9d5ff';
+                        side = '#9333ea';
+                        label = '*';
+                    } else if (openSet.has(key)) {
+                        front = '#bae6fd';
+                        topColor = '#e0f2fe';
+                        side = '#0284c7';
+                        label = 'O';
+                    } else if (closedSet.has(key)) {
+                        front = '#bfdbfe';
+                        topColor = '#dbeafe';
+                        side = '#1d4ed8';
+                        label = 'X';
+                    }
+
+                    cells.push(`
+                        <g>
+                            <polygon points="${x},${y} ${x + depth},${y - depth} ${x + cell + depth},${y - depth} ${x + cell},${y}" fill="${topColor}"></polygon>
+                            <polygon points="${x + cell},${y} ${x + cell + depth},${y - depth} ${x + cell + depth},${y + cell - depth} ${x + cell},${y + cell}" fill="${side}" opacity="0.9"></polygon>
+                            <rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="7" fill="${front}" stroke="${stroke}" stroke-width="1.2"></rect>
+                            ${label ? `<text x="${x + (cell / 2)}" y="${y + 22}" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">${label}</text>` : ''}
+                        </g>
+                    `);
+                }
+            }
+
+            return render3DScene(cells.join(''), width, height, '3D A* grid');
+        }
+
         if (blocked.has(startKey) || blocked.has(goalKey)) {
             return {
                 title: 'Execution Visualization - A* Grid Search',
@@ -2705,40 +3326,14 @@
                     makeStep(
                         'Invalid Grid',
                         'Start or goal is blocked, so route is unreachable.',
-                        `<div class="exec-summary">Answer: -1</div>`,
+                        `
+                            ${renderGrid(startKey, new Set(), new Set([startKey]), new Set())}
+                            <div class="exec-summary">Answer: -1</div>
+                        `,
                         '<code>if start/goal blocked -> unreachable</code>'
                     ),
                 ],
             };
-        }
-
-        function heuristic(row, col) {
-            return Math.abs(goal[0] - row) + Math.abs(goal[1] - col);
-        }
-
-        function renderGrid(currentKey = null, pathSet = new Set()) {
-            const lines = [];
-            for (let row = 0; row < rows; row += 1) {
-                const tokens = [];
-                for (let col = 0; col < cols; col += 1) {
-                    const key = `${row},${col}`;
-                    if (key === startKey) {
-                        tokens.push('S');
-                    } else if (key === goalKey) {
-                        tokens.push('G');
-                    } else if (key === currentKey) {
-                        tokens.push('C');
-                    } else if (pathSet.has(key)) {
-                        tokens.push('*');
-                    } else if (blocked.has(key)) {
-                        tokens.push('#');
-                    } else {
-                        tokens.push('.');
-                    }
-                }
-                lines.push(tokens.join(' '));
-            }
-            return `<pre class="exec-summary">${lines.join('\n')}</pre>`;
         }
 
         const open = [{ row: 0, col: 0, g: 0, f: heuristic(0, 0) }];
@@ -2750,7 +3345,7 @@
             makeStep(
                 'Initialize A*',
                 `Grid ${rows}x${cols}, start=(0,0), goal=(${goal[0]},${goal[1]}).`,
-                renderGrid(startKey),
+                renderGrid(startKey, new Set(), new Set([startKey]), new Set()),
                 '<code>f(n)=g(n)+h(n), h=Manhattan distance</code>'
             ),
         ];
@@ -2772,7 +3367,7 @@
                     `Expand (${current.row},${current.col})`,
                     `g=${formatNumber(current.g)}, h=${formatNumber(heuristic(current.row, current.col))}, f=${formatNumber(current.f)}.`,
                     `
-                        ${renderGrid(currentKey)}
+                        ${renderGrid(currentKey, new Set(), new Set(open.map((entry) => `${entry.row},${entry.col}`)), closed)}
                         <div class="exec-summary">Open size: ${open.length}, Closed size: ${closed.size}</div>
                     `,
                     '<code>pop node with smallest f from open set</code>'
@@ -2807,7 +3402,7 @@
                         makeStep(
                             `Update neighbor (${nextRow},${nextCol})`,
                             `Better path found: g ${priorG === Number.POSITIVE_INFINITY ? 'inf' : formatNumber(priorG)} -> ${formatNumber(candidateG)}.`,
-                            renderGrid(currentKey),
+                            renderGrid(currentKey, new Set(), new Set(open.map((entry) => `${entry.row},${entry.col}`)), closed),
                             `<code>tentative_g = ${formatNumber(current.g)} + 1 = ${formatNumber(candidateG)}, f = g + h</code>`
                         )
                     );
@@ -2837,7 +3432,7 @@
                     ? `Reached goal in ${moves} moves.`
                     : 'Goal unreachable, answer is -1.',
                 `
-                    ${renderGrid(null, pathSet)}
+                    ${renderGrid(null, pathSet, new Set(), closed)}
                     <div class="exec-summary success">Answer: ${moves}</div>
                 `,
                 found
@@ -2867,7 +3462,7 @@
                 'Load Leaf Utilities',
                 `Start fold with ${level.length} leaf values.`,
                 `
-                    ${renderIndexedStrip(level)}
+                    ${renderIndexedStrip3D(level)}
                     <div class="exec-summary">Fold rule starts with MIN level.</div>
                 `,
                 '<code>Fold pairs bottom-up, toggling MIN/MAX each level</code>'
@@ -2888,7 +3483,7 @@
                     makeStep(
                         `Depth ${depth + 1} pair (${idx}, ${idx + 1})`,
                         `${maximizing ? 'MAX' : 'MIN'}(${formatNumber(left)}, ${formatNumber(right)}) = ${formatNumber(chosen)}.`,
-                        renderIndexedStrip(level, new Set([idx, idx + 1])),
+                        renderIndexedStrip3D(level, new Set([idx, idx + 1]), new Set([idx, idx + 1])),
                         `<code>${maximizing ? 'max' : 'min'}(${formatNumber(left)}, ${formatNumber(right)})</code>`
                     )
                 );
@@ -2901,7 +3496,7 @@
                 makeStep(
                     `Level ${depth} Fold Result`,
                     `Collapsed to ${level.length} node values.`,
-                    renderIndexedStrip(level),
+                    renderIndexedStrip3D(level),
                     '<code>repeat until one root value remains</code>'
                 )
             );
@@ -2937,9 +3532,7 @@
                 'Initialize Candidate Prefix',
                 `Start with first word as candidate: "${prefix}".`,
                 `
-                    <div class="exec-list">
-                        ${words.map((word, idx) => `<div class="exec-list-row${idx === 0 ? ' active' : ''}">W${idx + 1}: ${escapeHtml(word)}</div>`).join('')}
-                    </div>
+                    ${renderWordRail3D(words, 0, prefix)}
                     <div class="exec-summary">Candidate prefix: "${escapeHtml(prefix)}"</div>
                 `,
                 '<code>prefix = words[0]</code>'
@@ -2953,9 +3546,7 @@
                     `Compare with W${idx + 1}`,
                     `Check whether "${escapeHtml(word)}" starts with current prefix.`,
                     `
-                        <div class="exec-list">
-                            ${words.map((entry, entryIdx) => `<div class="exec-list-row${entryIdx === idx ? ' active' : ''}">W${entryIdx + 1}: ${escapeHtml(entry)}</div>`).join('')}
-                        </div>
+                        ${renderWordRail3D(words, idx, prefix)}
                         <div class="exec-summary">Current prefix: "${escapeHtml(prefix)}"</div>
                     `,
                     '<code>while !word.startsWith(prefix): shrink prefix by 1 char</code>'
@@ -2970,9 +3561,7 @@
                         `Shrink Prefix`,
                         `"${escapeHtml(word)}" does not match "${escapeHtml(before)}", shrink to "${escapeHtml(prefix)}".`,
                         `
-                            <div class="exec-list">
-                                ${words.map((entry, entryIdx) => `<div class="exec-list-row${entryIdx === idx ? ' active' : ''}">W${entryIdx + 1}: ${escapeHtml(entry)}</div>`).join('')}
-                            </div>
+                            ${renderWordRail3D(words, idx, prefix)}
                             <div class="exec-summary">Current prefix: "${escapeHtml(prefix)}"</div>
                         `,
                         '<code>prefix = prefix.slice(0, -1)</code>'
@@ -2985,7 +3574,10 @@
                     makeStep(
                         'Prefix Exhausted',
                         'No common prefix remains.',
-                        `<div class="exec-summary">Current prefix: ""</div>`,
+                        `
+                            ${renderWordRail3D(words, idx, '')}
+                            <div class="exec-summary">Current prefix: ""</div>
+                        `,
                         '<code>if prefix == "": stop early</code>'
                     )
                 );
@@ -2999,9 +3591,7 @@
                 'Final Answer',
                 `Longest common prefix is ${answerLabel}.`,
                 `
-                    <div class="exec-list">
-                        ${words.map((word, idx) => `<div class="exec-list-row">W${idx + 1}: ${escapeHtml(word)}</div>`).join('')}
-                    </div>
+                    ${renderWordRail3D(words, -1, answerLabel === '(empty)' ? '' : answerLabel)}
                     <div class="exec-summary success">Answer: ${escapeHtml(answerLabel)}</div>
                 `,
                 '<code>answer = prefix</code>'
@@ -3026,7 +3616,7 @@
             makeStep(
                 'Initialize Search',
                 `Scan left-to-right for first target occurrence (${formatNumber(target)}).`,
-                renderIndexedStrip(data),
+                renderIndexedStrip3D(data),
                 '<code>for i in [0..n-1]: if arr[i] == target return i</code>'
             ),
         ];
@@ -3043,7 +3633,8 @@
                         ? `arr[${idx}] = ${formatNumber(data[idx])} matches target. Stop at first match.`
                         : `arr[${idx}] = ${formatNumber(data[idx])} does not match target.`,
                     `
-                        ${renderIndexedStrip(data, new Set([idx]))}
+                        ${renderArrayVisualization(data, visited, new Set([idx]))}
+                        ${renderIndexedStrip3D(data, visited, new Set([idx]))}
                         <div class="exec-summary">Visited: [${Array.from(visited).join(', ')}]</div>
                     `,
                     `<code>compare ${formatNumber(data[idx])} with ${formatNumber(target)}</code>`
@@ -3062,8 +3653,8 @@
                     ? `First matching index is ${answerIndex}.`
                     : 'Target not found, answer is -1.',
                 answerIndex >= 0
-                    ? renderIndexedStrip(data, new Set([answerIndex]))
-                    : renderIndexedStrip(data),
+                    ? `${renderArrayVisualization(data, new Set([answerIndex]), new Set([answerIndex]))}${renderIndexedStrip3D(data, new Set([answerIndex]), new Set([answerIndex]))}`
+                    : `${renderArrayVisualization(data)}${renderIndexedStrip3D(data)}`,
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -3092,7 +3683,7 @@
             makeStep(
                 'Initialize Search Window',
                 `Binary search on sorted array for target ${formatNumber(target)}.`,
-                renderIndexedStrip(data),
+                renderIndexedStrip3D(data),
                 '<code>while low <= high: mid=(low+high)//2</code>'
             ),
         ];
@@ -3104,6 +3695,10 @@
         while (low <= high) {
             const mid = Math.floor((low + high) / 2);
             const midValue = data[mid];
+            const windowHighlight = new Set();
+            for (let cursor = low; cursor <= high; cursor += 1) {
+                windowHighlight.add(cursor);
+            }
             const highlight = new Set([low, mid, high]);
 
             steps.push(
@@ -3111,7 +3706,8 @@
                     `Window [${low}..${high}], mid=${mid}`,
                     `Compare target ${formatNumber(target)} with arr[${mid}] = ${formatNumber(midValue)}.`,
                     `
-                        ${renderIndexedStrip(data, highlight)}
+                        ${renderArrayVisualization(data, windowHighlight, highlight)}
+                        ${renderIndexedStrip3D(data, windowHighlight, highlight)}
                         <div class="exec-summary">low=${low}, mid=${mid}, high=${high}</div>
                     `,
                     `<code>mid = floor((${low}+${high})/2)</code>`
@@ -3124,7 +3720,10 @@
                     makeStep(
                         'Target Found',
                         `arr[${mid}] equals target.`,
-                        renderIndexedStrip(data, new Set([mid])),
+                        `
+                            ${renderArrayVisualization(data, new Set([mid]), new Set([mid]))}
+                            ${renderIndexedStrip3D(data, new Set([mid]), new Set([mid]))}
+                        `,
                         `<code>return ${mid}</code>`
                     )
                 );
@@ -3137,7 +3736,10 @@
                     makeStep(
                         'Move Right',
                         `${formatNumber(midValue)} < ${formatNumber(target)} so discard left half.`,
-                        renderIndexedStrip(data, highlight),
+                        `
+                            ${renderArrayVisualization(data, windowHighlight, highlight)}
+                            ${renderIndexedStrip3D(data, windowHighlight, highlight)}
+                        `,
                         `<code>low = mid + 1 = ${nextLow}</code>`
                     )
                 );
@@ -3148,7 +3750,10 @@
                     makeStep(
                         'Move Left',
                         `${formatNumber(midValue)} > ${formatNumber(target)} so discard right half.`,
-                        renderIndexedStrip(data, highlight),
+                        `
+                            ${renderArrayVisualization(data, windowHighlight, highlight)}
+                            ${renderIndexedStrip3D(data, windowHighlight, highlight)}
+                        `,
                         `<code>high = mid - 1 = ${nextHigh}</code>`
                     )
                 );
@@ -3161,7 +3766,10 @@
                 makeStep(
                     'Window Exhausted',
                     'low crossed high, target is absent.',
-                    renderIndexedStrip(data),
+                    `
+                        ${renderArrayVisualization(data)}
+                        ${renderIndexedStrip3D(data)}
+                    `,
                     '<code>if low > high: return -1</code>'
                 )
             );
@@ -3174,8 +3782,8 @@
                     ? `Target index is ${answerIndex}.`
                     : 'Target not found, answer is -1.',
                 answerIndex >= 0
-                    ? renderIndexedStrip(data, new Set([answerIndex]))
-                    : renderIndexedStrip(data),
+                    ? `${renderArrayVisualization(data, new Set([answerIndex]), new Set([answerIndex]))}${renderIndexedStrip3D(data, new Set([answerIndex]), new Set([answerIndex]))}`
+                    : `${renderArrayVisualization(data)}${renderIndexedStrip3D(data)}`,
                 `<code>answer = ${answerIndex}</code>`
             )
         );

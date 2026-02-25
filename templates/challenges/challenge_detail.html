@@ -187,9 +187,9 @@
         const vizOutput = document.getElementById('visualizationOutput');
         const vizTitle = document.getElementById('visualizationTitle');
 
-        if (algorithmTypeValue === 'bfs' && visualizationType === 'graph') {
+        if (['bfs', 'dfs', 'dijkstra', 'astar'].includes(algorithmTypeValue) && visualizationType === 'graph') {
             if (window.Visualization3D && window.Visualization3D.init) {
-                window.Visualization3D.init('visualizationOutput');
+                window.Visualization3D.init('visualizationOutput', algorithmTypeValue);
                 if (vizTitle) {
                     vizTitle.innerHTML = '<i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>3D Interactive Execution';
                 }
@@ -801,22 +801,63 @@
         });
         adjacency.forEach((neighbors) => neighbors.sort((a, b) => a - b));
 
-        const reachable = new Set([start]);
-        const queue = [start];
-        while (queue.length) {
-            const current = queue.shift();
-            (adjacency.get(current) || []).forEach((nextNode) => {
-                if (!reachable.has(nextNode)) {
-                    reachable.add(nextNode);
-                    queue.push(nextNode);
+        function buildTraversalTrace(kind) {
+            const trace = [];
+            if (kind === 'bfs') {
+                const queue = [start];
+                const visited = new Set([start]);
+                while (queue.length) {
+                    const current = queue.shift();
+                    (adjacency.get(current) || []).forEach((nextNode) => {
+                        if (!visited.has(nextNode)) {
+                            visited.add(nextNode);
+                            queue.push(nextNode);
+                        }
+                    });
+                    trace.push({
+                        node: current,
+                        frontierAfter: queue.slice(),
+                    });
                 }
-            });
+                return trace;
+            }
+
+            const stack = [start];
+            const visited = new Set();
+            while (stack.length) {
+                const current = stack.pop();
+                if (visited.has(current)) {
+                    continue;
+                }
+                visited.add(current);
+                const neighbors = (adjacency.get(current) || []).slice().sort((a, b) => b - a);
+                neighbors.forEach((nextNode) => {
+                    if (!visited.has(nextNode)) {
+                        stack.push(nextNode);
+                    }
+                });
+                trace.push({
+                    node: current,
+                    frontierAfter: stack.slice(),
+                });
+            }
+            return trace;
         }
-        const expectedLength = reachable.size;
+
+        const traversalTrace = buildTraversalTrace(mode);
+        const expectedOrder = traversalTrace.map((entry) => entry.node);
+        if (!expectedOrder.length || expectedOrder[0] !== start) {
+            return false;
+        }
+        const reachable = new Set(expectedOrder);
+        const expectedLength = expectedOrder.length;
+        const frontierLabel = mode === 'bfs' ? 'Queue' : 'Stack';
 
         const shell = renderActionHostShell(
             mode === 'bfs' ? 'BFS Route Builder' : 'DFS Route Builder',
-            'Click nodes in traversal order. Start node is pre-selected.'
+            mode === 'bfs'
+                ? 'Choose the next valid BFS node. Start node is pre-selected.'
+                : 'Choose the next valid DFS node. Start node is pre-selected.'
         );
         if (!shell || !shell.body) {
             return false;
@@ -841,19 +882,32 @@
 
         const order = [start];
         const used = new Set([start]);
+        let feedback = '';
 
         function renderBoard() {
             if (!board) {
                 return;
             }
+            const expectedNext = expectedOrder[order.length];
+            const isComplete = order.length >= expectedLength;
             board.innerHTML = nodes
                 .map((node) => {
                     const index = order.indexOf(node);
                     const isUsed = index !== -1;
-                    const btnClass = isUsed ? 'btn-outline-success' : 'btn-outline-primary';
+                    const isReachable = reachable.has(node);
+                    const isExpected = Number.isInteger(expectedNext) && node === expectedNext;
+                    let btnClass = 'btn-outline-primary';
+                    if (!isReachable) {
+                        btnClass = 'btn-outline-secondary';
+                    } else if (isUsed) {
+                        btnClass = 'btn-outline-success';
+                    } else if (isExpected) {
+                        btnClass = 'btn-outline-warning';
+                    }
                     return `
-                        <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-node="${node}">
-                            ${node}${isUsed ? ` (#${index + 1})` : ''}
+                        <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-node="${node}"
+                            ${!isReachable || isUsed || isComplete ? 'disabled' : ''}>
+                            ${node}${isUsed ? ` (#${index + 1})` : ''}${!isReachable ? ' (out)' : ''}
                         </button>
                     `;
                 })
@@ -865,8 +919,20 @@
                     if (!Number.isInteger(node) || used.has(node)) {
                         return;
                     }
+                    if (!reachable.has(node)) {
+                        feedback = `Node ${node} is unreachable from start ${start}.`;
+                        render();
+                        return;
+                    }
+                    const expectedNext = expectedOrder[order.length];
+                    if (!Number.isInteger(expectedNext) || node !== expectedNext) {
+                        feedback = `Wrong next node. Choose ${expectedNext}.`;
+                        render();
+                        return;
+                    }
                     order.push(node);
                     used.add(node);
+                    feedback = '';
                     render();
                 });
             });
@@ -874,14 +940,25 @@
 
         function render() {
             renderBoard();
+            const isComplete = order.length >= expectedLength;
+            const expectedNext = expectedOrder[order.length];
+            const traceIndex = Math.max(0, Math.min(order.length - 1, traversalTrace.length - 1));
+            const frontier = traversalTrace[traceIndex] ? traversalTrace[traceIndex].frontierAfter : [];
             if (meta) {
-                meta.textContent = `Traversal: ${order.join(' -> ')} | Step ${order.length}/${expectedLength}`;
+                meta.textContent = `Traversal: ${order.join(' -> ')} | Step ${order.length}/${expectedLength} | ${frontierLabel}: [${frontier.join(', ') || '-'}] | ${isComplete ? 'Traversal complete' : `Next: ${expectedNext}`}${feedback ? ` | ${feedback}` : ''}`;
             }
             if (shell.badge) {
-                shell.badge.textContent = `${order.length}/${expectedLength}`;
-                shell.badge.classList.toggle('badge-accent', order.length === expectedLength);
-                shell.badge.classList.toggle('badge-primary', order.length !== expectedLength);
-                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (feedback) {
+                    shell.badge.textContent = 'Wrong step';
+                    shell.badge.classList.add('badge-danger');
+                } else if (isComplete) {
+                    shell.badge.textContent = `${expectedLength}/${expectedLength}`;
+                    shell.badge.classList.add('badge-accent');
+                } else {
+                    shell.badge.textContent = `Next ${expectedNext}`;
+                    shell.badge.classList.add('badge-primary');
+                }
             }
             setDerivedAnswer(order.join(' '));
             setActionPayload({
@@ -897,6 +974,7 @@
                 }
                 const removed = order.pop();
                 used.delete(removed);
+                feedback = '';
                 render();
             });
         }
@@ -906,6 +984,7 @@
                 order.length = 1;
                 used.clear();
                 used.add(start);
+                feedback = '';
                 render();
             });
         }
@@ -3621,7 +3700,8 @@
         initializeCategorySequenceControls();
         initializeMobileTabs();
         
-        if (visualizationType === 'graph') {
+        const isThreeDGraphAlgorithm = ['bfs', 'dfs', 'dijkstra', 'astar'].includes((algorithmType || '').toLowerCase());
+        if (visualizationType === 'graph' && !isThreeDGraphAlgorithm) {
             if (window.VisualizationEngine && window.VisualizationEngine.renderPreview) {
                 window.VisualizationEngine.renderPreview(algorithmType);
             }

@@ -19,6 +19,8 @@
         baseNodeSize: 12,
         clock: new THREE.Clock(),
         resizeBound: false,
+        currentAlgorithm: '',
+        activeConfig: null,
     };
 
     const ChallengeVisualization3DContext = {
@@ -131,6 +133,24 @@
                 color: 0xaaaaaa,
                 roughness: 0.8,
             }),
+            frontier: new THREE.MeshPhysicalMaterial({
+                color: 0x38bdf8,
+                metalness: 0.25,
+                roughness: 0.18,
+                transmission: 0.75,
+                transparent: true,
+                opacity: 0.95,
+                ior: 1.55,
+            }),
+            path: new THREE.MeshPhysicalMaterial({
+                color: 0xa855f7,
+                metalness: 0.25,
+                roughness: 0.18,
+                transmission: 0.75,
+                transparent: true,
+                opacity: 0.96,
+                ior: 1.6,
+            }),
         };
     }
 
@@ -192,6 +212,235 @@
             edges: edges,
             start: start,
         };
+    }
+
+    function weightedGraphConfigFromPayload(defaultConfig, container) {
+        const payload = getChallengePayload();
+        const rawWeighted = Array.isArray(payload.weighted_edges) ? payload.weighted_edges : [];
+        const rawEdges = rawWeighted.length
+            ? rawWeighted
+            : (Array.isArray(payload.edges) ? payload.edges : []);
+        if (!rawEdges.length) {
+            return defaultConfig;
+        }
+
+        const discovered = new Set();
+        rawEdges.forEach((edge) => {
+            if (Array.isArray(edge) && edge.length >= 2) {
+                discovered.add(edge[0]);
+                discovered.add(edge[1]);
+            }
+        });
+        const rawNodes =
+            Array.isArray(payload.nodes) && payload.nodes.length
+                ? payload.nodes
+                : Array.from(discovered.values());
+        const nodeIds = rawNodes.slice().sort((a, b) => Number(a) - Number(b));
+        const idToIndex = new Map(nodeIds.map((id, idx) => [id, idx]));
+
+        const edges = rawEdges
+            .map((edge) => {
+                if (!Array.isArray(edge) || edge.length < 2) {
+                    return null;
+                }
+                const from = idToIndex.get(edge[0]);
+                const to = idToIndex.get(edge[1]);
+                if (from === undefined || to === undefined) {
+                    return null;
+                }
+                const weight = edge.length >= 3 ? Number(edge[2]) : 1;
+                return {
+                    from,
+                    to,
+                    weight: Number.isFinite(weight) ? weight : 1,
+                };
+            })
+            .filter(Boolean);
+
+        if (!edges.length || !nodeIds.length) {
+            return defaultConfig;
+        }
+
+        const source = idToIndex.has(payload.source) ? idToIndex.get(payload.source) : 0;
+        const target = idToIndex.has(payload.target) ? idToIndex.get(payload.target) : nodeIds.length - 1;
+        return {
+            nodes: buildNodeLayout(nodeIds, container),
+            edges,
+            source,
+            target,
+        };
+    }
+
+    function astarGridConfigFromPayload(defaultConfig) {
+        const payload = getChallengePayload();
+        const rows = Number(payload.rows);
+        const cols = Number(payload.cols);
+        const blockedRaw = Array.isArray(payload.blocked) ? payload.blocked : [];
+        if (!Number.isFinite(rows) || !Number.isFinite(cols) || rows <= 0 || cols <= 0) {
+            return defaultConfig;
+        }
+
+        const blocked = new Set(
+            blockedRaw
+                .filter((cell) => Array.isArray(cell) && cell.length >= 2)
+                .map((cell) => `${Number(cell[0])},${Number(cell[1])}`)
+        );
+
+        const nodes = [];
+        const cellToIndex = new Map();
+        const spacing = 34;
+        const startX = -((cols - 1) * spacing) / 2;
+        const startY = ((rows - 1) * spacing) / 2;
+
+        for (let r = 0; r < rows; r += 1) {
+            for (let c = 0; c < cols; c += 1) {
+                const key = `${r},${c}`;
+                if (blocked.has(key)) {
+                    continue;
+                }
+                const idx = nodes.length;
+                nodes.push({
+                    x: startX + (c * spacing),
+                    y: startY - (r * spacing),
+                    z: 0,
+                    row: r,
+                    col: c,
+                    label: `${r},${c}`,
+                    id: key,
+                });
+                cellToIndex.set(key, idx);
+            }
+        }
+
+        if (!nodes.length) {
+            return defaultConfig;
+        }
+
+        function resolveCell(row, col) {
+            const key = `${row},${col}`;
+            return cellToIndex.has(key) ? cellToIndex.get(key) : null;
+        }
+
+        const edges = [];
+        const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        nodes.forEach((node, idx) => {
+            directions.forEach(([dr, dc]) => {
+                const nextRow = node.row + dr;
+                const nextCol = node.col + dc;
+                const nextIndex = resolveCell(nextRow, nextCol);
+                if (nextIndex !== null && idx < nextIndex) {
+                    edges.push({ from: idx, to: nextIndex, weight: 1 });
+                }
+            });
+        });
+
+        const start = resolveCell(0, 0) !== null ? resolveCell(0, 0) : 0;
+        const targetCell = resolveCell(rows - 1, cols - 1);
+        const target = targetCell !== null ? targetCell : nodes.length - 1;
+
+        return {
+            nodes,
+            edges,
+            source: start,
+            target,
+            grid: true,
+        };
+    }
+
+    function resolveConfigForAlgorithm(algorithmType, container) {
+        const normalized = String(algorithmType || '').toLowerCase();
+        const traversalFallback = {
+            nodes: buildNodeLayout([0, 1, 2, 3, 4, 5], container),
+            edges: [[0, 1], [0, 2], [1, 3], [2, 4], [2, 5]],
+            start: 0,
+        };
+        const weightedFallback = {
+            nodes: buildNodeLayout([0, 1, 2, 3, 4, 5], container),
+            edges: [
+                { from: 0, to: 1, weight: 4 },
+                { from: 0, to: 2, weight: 2 },
+                { from: 1, to: 3, weight: 5 },
+                { from: 2, to: 4, weight: 3 },
+                { from: 3, to: 5, weight: 1 },
+                { from: 4, to: 5, weight: 6 },
+            ],
+            source: 0,
+            target: 5,
+        };
+        if (normalized === 'dijkstra') {
+            return weightedGraphConfigFromPayload(weightedFallback, container);
+        }
+        if (normalized === 'astar') {
+            const gridConfig = astarGridConfigFromPayload(null);
+            if (gridConfig) {
+                return gridConfig;
+            }
+            return weightedGraphConfigFromPayload(weightedFallback, container);
+        }
+        return graphConfigFromPayload(traversalFallback, container);
+    }
+
+    function edgeEndpoints(edgeEntry) {
+        if (Array.isArray(edgeEntry)) {
+            return { from: edgeEntry[0], to: edgeEntry[1], weight: 1 };
+        }
+        return {
+            from: edgeEntry.from,
+            to: edgeEntry.to,
+            weight: Number.isFinite(Number(edgeEntry.weight)) ? Number(edgeEntry.weight) : 1,
+        };
+    }
+
+    function buildUnweightedAdjacency(count, edges) {
+        const adjacency = Array(count)
+            .fill(0)
+            .map(() => []);
+        edges.forEach((edgeEntry) => {
+            const edge = edgeEndpoints(edgeEntry);
+            adjacency[edge.from].push(edge.to);
+            adjacency[edge.to].push(edge.from);
+        });
+        return adjacency;
+    }
+
+    function buildWeightedAdjacency(count, edges) {
+        const adjacency = Array(count)
+            .fill(0)
+            .map(() => []);
+        edges.forEach((edgeEntry) => {
+            const edge = edgeEndpoints(edgeEntry);
+            adjacency[edge.from].push({ node: edge.to, weight: edge.weight });
+            adjacency[edge.to].push({ node: edge.from, weight: edge.weight });
+        });
+        return adjacency;
+    }
+
+    function setNodeMaterial(index, materialKey) {
+        const node = Visualization3DState.nodes[index];
+        const material = Visualization3DState.materials[materialKey];
+        if (!node || !material) {
+            return;
+        }
+        node.material = material;
+    }
+
+    function tracePath(previous, start, target) {
+        if (!Array.isArray(previous) || start == null || target == null) {
+            return [];
+        }
+        const path = [];
+        let cursor = target;
+        while (cursor !== null && cursor !== undefined) {
+            path.push(cursor);
+            if (cursor === start) {
+                break;
+            }
+            cursor = previous[cursor];
+        }
+        if (path[path.length - 1] !== start) {
+            return [];
+        }
+        return path.reverse();
     }
 
     function disposeMaterial(material) {
@@ -306,7 +555,7 @@
     }
 
     const Visualization3D = {
-        init(containerId) {
+        init(containerId, algorithmType = '') {
             const container = document.getElementById(containerId);
             if (!container) {
                 return false;
@@ -333,7 +582,7 @@
                 Visualization3DState.resizeBound = true;
             }
 
-            this.drawInitialGraph();
+            this.drawInitialGraph(algorithmType);
             return true;
         },
 
@@ -345,13 +594,15 @@
             );
         },
 
-        drawInitialGraph() {
+        drawInitialGraph(algorithmType = '') {
             if (!this.isActive()) {
                 return;
             }
-            const config = graphConfigFromPayload(null, Visualization3DState.container);
+            const normalized = String(algorithmType || '').toLowerCase();
+            const config = resolveConfigForAlgorithm(normalized, Visualization3DState.container);
             if (!config) {
                 clearGraphObjects();
+                Visualization3DState.activeConfig = null;
                 return;
             }
 
@@ -378,7 +629,10 @@
             });
 
             const edgeThickness = 2.5;
-            Visualization3DState.edges = edges.map(([from, to]) => {
+            Visualization3DState.edges = edges.map((edgeEntry) => {
+                const edge = edgeEndpoints(edgeEntry);
+                const from = edge.from;
+                const to = edge.to;
                 const fromNode = nodes[from];
                 const toNode = nodes[to];
                 const p1 = new THREE.Vector3(fromNode.x, fromNode.y, fromNode.z);
@@ -393,12 +647,26 @@
                 scene.add(edgeMesh);
                 return edgeMesh;
             });
+            Visualization3DState.currentAlgorithm = normalized;
+            Visualization3DState.activeConfig = config;
         },
 
         start(algorithmType) {
             const normalized = String(algorithmType || '').toLowerCase();
             if (normalized === 'bfs') {
                 this.runBFS();
+                return;
+            }
+            if (normalized === 'dfs') {
+                this.runDFS();
+                return;
+            }
+            if (normalized === 'dijkstra') {
+                this.runDijkstra();
+                return;
+            }
+            if (normalized === 'astar') {
+                this.runAStar();
             }
         },
 
@@ -414,7 +682,8 @@
                 return;
             }
 
-            const config = graphConfigFromPayload(null, Visualization3DState.container);
+            this.drawInitialGraph('bfs');
+            const config = Visualization3DState.activeConfig;
             if (!config) {
                 return;
             }
@@ -425,13 +694,7 @@
             const edges = config.edges;
             const start = config.start;
 
-            const adjacencyList = Array(nodes.length)
-                .fill(0)
-                .map(() => []);
-            edges.forEach(([from, to]) => {
-                adjacencyList[from].push(to);
-                adjacencyList[to].push(from);
-            });
+            const adjacencyList = buildUnweightedAdjacency(nodes.length, edges);
             adjacencyList.forEach((neighbors) => {
                 neighbors.sort((a, b) => Number(nodes[a].label) - Number(nodes[b].label));
             });
@@ -456,25 +719,272 @@
                     continue;
                 }
 
-                Visualization3DState.nodes[current].material =
-                    Visualization3DState.materials.current;
+                setNodeMaterial(current, 'current');
                 await sleepWithPause(Visualization3DState.speed);
                 if (!Visualization3DState.isRunning) {
                     break;
                 }
 
                 visited.add(current);
-                Visualization3DState.nodes[current].material =
-                    Visualization3DState.materials.visited;
+                setNodeMaterial(current, 'visited');
 
                 const neighbors = adjacencyList[current] || [];
                 for (const neighbor of neighbors) {
                     if (!visited.has(neighbor)) {
                         queue.push(neighbor);
+                        if (Visualization3DState.nodes[neighbor].material !== Visualization3DState.materials.visited) {
+                            setNodeMaterial(neighbor, 'frontier');
+                        }
                     }
                 }
 
                 await sleepWithPause(Visualization3DState.speed);
+            }
+
+            Visualization3DState.isRunning = false;
+            Visualization3DState.isPaused = false;
+        },
+
+        async runDFS() {
+            if (Visualization3DState.isRunning || !this.isActive()) {
+                return;
+            }
+
+            this.drawInitialGraph('dfs');
+            const config = Visualization3DState.activeConfig;
+            if (!config) {
+                return;
+            }
+
+            this.resetVisualization();
+
+            const nodes = config.nodes;
+            const edges = config.edges;
+            const start = config.start;
+            const adjacencyList = buildUnweightedAdjacency(nodes.length, edges);
+            adjacencyList.forEach((neighbors) => {
+                neighbors.sort((a, b) => Number(nodes[a].label) - Number(nodes[b].label));
+            });
+
+            Visualization3DState.isRunning = true;
+            Visualization3DState.isPaused = false;
+
+            const visited = new Set();
+            const stack = [start];
+
+            while (stack.length > 0) {
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+                await waitForUnpause();
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+
+                const current = stack.pop();
+                if (visited.has(current)) {
+                    continue;
+                }
+
+                setNodeMaterial(current, 'current');
+                await sleepWithPause(Visualization3DState.speed);
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+
+                visited.add(current);
+                setNodeMaterial(current, 'visited');
+
+                const neighbors = adjacencyList[current] || [];
+                for (let idx = neighbors.length - 1; idx >= 0; idx -= 1) {
+                    const neighbor = neighbors[idx];
+                    if (!visited.has(neighbor)) {
+                        stack.push(neighbor);
+                        if (Visualization3DState.nodes[neighbor].material !== Visualization3DState.materials.visited) {
+                            setNodeMaterial(neighbor, 'frontier');
+                        }
+                    }
+                }
+
+                await sleepWithPause(Visualization3DState.speed);
+            }
+
+            Visualization3DState.isRunning = false;
+            Visualization3DState.isPaused = false;
+        },
+
+        async runDijkstra() {
+            if (Visualization3DState.isRunning || !this.isActive()) {
+                return;
+            }
+
+            this.drawInitialGraph('dijkstra');
+            const config = Visualization3DState.activeConfig;
+            if (!config) {
+                return;
+            }
+
+            this.resetVisualization();
+
+            const source = Number.isInteger(config.source) ? config.source : 0;
+            const target = Number.isInteger(config.target) ? config.target : (config.nodes.length - 1);
+            const adjacency = buildWeightedAdjacency(config.nodes.length, config.edges);
+            const distances = Array(config.nodes.length).fill(Infinity);
+            const previous = Array(config.nodes.length).fill(null);
+            const visited = new Set();
+            distances[source] = 0;
+            setNodeMaterial(source, 'frontier');
+
+            Visualization3DState.isRunning = true;
+            Visualization3DState.isPaused = false;
+
+            while (visited.size < config.nodes.length) {
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+                await waitForUnpause();
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+
+                let current = -1;
+                let bestDistance = Infinity;
+                for (let idx = 0; idx < distances.length; idx += 1) {
+                    if (!visited.has(idx) && distances[idx] < bestDistance) {
+                        bestDistance = distances[idx];
+                        current = idx;
+                    }
+                }
+                if (current < 0) {
+                    break;
+                }
+
+                setNodeMaterial(current, 'current');
+                await sleepWithPause(Visualization3DState.speed);
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+
+                visited.add(current);
+                setNodeMaterial(current, 'visited');
+
+                const neighbors = adjacency[current] || [];
+                neighbors.forEach((entry) => {
+                    if (visited.has(entry.node)) {
+                        return;
+                    }
+                    const candidate = distances[current] + entry.weight;
+                    if (candidate < distances[entry.node]) {
+                        distances[entry.node] = candidate;
+                        previous[entry.node] = current;
+                    }
+                    setNodeMaterial(entry.node, 'frontier');
+                });
+
+                await sleepWithPause(Visualization3DState.speed * 0.8);
+            }
+
+            const path = tracePath(previous, source, target);
+            path.forEach((index) => setNodeMaterial(index, 'path'));
+
+            Visualization3DState.isRunning = false;
+            Visualization3DState.isPaused = false;
+        },
+
+        async runAStar() {
+            if (Visualization3DState.isRunning || !this.isActive()) {
+                return;
+            }
+
+            this.drawInitialGraph('astar');
+            const config = Visualization3DState.activeConfig;
+            if (!config) {
+                return;
+            }
+
+            this.resetVisualization();
+
+            const start = Number.isInteger(config.source) ? config.source : 0;
+            const target = Number.isInteger(config.target) ? config.target : (config.nodes.length - 1);
+            const adjacency = buildWeightedAdjacency(config.nodes.length, config.edges);
+            const gScore = Array(config.nodes.length).fill(Infinity);
+            const fScore = Array(config.nodes.length).fill(Infinity);
+            const previous = Array(config.nodes.length).fill(null);
+            const open = new Set([start]);
+            const closed = new Set();
+
+            function heuristic(a, b) {
+                const nodeA = config.nodes[a];
+                const nodeB = config.nodes[b];
+                if (nodeA && nodeB && Number.isFinite(nodeA.row) && Number.isFinite(nodeB.row)) {
+                    return Math.abs(nodeA.row - nodeB.row) + Math.abs(nodeA.col - nodeB.col);
+                }
+                const dx = (nodeA?.x || 0) - (nodeB?.x || 0);
+                const dy = (nodeA?.y || 0) - (nodeB?.y || 0);
+                return Math.sqrt((dx * dx) + (dy * dy));
+            }
+
+            gScore[start] = 0;
+            fScore[start] = heuristic(start, target);
+            setNodeMaterial(start, 'frontier');
+
+            Visualization3DState.isRunning = true;
+            Visualization3DState.isPaused = false;
+
+            while (open.size > 0) {
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+                await waitForUnpause();
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+
+                let current = -1;
+                let bestF = Infinity;
+                open.forEach((candidate) => {
+                    if (fScore[candidate] < bestF) {
+                        bestF = fScore[candidate];
+                        current = candidate;
+                    }
+                });
+
+                if (current < 0) {
+                    break;
+                }
+                if (current === target) {
+                    break;
+                }
+
+                open.delete(current);
+                closed.add(current);
+                setNodeMaterial(current, 'current');
+                await sleepWithPause(Visualization3DState.speed);
+                if (!Visualization3DState.isRunning) {
+                    break;
+                }
+                setNodeMaterial(current, 'visited');
+
+                (adjacency[current] || []).forEach((entry) => {
+                    if (closed.has(entry.node)) {
+                        return;
+                    }
+                    const tentativeG = gScore[current] + entry.weight;
+                    if (tentativeG < gScore[entry.node]) {
+                        previous[entry.node] = current;
+                        gScore[entry.node] = tentativeG;
+                        fScore[entry.node] = tentativeG + heuristic(entry.node, target);
+                        open.add(entry.node);
+                        setNodeMaterial(entry.node, 'frontier');
+                    }
+                });
+
+                await sleepWithPause(Visualization3DState.speed * 0.8);
+            }
+
+            const path = tracePath(previous, start, target);
+            if (path.length) {
+                path.forEach((index) => setNodeMaterial(index, 'path'));
             }
 
             Visualization3DState.isRunning = false;
@@ -499,6 +1009,9 @@
             Visualization3DState.nodes.forEach((node) => {
                 node.material = Visualization3DState.materials.default.clone();
                 node.scale.set(1, 1, 1);
+            });
+            Visualization3DState.edges.forEach((edge) => {
+                edge.material = Visualization3DState.materials.edge.clone();
             });
         },
 
@@ -527,6 +1040,8 @@
             disposeMaterial(Visualization3DState.materials.visited);
             disposeMaterial(Visualization3DState.materials.current);
             disposeMaterial(Visualization3DState.materials.edge);
+            disposeMaterial(Visualization3DState.materials.frontier);
+            disposeMaterial(Visualization3DState.materials.path);
 
             if (Visualization3DState.renderer) {
                 Visualization3DState.renderer.dispose();
@@ -545,6 +1060,8 @@
                 materials: {},
                 nodes: [],
                 edges: [],
+                currentAlgorithm: '',
+                activeConfig: null,
             });
         },
     };
@@ -555,7 +1072,7 @@
 
     function shouldUse3DEngine(algorithmType) {
         const normalized = String(algorithmType || '').toLowerCase();
-        return normalized === 'bfs' && window.Visualization3D && window.Visualization3D.isActive();
+        return ['bfs', 'dfs', 'dijkstra', 'astar'].includes(normalized) && window.Visualization3D && window.Visualization3D.isActive();
     }
 
     window.VisualizationEngine = {
@@ -614,7 +1131,7 @@
         },
         renderPreview(algorithmType) {
             if (shouldUse3DEngine(algorithmType)) {
-                window.Visualization3D.drawInitialGraph();
+                window.Visualization3D.drawInitialGraph(algorithmType);
                 return;
             }
             if (typeof baseEngine.renderPreview === 'function') {
