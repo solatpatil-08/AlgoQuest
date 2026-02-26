@@ -66,6 +66,29 @@ class CustomSetPasswordForm(SetPasswordForm):
         self.fields['new_password1'].help_text = password_validation.password_validators_help_text_html()
 
 
+class PasswordResetOtpForm(forms.Form):
+    otp = forms.CharField(
+        label='OTP',
+        max_length=6,
+        min_length=6,
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter 6-digit OTP',
+                'inputmode': 'numeric',
+                'autocomplete': 'one-time-code',
+                'pattern': r'\d{6}',
+            }
+        ),
+    )
+
+    def clean_otp(self):
+        otp = self.cleaned_data.get('otp', '').strip()
+        if not otp.isdigit():
+            raise forms.ValidationError('OTP must contain only numbers.')
+        return otp
+
+
 class UserSettingsForm(forms.ModelForm):
     class Meta:
         model = User

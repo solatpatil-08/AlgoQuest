@@ -78,6 +78,15 @@
     }
 }
 
+@keyframes execLinkedFlow {
+    0% {
+        stroke-dashoffset: 0;
+    }
+    100% {
+        stroke-dashoffset: -56;
+    }
+}
+
 /* ============================================
    Challenge Page Layout
    ============================================ */
@@ -888,9 +897,110 @@
     animation: execSceneFloat 4s ease-in-out infinite;
 }
 
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml {
+    --exec-ml-floor: #e2e8f0;
+    --exec-ml-floor-stroke: #cbd5e1;
+    --exec-ml-grid: #cbd5e1;
+    --exec-ml-axis-line: #475569;
+    --exec-ml-text: #0f172a;
+    --exec-ml-text-muted: #334155;
+    --exec-ml-text-axis: #475569;
+    --exec-ml-text-query: #6d28d9;
+    --exec-ml-text-positive: #166534;
+    --exec-ml-text-negative: #9a3412;
+    --exec-ml-halo: rgba(248, 250, 252, 0.96);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml .exec-ml-text {
+    fill: var(--exec-ml-text);
+    paint-order: stroke;
+    stroke: var(--exec-ml-halo);
+    stroke-width: 2.2px;
+    stroke-linejoin: round;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml .exec-ml-text-muted {
+    fill: var(--exec-ml-text-muted);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml .exec-ml-text-axis {
+    fill: var(--exec-ml-text-axis);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml .exec-ml-text-query {
+    fill: var(--exec-ml-text-query);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml .exec-ml-text-positive {
+    fill: var(--exec-ml-text-positive);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-ml .exec-ml-text-negative {
+    fill: var(--exec-ml-text-negative);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked {
+    --exec-ll-floor: #dbeafe;
+    --exec-ll-floor-stroke: #bfdbfe;
+    --exec-ll-shadow: rgba(30, 41, 59, 0.22);
+    --exec-ll-slot-bg: rgba(148, 163, 184, 0.2);
+    --exec-ll-null-bg: #f8fafc;
+    --exec-ll-null-stroke: #94a3b8;
+    --exec-ll-index-bg: rgba(248, 250, 252, 0.9);
+    --exec-ll-index-stroke: #cbd5e1;
+    --exec-ll-text: #0f172a;
+    --exec-ll-label: #334155;
+    --exec-ll-badge: #f8fafc;
+    --exec-ll-halo: rgba(248, 250, 252, 0.96);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-svg.exec-svg-3d {
+    width: auto;
+    min-width: 100%;
+    max-width: none;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-text {
+    fill: var(--exec-ll-text);
+    paint-order: stroke;
+    stroke: var(--exec-ll-halo);
+    stroke-width: 2.1px;
+    stroke-linejoin: round;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-label {
+    fill: var(--exec-ll-label);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-badge {
+    fill: var(--exec-ll-badge);
+    stroke-width: 1.8px;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-next-path,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-prev-path,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-wrap-path {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 17 10;
+    animation: execLinkedFlow 3.6s linear infinite;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-prev-path {
+    animation-duration: 4.1s;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-wrap-path {
+    stroke-dasharray: 20 12;
+    animation-duration: 4.8s;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .exec-diagram-wrap.exec-3d-scene::before,
-    .exec-svg.exec-svg-3d {
+    .exec-svg.exec-svg-3d,
+    .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-next-path,
+    .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-prev-path,
+    .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-wrap-path {
         animation: none !important;
     }
 }
@@ -1027,6 +1137,35 @@
         radial-gradient(circle at 14% 18%, rgba(37, 99, 235, 0.24), transparent 42%),
         radial-gradient(circle at 82% 16%, rgba(16, 185, 129, 0.16), transparent 40%),
         linear-gradient(160deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.9));
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-ml {
+    --exec-ml-floor: #334155;
+    --exec-ml-floor-stroke: #64748b;
+    --exec-ml-grid: #475569;
+    --exec-ml-axis-line: #cbd5e1;
+    --exec-ml-text: #f8fafc;
+    --exec-ml-text-muted: #e2e8f0;
+    --exec-ml-text-axis: #cbd5e1;
+    --exec-ml-text-query: #e9d5ff;
+    --exec-ml-text-positive: #bbf7d0;
+    --exec-ml-text-negative: #fed7aa;
+    --exec-ml-halo: rgba(2, 6, 23, 0.96);
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked {
+    --exec-ll-floor: #1e293b;
+    --exec-ll-floor-stroke: #334155;
+    --exec-ll-shadow: rgba(2, 6, 23, 0.68);
+    --exec-ll-slot-bg: rgba(100, 116, 139, 0.32);
+    --exec-ll-null-bg: #0f172a;
+    --exec-ll-null-stroke: #64748b;
+    --exec-ll-index-bg: rgba(15, 23, 42, 0.92);
+    --exec-ll-index-stroke: #475569;
+    --exec-ll-text: #f8fafc;
+    --exec-ll-label: #cbd5e1;
+    --exec-ll-badge: #f8fafc;
+    --exec-ll-halo: rgba(2, 6, 23, 0.96);
 }
 
 [data-theme="dark"] .exec-score-track,

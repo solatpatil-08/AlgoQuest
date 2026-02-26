@@ -152,6 +152,7 @@ FILTER_KEYWORDS = {
 }
 
 ALGORITHM_TYPE_LABELS = dict(Challenge.AlgorithmType.choices)
+SUPPORTED_ALGORITHM_TYPE_VALUES = set(ALGORITHM_TYPE_LABELS.keys())
 CATEGORY_LABEL_MAP = dict(CATEGORY_OPTIONS)
 CATEGORY_DISPLAY_LABELS = {
     **CATEGORY_LABEL_MAP,
@@ -335,7 +336,10 @@ def _build_category_filter_q(selected_category):
 
 def _build_subtype_options(selected_category, queryset):
     present_algorithm_types = set(
-        queryset.exclude(algorithm_type='').values_list('algorithm_type', flat=True).distinct()
+        queryset.filter(
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type__in=SUPPORTED_ALGORITHM_TYPE_VALUES,
+        ).values_list('algorithm_type', flat=True).distinct()
     )
     if selected_category == 'all':
         subtype_values = present_algorithm_types
@@ -360,13 +364,164 @@ def _search_algorithm_type_values(search_query):
     if not normalized_query:
         return set()
 
+    query_tokens = set(normalized_query.split())
+
+    def query_matches_term(term):
+        normalized_term = _normalize_text(term)
+        if not normalized_term:
+            return False
+        if normalized_term == normalized_query:
+            return True
+        if len(normalized_term) <= 1:
+            # Avoid broad false positives (for example "a*" -> "a").
+            return normalized_term in query_tokens
+        if ' ' in normalized_term:
+            return normalized_term in normalized_query or normalized_query in normalized_term
+        return normalized_term in query_tokens or normalized_term in normalized_query
+
     matches = set()
     for value, label in Challenge.AlgorithmType.choices:
         normalized_label = _normalize_text(label)
         normalized_value = _normalize_text(value.replace('_', ' '))
-        if normalized_query in normalized_label or normalized_query in normalized_value:
+        if (
+            normalized_query in normalized_label
+            or normalized_query in normalized_value
+            or query_matches_term(label)
+            or query_matches_term(value.replace('_', ' '))
+        ):
+            matches.add(value)
+
+    for filter_key, keywords in FILTER_KEYWORDS.items():
+        keyword_hit = query_matches_term(filter_key)
+        if not keyword_hit:
+            keyword_hit = any(query_matches_term(keyword) for keyword in keywords)
+        if keyword_hit:
+            matches.update(CATEGORY_TO_ALGORITHM_TYPES.get(filter_key, set()))
+
+    return matches
+
+
+def _search_challenge_type_values(search_query):
+    normalized_query = _normalize_text(search_query)
+    if not normalized_query:
+        return set()
+
+    query_tokens = set(normalized_query.split())
+    matches = set()
+    for value, label in Challenge.ChallengeType.choices:
+        normalized_label = _normalize_text(label)
+        normalized_value = _normalize_text(value.replace('_', ' '))
+        if (
+            normalized_query in normalized_label
+            or normalized_query in normalized_value
+            or normalized_value in query_tokens
+        ):
             matches.add(value)
     return matches
+
+
+def _search_difficulty_values(search_query):
+    normalized_query = _normalize_text(search_query)
+    if not normalized_query:
+        return set()
+
+    query_tokens = set(normalized_query.split())
+    matches = set()
+    for value, label in Challenge.Difficulty.choices:
+        normalized_label = _normalize_text(label)
+        normalized_value = _normalize_text(value)
+        if (
+            normalized_query in normalized_label
+            or normalized_query in normalized_value
+            or normalized_value in query_tokens
+        ):
+            matches.add(value)
+    return matches
+
+
+def _search_category_targets(search_query):
+    normalized_query = _normalize_text(search_query)
+    if not normalized_query:
+        return set()
+
+    query_tokens = set(normalized_query.split())
+    targets = set()
+
+    def query_matches_term(term):
+        normalized_term = _normalize_text(term)
+        if not normalized_term:
+            return False
+        if normalized_term == normalized_query:
+            return True
+        if len(normalized_term) <= 1:
+            return normalized_term in query_tokens
+        if ' ' in normalized_term:
+            return normalized_term in normalized_query or normalized_query in normalized_term
+        return normalized_term in query_tokens or normalized_term in normalized_query
+
+    # Keep search mapping explicit: canonical categories + discovered categories.
+    category_candidates = (set(CATEGORY_DISPLAY_LABELS.keys()) | set(CATEGORY_LABEL_MAP.keys())) - set(CATEGORY_ALIASES.keys())
+    for category_code in category_candidates:
+        display_label = _category_display_label(category_code)
+        if not (query_matches_term(category_code) or query_matches_term(display_label)):
+            continue
+
+        # For broad canonical categories, include equivalent buckets.
+        if category_code in CATEGORY_FILTER_EQUIVALENTS and category_code in CATEGORY_LABEL_MAP:
+            targets.update(_category_targets(category_code))
+        else:
+            targets.add(category_code)
+
+    for filter_key, keywords in FILTER_KEYWORDS.items():
+        keyword_hit = query_matches_term(filter_key)
+        if not keyword_hit:
+            keyword_hit = any(query_matches_term(keyword) for keyword in keywords)
+        if not keyword_hit:
+            continue
+
+        if filter_key in CATEGORY_FILTER_EQUIVALENTS and filter_key in CATEGORY_LABEL_MAP:
+            targets.update(_category_targets(filter_key))
+        else:
+            targets.add(filter_key)
+
+    return targets
+
+
+def _build_search_filters(search_query):
+    numeric_tokens = {int(token) for token in re.findall(r'\d+', search_query)}
+    matching_algorithm_types = _search_algorithm_type_values(search_query)
+    matching_challenge_types = _search_challenge_type_values(search_query)
+    matching_difficulties = _search_difficulty_values(search_query)
+    matching_category_targets = _search_category_targets(search_query)
+
+    search_filters = (
+        Q(title__icontains=search_query)
+        | Q(description__icontains=search_query)
+        | Q(prompt__icontains=search_query)
+        | Q(topic__label__icontains=search_query)
+        | Q(topic__stable_id__icontains=search_query)
+        | Q(topic__category__icontains=search_query)
+    )
+
+    if matching_algorithm_types:
+        search_filters |= Q(algorithm_type__in=matching_algorithm_types)
+    if matching_challenge_types:
+        search_filters |= Q(challenge_type__in=matching_challenge_types)
+    if matching_difficulties:
+        search_filters |= Q(difficulty__in=matching_difficulties)
+    if numeric_tokens:
+        search_filters |= Q(xp_reward__in=numeric_tokens) | Q(order_index__in=numeric_tokens)
+
+    if matching_category_targets:
+        mapped_algorithm_types = set()
+        for target in matching_category_targets:
+            mapped_algorithm_types.update(CATEGORY_TO_ALGORITHM_TYPES.get(target, set()))
+
+        search_filters |= Q(topic__category__in=matching_category_targets)
+        if mapped_algorithm_types:
+            search_filters |= Q(algorithm_type__in=mapped_algorithm_types)
+
+    return search_filters
 
 
 def _apply_queryset_sort(challenges_queryset, sort_by, user):
@@ -2852,21 +3007,26 @@ def challenge_list_view(request):
     if selected_category != 'all':
         challenges = challenges.filter(_build_category_filter_q(selected_category))
 
+    # Hide invalid legacy rows that do not map to a supported algorithm subtype.
+    challenges = challenges.exclude(
+        Q(challenge_type=Challenge.ChallengeType.ALGORITHM)
+        & ~Q(algorithm_type__in=SUPPORTED_ALGORITHM_TYPE_VALUES)
+    )
+
     subtype_options = _build_subtype_options(selected_category, challenges)
     valid_subtypes = {option['value'] for option in subtype_options}
     if selected_subtype != 'all' and selected_subtype not in valid_subtypes:
         selected_subtype = 'all'
 
+    # Keep list in subtype-card mode whenever no subtype is selected.
+    # This ensures search like "AI/ML" lands on algorithm types first (KMeans, Naive Bayes, etc.).
     is_subtype_index_mode = selected_subtype == 'all'
     if not is_subtype_index_mode:
-        challenges = challenges.filter(algorithm_type=selected_subtype)
+        if selected_subtype != 'all':
+            challenges = challenges.filter(algorithm_type=selected_subtype)
 
     if search_query:
-        matching_algorithm_types = _search_algorithm_type_values(search_query)
-        search_filters = Q(title__icontains=search_query) | Q(description__icontains=search_query)
-        if matching_algorithm_types:
-            search_filters |= Q(algorithm_type__in=matching_algorithm_types)
-        challenges = challenges.filter(search_filters)
+        challenges = challenges.filter(_build_search_filters(search_query))
 
     challenges = _apply_queryset_sort(challenges, sort_by, request.user)
 
@@ -2899,6 +3059,10 @@ def challenge_list_view(request):
         subtype_counts = defaultdict(int)
         representatives = {}
         for challenge in challenges:
+            if challenge.challenge_type != Challenge.ChallengeType.ALGORITHM:
+                continue
+            if challenge.algorithm_type not in SUPPORTED_ALGORITHM_TYPE_VALUES:
+                continue
             subtype_key = challenge.algorithm_type or f'challenge-{challenge.id}'
             subtype_counts[subtype_key] += 1
             if subtype_key not in representatives:

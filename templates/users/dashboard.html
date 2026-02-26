@@ -107,9 +107,14 @@
                 <div class="card-body">
                     <h2 class="h5 mb-3"><i class="bi bi-award me-2" style="color: var(--aq-accent);"></i>Badges</h2>
                     {% if profile.badges %}
-                        <div class="d-flex flex-wrap gap-2">
+                        <div class="dashboard-achievements-grid">
                             {% for badge in profile.badges %}
-                                <span class="badge badge-level">{{ badge }}</span>
+                                <span class="dashboard-achievement-chip" title="{{ badge }}">
+                                    <span class="dashboard-achievement-icon" aria-hidden="true">
+                                        <i class="bi bi-trophy-fill"></i>
+                                    </span>
+                                    <span class="dashboard-achievement-text">{{ badge }}</span>
+                                </span>
                             {% endfor %}
                         </div>
                     {% else %}

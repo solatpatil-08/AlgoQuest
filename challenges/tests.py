@@ -1266,6 +1266,12 @@ class ChallengeCategoryTests(TestCase):
 
 class ChallengeListFilterTests(TestCase):
     def setUp(self):
+        self.ai_topic = Topic.objects.create(
+            stable_id='ml_search_topic',
+            label='Machine Learning Foundations',
+            category=Topic.Category.AI_ML,
+            description='ml topic',
+        )
         Challenge.objects.create(
             title='Graph Traversal BFS',
             challenge_type=Challenge.ChallengeType.ALGORITHM,
@@ -1274,6 +1280,7 @@ class ChallengeListFilterTests(TestCase):
             description='desc',
             prompt='prompt',
             expected_answer='a b',
+            xp_reward=73,
         )
         Challenge.objects.create(
             title='KMeans Cluster Challenge',
@@ -1283,6 +1290,8 @@ class ChallengeListFilterTests(TestCase):
             description='desc',
             prompt='prompt',
             expected_answer='mean position',
+            xp_reward=91,
+            topic=self.ai_topic,
         )
 
     def test_category_filter_only_returns_requested_category(self):
@@ -1291,6 +1300,29 @@ class ChallengeListFilterTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'K-Means')
         self.assertNotContains(response, 'BFS')
+
+    def test_search_by_xp_points_returns_matching_challenge(self):
+        response = self.client.get(reverse('challenges-list'), {'search': '91'})
+
+        self.assertEqual(response.status_code, 200)
+        returned_titles = {challenge.title for challenge in response.context['challenges']}
+        self.assertIn('KMeans Cluster Challenge', returned_titles)
+        self.assertNotIn('Graph Traversal BFS', returned_titles)
+
+    def test_search_by_topic_label_returns_related_challenge(self):
+        response = self.client.get(reverse('challenges-list'), {'search': 'Machine Learning Foundations'})
+
+        self.assertEqual(response.status_code, 200)
+        returned_titles = {challenge.title for challenge in response.context['challenges']}
+        self.assertIn('KMeans Cluster Challenge', returned_titles)
+
+    def test_search_typo_keyword_graph_like_still_returns_related_results_only(self):
+        response = self.client.get(reverse('challenges-list'), {'search': 'grapht'})
+
+        self.assertEqual(response.status_code, 200)
+        returned_titles = {challenge.title for challenge in response.context['challenges']}
+        self.assertIn('Graph Traversal BFS', returned_titles)
+        self.assertNotIn('KMeans Cluster Challenge', returned_titles)
 
 class TopicModelTests(TestCase):
     def test_topic_creation(self):
@@ -2271,6 +2303,30 @@ class ChallengeCategorySubtypeNavigationTests(TestCase):
         self.assertEqual(len(returned), 5)
         self.assertTrue(all('Entropy' in ch.description or 'entropy' in ch.description for ch in returned))
 
+    def test_search_without_subtype_shows_matching_subtype_cards(self):
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'ai_ml', 'search': 'Decision Tree Level'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        returned = response.context['challenges']
+        self.assertEqual(len(returned), 1)
+        self.assertTrue(all(ch.algorithm_type == 'decision_tree' for ch in returned))
+        self.assertEqual(response.context['selected_subtype'], 'all')
+        self.assertTrue(response.context['is_subtype_index_mode'])
+
+    def test_subtype_link_preserves_search_query(self):
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'ai_ml', 'search': 'AI/ML'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        cards = response.context['challenges']
+        self.assertTrue(cards)
+        self.assertTrue(all('search=AI%2FML' in ch.subtype_query for ch in cards))
+
     def test_subtype_returns_all_30_levels(self):
         response = self.client.get(
             reverse('challenges-list'),
@@ -2281,6 +2337,33 @@ class ChallengeCategorySubtypeNavigationTests(TestCase):
         self.assertEqual(len(levels), 30)
         self.assertEqual(min(levels), 0)
         self.assertEqual(max(levels), 29)
+
+    def test_subtype_index_hides_blank_or_unsupported_algorithm_types(self):
+        noise_topic = Topic.objects.create(
+            stable_id='noise_topic',
+            label='Noise Topic',
+            category=Topic.Category.DSA_CORE,
+            description='noise',
+        )
+        Challenge.objects.create(
+            title='Probe A',
+            topic=noise_topic,
+            order_index=0,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type='',
+            difficulty=Challenge.Difficulty.EASY,
+            description='noise',
+            prompt='noise',
+            expected_answer='x',
+        )
+
+        response = self.client.get(reverse('challenges-list'), {'category': 'dsa_core'})
+        self.assertEqual(response.status_code, 200)
+        cards = response.context['challenges']
+        self.assertGreaterEqual(len(cards), 1)
+        self.assertTrue(all(ch.algorithm_type for ch in cards))
+        self.assertTrue(all(ch.algorithm_type in dict(Challenge.AlgorithmType.choices) for ch in cards))
+        self.assertFalse(any(ch.title == 'Probe A' for ch in cards))
 
     def test_subtype_ignores_legacy_duplicates_for_same_algorithm_level(self):
         Challenge.objects.create(
@@ -2446,7 +2529,7 @@ class FilterPersistenceTests(TestCase):
         self.assertEqual(response.context['selected_difficulty'], 'easy')
         self.assertEqual(response.context['search_query'], 'Easy')
         self.assertContains(response, 'id="quickFilterSearchInput"')
-        self.assertContains(response, 'value="Easy"')
+        self.assertContains(response, 'value=""')
         self.assertEqual(len(response.context['challenges']), 1)
         self.assertContains(response, 'BFS')
     
@@ -2456,7 +2539,7 @@ class FilterPersistenceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['search_query'], 'Easy')
         self.assertContains(response, 'id="quickFilterSearchInput"')
-        self.assertContains(response, 'value="Easy"')
+        self.assertContains(response, 'value=""')
 
 
 class ProgressPanelStructureTests(TestCase):

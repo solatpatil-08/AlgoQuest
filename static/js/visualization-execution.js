@@ -100,10 +100,12 @@
         return String(rounded.toFixed(decimals).replace(/\.?0+$/, ''));
     }
 
-    function render3DScene(svgBody, width, height, ariaLabel) {
+    function render3DScene(svgBody, width, height, ariaLabel, sceneClass = '', svgInlineStyle = '') {
+        const extraClass = sceneClass ? ` ${sceneClass}` : '';
+        const svgStyleAttr = svgInlineStyle ? ` style="${escapeHtml(svgInlineStyle)}"` : '';
         return `
-            <div class="exec-diagram-wrap exec-3d-scene">
-                <svg class="exec-svg exec-svg-3d" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ariaLabel || '3D execution visualization')}">
+            <div class="exec-diagram-wrap exec-3d-scene${extraClass}">
+                <svg class="exec-svg exec-svg-3d" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ariaLabel || '3D execution visualization')}"${svgStyleAttr}>
                     ${svgBody}
                 </svg>
             </div>
@@ -342,14 +344,25 @@
         const matchedIndex = Number.isInteger(options.matchedIndex) ? options.matchedIndex : null;
         const startIndex = Number.isInteger(options.startIndex) ? options.startIndex : null;
         const visitedSet = options.visitedSet instanceof Set ? options.visitedSet : new Set();
-        const spacing = 102;
-        const nodeWidth = 74;
-        const nodeHeight = 38;
-        const depth = 9;
-        const pad = 30;
-        const width = Math.max(420, pad * 2 + (values.length * spacing));
-        const baseY = mode === 'circular' ? 92 : 64;
-        const height = mode === 'circular' ? 206 : 154;
+        const spacing = values.length > 9 ? 122 : (mode === 'doubly' ? 142 : 132);
+        const nodeWidth = mode === 'doubly' ? 94 : 92;
+        const nodeHeight = 52;
+        const pointerSlotWidth = mode === 'doubly' ? 28 : 26;
+        const depth = 10;
+        const pad = mode === 'doubly' ? 76 : 44;
+        const width = Math.max(560, (pad * 2) + ((values.length - 1) * spacing) + nodeWidth + 152);
+        const baseY = mode === 'circular' ? 96 : 78;
+        const height = mode === 'circular' ? 268 : 216;
+        const pointerDivider = nodeWidth - pointerSlotWidth;
+        const nextPortY = mode === 'doubly' ? baseY + 16 : baseY + 26;
+        const prevPortY = baseY + 40;
+        const linkCurveX = Math.max(36, Math.floor(spacing * 0.38));
+        const linkCurveUp = mode === 'doubly' ? 24 : 22;
+        const linkCurveDown = 24;
+        const markerScope = `${mode}-${values.length}-${currentIndex ?? 'n'}-${matchedIndex ?? 'n'}-${startIndex ?? 'n'}`
+            .replace(/[^a-z0-9_-]/gi, '');
+        const nextMarkerId = `exec3d-next-${markerScope}`;
+        const prevMarkerId = `exec3d-prev-${markerScope}`;
 
         function paletteFor(idx) {
             if (idx === matchedIndex) {
@@ -364,34 +377,90 @@
             return { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#334155' };
         }
 
+        const deckTop = baseY + nodeHeight + 24;
+        const deck = `
+            <ellipse cx="${width / 2}" cy="${deckTop + 15}" rx="${Math.max(140, (width / 2) - 52)}" ry="14" fill="var(--exec-ll-shadow)" opacity="0.48"></ellipse>
+            <polygon
+                points="${pad - 24},${deckTop} ${pad - 12},${deckTop - depth} ${width - pad + 22},${deckTop - depth} ${width - pad + 10},${deckTop}"
+                fill="var(--exec-ll-floor)"
+                stroke="var(--exec-ll-floor-stroke)"
+                stroke-width="1.2"
+            ></polygon>
+        `;
+
         const markers = `
             <defs>
-                <marker id="exec3d-next" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
-                    <path d="M0,0 L10,5 L0,10 z" fill="#2563EB"></path>
+                <marker id="${nextMarkerId}" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#1D4ED8"></path>
                 </marker>
-                <marker id="exec3d-prev" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto">
-                    <path d="M10,0 L0,5 L10,10 z" fill="#10B981"></path>
+                <marker id="${prevMarkerId}" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto">
+                    <path d="M10,0 L0,5 L10,10 z" fill="#0D9488"></path>
                 </marker>
             </defs>
         `;
 
         const edges = [];
         for (let idx = 0; idx < values.length - 1; idx += 1) {
-            const fromX = pad + (idx * spacing) + nodeWidth;
-            const toX = pad + ((idx + 1) * spacing);
+            const currentNodeX = pad + (idx * spacing);
+            const nextNodeX = pad + ((idx + 1) * spacing);
+            const nextStartX = currentNodeX + nodeWidth - 1.5;
+            const nextEndX = nextNodeX + 1.5;
+            edges.push(`
+                <path class="exec-ll-next-path" d="M ${nextStartX} ${nextPortY} C ${nextStartX + linkCurveX} ${nextPortY - linkCurveUp}, ${nextEndX - linkCurveX} ${nextPortY - linkCurveUp}, ${nextEndX} ${nextPortY}"
+                    fill="none" stroke="#1D4ED8" stroke-width="${mode === 'doubly' ? '2.35' : '2.5'}" marker-end="url(#${nextMarkerId})"></path>
+            `);
             if (mode === 'doubly') {
-                edges.push(`<line x1="${fromX}" y1="${baseY + 9}" x2="${toX}" y2="${baseY + 9}" stroke="#2563eb" stroke-width="2.1" marker-end="url(#exec3d-next)"></line>`);
-                edges.push(`<line x1="${toX}" y1="${baseY + 29}" x2="${fromX}" y2="${baseY + 29}" stroke="#10b981" stroke-width="2.1" marker-end="url(#exec3d-prev)"></line>`);
-            } else {
-                edges.push(`<line x1="${fromX}" y1="${baseY + 20}" x2="${toX}" y2="${baseY + 20}" stroke="#2563eb" stroke-width="2.4" marker-end="url(#exec3d-next)"></line>`);
+                const prevStartX = nextNodeX + 1.5;
+                const prevEndX = currentNodeX + 1.5;
+                edges.push(`
+                    <path class="exec-ll-prev-path" d="M ${prevStartX} ${prevPortY} C ${prevStartX - linkCurveX} ${prevPortY + linkCurveDown}, ${prevEndX + linkCurveX} ${prevPortY + linkCurveDown}, ${prevEndX} ${prevPortY}"
+                        fill="none" stroke="#0D9488" stroke-width="2.35" marker-end="url(#${prevMarkerId})"></path>
+                `);
             }
         }
-        if (mode === 'circular' && values.length > 1) {
-            const firstX = pad + (nodeWidth / 2);
-            const lastX = pad + ((values.length - 1) * spacing) + (nodeWidth / 2);
+
+        const nullNodes = [];
+        if (mode !== 'circular') {
+            const rightNullX = pad + ((values.length - 1) * spacing) + nodeWidth + 46;
+            const rightNullEntryX = rightNullX + 1;
+            const rightNullEntryY = baseY + 26;
+            nullNodes.push(`
+                <g>
+                    <rect x="${rightNullX}" y="${baseY + 14}" width="52" height="24" rx="7" fill="var(--exec-ll-null-bg)" stroke="var(--exec-ll-null-stroke)" stroke-width="1.3"></rect>
+                    <text x="${rightNullX + 26}" y="${baseY + 30}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label">NULL</text>
+                </g>
+            `);
             edges.push(`
-                <path d="M ${lastX} ${baseY + nodeHeight + 2} C ${lastX + 42} ${baseY + 70}, ${firstX - 42} ${baseY + 70}, ${firstX} ${baseY + nodeHeight + 2}"
-                    fill="none" stroke="#7c3aed" stroke-width="2.4" marker-end="url(#exec3d-next)"></path>
+                <path class="exec-ll-next-path" d="M ${pad + ((values.length - 1) * spacing) + nodeWidth - 1.5} ${nextPortY} C ${pad + ((values.length - 1) * spacing) + nodeWidth + (linkCurveX - 6)} ${nextPortY - (linkCurveUp - 3)}, ${rightNullEntryX - (linkCurveX - 10)} ${rightNullEntryY - (linkCurveUp - 8)}, ${rightNullEntryX} ${rightNullEntryY}"
+                    fill="none" stroke="#1D4ED8" stroke-width="2.35" marker-end="url(#${nextMarkerId})"></path>
+            `);
+
+            if (mode === 'doubly') {
+                const leftNullX = Math.max(12, pad - 62);
+                const leftNullEntryX = leftNullX + 51;
+                nullNodes.push(`
+                    <g>
+                        <rect x="${leftNullX}" y="${baseY + 14}" width="52" height="24" rx="7" fill="var(--exec-ll-null-bg)" stroke="var(--exec-ll-null-stroke)" stroke-width="1.3"></rect>
+                        <text x="${leftNullX + 26}" y="${baseY + 30}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label">NULL</text>
+                    </g>
+                `);
+                edges.push(`
+                    <path class="exec-ll-prev-path" d="M ${pad + 1.5} ${prevPortY} C ${pad - (linkCurveX - 12)} ${prevPortY + (linkCurveDown - 6)}, ${leftNullEntryX + (linkCurveX - 14)} ${prevPortY + (linkCurveDown - 6)}, ${leftNullEntryX} ${prevPortY}"
+                        fill="none" stroke="#0D9488" stroke-width="2.3" marker-end="url(#${prevMarkerId})"></path>
+                `);
+            }
+        }
+
+        if (mode === 'circular' && values.length > 1) {
+            const headEntryX = pad + 1.5;
+            const tailExitX = pad + ((values.length - 1) * spacing) + nodeWidth - 1.5;
+            const wrapLaneY = baseY + nodeHeight + 94;
+            edges.push(`
+                <path class="exec-ll-wrap-path" d="M ${tailExitX} ${nextPortY} C ${tailExitX + (linkCurveX + 20)} ${wrapLaneY}, ${headEntryX - (linkCurveX + 20)} ${wrapLaneY}, ${headEntryX} ${nextPortY}"
+                    fill="none" stroke="#7C3AED" stroke-width="2.55" marker-end="url(#${nextMarkerId})"></path>
+            `);
+            edges.push(`
+                <text x="${(headEntryX + tailExitX) / 2}" y="${wrapLaneY + 12}" text-anchor="middle" font-size="10.7" class="exec-ll-text exec-ll-badge">wrap to head</text>
             `);
         }
 
@@ -399,24 +468,78 @@
             const x = pad + (idx * spacing);
             const y = baseY;
             const palette = paletteFor(idx);
+            const rawValue = formatNumber(value);
+            const compactValue = rawValue.length > 7 ? Number(value).toExponential(1).replace('+', '') : rawValue;
+            const valueFontSize = compactValue.length > 7 ? 11.2 : (compactValue.length > 5 ? 12.6 : 14);
+            const valueWidth = nodeWidth - pointerSlotWidth - 14;
+            const valueFitAttrs = compactValue.length > 5
+                ? ` textLength="${valueWidth}" lengthAdjust="spacingAndGlyphs"`
+                : '';
+            const isHead = idx === 0;
+            const isTail = idx === values.length - 1;
+            const badges = [];
+            if (startIndex === idx) {
+                badges.push({ label: 'START', color: '#7c3aed' });
+            } else if (isHead) {
+                badges.push({ label: 'HEAD', color: '#2563eb' });
+            }
+            if (isTail && mode !== 'circular') {
+                badges.push({ label: 'TAIL', color: '#0f766e' });
+            }
+
             return `
                 <g>
                     <polygon points="${x},${y} ${x + depth},${y - depth} ${x + nodeWidth + depth},${y - depth} ${x + nodeWidth},${y}" fill="${palette.top}"></polygon>
                     <polygon points="${x + nodeWidth},${y} ${x + nodeWidth + depth},${y - depth} ${x + nodeWidth + depth},${y + nodeHeight - depth} ${x + nodeWidth},${y + nodeHeight}" fill="${palette.side}"></polygon>
-                    <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="8" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${idx === currentIndex ? '2.6' : '1.6'}"></rect>
-                    <text x="${x + (nodeWidth / 2)}" y="${y + 23}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
-                    <text x="${x + (nodeWidth / 2)}" y="${y + 52}" text-anchor="middle" font-size="10.5" fill="#64748b">idx ${idx}</text>
-                    ${startIndex === idx ? `<text x="${x + (nodeWidth / 2)}" y="${y - 16}" text-anchor="middle" font-size="11" fill="#7c3aed">start</text>` : ''}
+                    <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${idx === currentIndex ? '2.7' : '1.6'}"></rect>
+                    <rect x="${x + pointerDivider}" y="${y + 1}" width="${pointerSlotWidth - 1}" height="${nodeHeight - 2}" rx="8" fill="var(--exec-ll-slot-bg)" stroke="${palette.stroke}" stroke-width="0.8" opacity="0.58"></rect>
+                    <line x1="${x + pointerDivider}" y1="${y + 2}" x2="${x + pointerDivider}" y2="${y + nodeHeight - 2}" stroke="${palette.stroke}" stroke-width="1.15" opacity="0.55"></line>
+                    <circle cx="${x + nodeWidth - 1.5}" cy="${mode === 'doubly' ? y + 16 : y + 26}" r="2.2" fill="#1D4ED8"></circle>
+                    ${mode === 'doubly'
+                        ? `<circle cx="${x + 1.5}" cy="${y + 40}" r="2.2" fill="#0D9488"></circle>`
+                        : ''}
+                    <text x="${x + ((nodeWidth - pointerSlotWidth) / 2)}" y="${y + 31}" text-anchor="middle" font-size="${valueFontSize}" font-weight="700"${valueFitAttrs} class="exec-ll-text">${escapeHtml(compactValue)}</text>
+                    <rect x="${x + 12}" y="${y + nodeHeight + 8}" width="${nodeWidth - pointerSlotWidth - 16}" height="16" rx="8" fill="var(--exec-ll-index-bg)" stroke="var(--exec-ll-index-stroke)" stroke-width="1"></rect>
+                    <text x="${x + ((nodeWidth - pointerSlotWidth) / 2)}" y="${y + nodeHeight + 20}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label">idx ${idx}</text>
+                    ${mode === 'doubly'
+                        ? `
+                            <text x="${x + pointerDivider + (pointerSlotWidth / 2)}" y="${y + 20}" text-anchor="middle" font-size="9.2" class="exec-ll-text exec-ll-label">N</text>
+                            <text x="${x + pointerDivider + (pointerSlotWidth / 2)}" y="${y + 39}" text-anchor="middle" font-size="9.2" class="exec-ll-text exec-ll-label">P</text>
+                        `
+                        : `<text x="${x + pointerDivider + (pointerSlotWidth / 2)}" y="${y + 30}" text-anchor="middle" font-size="9.4" class="exec-ll-text exec-ll-label">next</text>`}
+                    ${badges.map((badge, badgeIndex) => `
+                        <g>
+                            <rect x="${x + (badgeIndex * 46)}" y="${y - 20}" width="42" height="15" rx="7" fill="${badge.color}" opacity="0.94"></rect>
+                            <text x="${x + 21 + (badgeIndex * 46)}" y="${y - 9}" text-anchor="middle" font-size="9.4" class="exec-ll-text exec-ll-badge">${badge.label}</text>
+                        </g>
+                    `).join('')}
                 </g>
             `;
         }).join('');
 
+        const structureLegend = mode === 'doubly'
+            ? `
+                <span class="exec-legend-chip"><span class="exec-dot" style="background:#2563eb"></span>next link</span>
+                <span class="exec-legend-chip"><span class="exec-dot" style="background:#10b981"></span>prev link</span>
+            `
+            : (mode === 'circular'
+                ? `<span class="exec-legend-chip"><span class="exec-dot" style="background:#7c3aed"></span>circular wrap</span>`
+                : `<span class="exec-legend-chip"><span class="exec-dot" style="background:#2563eb"></span>next link</span>`);
+
         return `
-            ${render3DScene(`${markers}${edges.join('')}${nodes}`, width, height, '3D linked list diagram')}
+            ${render3DScene(
+                `${deck}${markers}${edges.join('')}${nullNodes.join('')}${nodes}`,
+                width,
+                height,
+                '3D linked list diagram',
+                'exec-3d-linked',
+                `width:${width}px;max-width:none;height:auto;`
+            )}
             <div class="exec-legend">
                 <span class="exec-legend-chip"><span class="exec-dot exec-dot-current"></span>Current</span>
                 <span class="exec-legend-chip"><span class="exec-dot exec-dot-visited"></span>Visited</span>
                 <span class="exec-legend-chip"><span class="exec-dot exec-dot-match"></span>Matched</span>
+                ${structureLegend}
             </div>
         `;
     }
@@ -1011,8 +1134,8 @@
         const floor = `
             <polygon
                 points="${leftPad},${height - bottomPad} ${leftPad + depth},${height - bottomPad - depth} ${width - rightPad + depth},${height - bottomPad - depth} ${width - rightPad},${height - bottomPad}"
-                fill="#f1f5f9"
-                stroke="#cbd5e1"
+                fill="var(--exec-ml-floor)"
+                stroke="var(--exec-ml-floor-stroke)"
                 stroke-width="1"
             ></polygon>
         `;
@@ -1020,7 +1143,7 @@
         const grid = Array.from({ length: 5 }, (_, idx) => {
             const ratio = idx / 4;
             const y = topPad + (ratio * (height - topPad - bottomPad));
-            return `<line x1="${leftPad}" y1="${y}" x2="${width - rightPad}" y2="${y}" stroke="#e2e8f0" stroke-width="1"></line>`;
+            return `<line x1="${leftPad}" y1="${y}" x2="${width - rightPad}" y2="${y}" stroke="var(--exec-ml-grid)" stroke-width="1"></line>`;
         }).join('');
 
         const pointsSvg = points.map((point) => {
@@ -1034,7 +1157,7 @@
                 <g>
                     <circle cx="${cx + (depth * 0.35)}" cy="${cy - (depth * 0.35)}" r="${radius}" fill="${side}" opacity="0.94"></circle>
                     <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="#0f172a" stroke-width="${active ? '1.6' : '1.2'}"></circle>
-                    <text x="${cx + 9}" y="${cy - 10}" font-size="11" fill="#334155">P${point.index + 1}</text>
+                    <text x="${cx + 10}" y="${cy - 12}" font-size="11.5" class="exec-ml-text exec-ml-text-muted">P${point.index + 1}</text>
                 </g>
             `;
         }).join('');
@@ -1042,8 +1165,8 @@
         return render3DScene(`
             ${floor}
             ${grid}
-            <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.7"></line>
-            <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.7"></line>
+            <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="var(--exec-ml-axis-line)" stroke-width="1.9"></line>
+            <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="var(--exec-ml-axis-line)" stroke-width="1.9"></line>
             ${showLine ? `
                 <line x1="${scaleX(lineStart.x)}" y1="${scaleY(lineStart.y)}" x2="${scaleX(lineEnd.x)}" y2="${scaleY(lineEnd.y)}" stroke="#bfdbfe" stroke-width="5" opacity="0.42"></line>
                 <line x1="${scaleX(lineStart.x)}" y1="${scaleY(lineStart.y)}" x2="${scaleX(lineEnd.x)}" y2="${scaleY(lineEnd.y)}" stroke="#2563eb" stroke-width="2.7"></line>
@@ -1052,11 +1175,11 @@
             ${showQuery ? `
                 <line x1="${scaleX(queryX)}" y1="${height - bottomPad}" x2="${scaleX(queryX)}" y2="${scaleY(queryY)}" stroke="#9333ea" stroke-width="1.8" stroke-dasharray="5 4"></line>
                 <circle cx="${scaleX(queryX)}" cy="${scaleY(queryY)}" r="6.7" fill="#c084fc" stroke="#6b21a8" stroke-width="1.4"></circle>
-                <text x="${scaleX(queryX) + 10}" y="${scaleY(queryY) - 10}" font-size="11" fill="#6d28d9">Query</text>
+                <text x="${scaleX(queryX) + 11}" y="${scaleY(queryY) - 11}" font-size="11.5" class="exec-ml-text exec-ml-text-query">Query</text>
             ` : ''}
-            <text x="${leftPad}" y="${height - 10}" font-size="11" fill="#64748b">x</text>
-            <text x="16" y="${topPad + 2}" font-size="11" fill="#64748b">y</text>
-        `, width, height, '3D linear regression chart');
+            <text x="${leftPad}" y="${height - 10}" font-size="11" class="exec-ml-text exec-ml-text-axis">x</text>
+            <text x="16" y="${topPad + 2}" font-size="11" class="exec-ml-text exec-ml-text-axis">y</text>
+        `, width, height, '3D linear regression chart', 'exec-3d-ml');
     }
 
     function renderLogisticCurve(z, options = {}) {
@@ -1086,24 +1209,24 @@
         return render3DScene(`
             <polygon
                 points="${leftPad},${height - bottomPad} ${leftPad + depth},${height - bottomPad - depth} ${width - rightPad + depth},${height - bottomPad - depth} ${width - rightPad},${height - bottomPad}"
-                fill="#f1f5f9"
-                stroke="#cbd5e1"
+                fill="var(--exec-ml-floor)"
+                stroke="var(--exec-ml-floor-stroke)"
                 stroke-width="1"
             ></polygon>
-            <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.6"></line>
-            <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="#64748b" stroke-width="1.6"></line>
+            <line x1="${leftPad}" y1="${height - bottomPad}" x2="${width - rightPad}" y2="${height - bottomPad}" stroke="var(--exec-ml-axis-line)" stroke-width="1.8"></line>
+            <line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${height - bottomPad}" stroke="var(--exec-ml-axis-line)" stroke-width="1.8"></line>
             <polyline points="${curvePath.join(' ')}" fill="none" stroke="#bfdbfe" stroke-width="5" opacity="0.5"></polyline>
             <polyline points="${curvePath.join(' ')}" fill="none" stroke="#2563eb" stroke-width="2.7"></polyline>
-            <line x1="${scaleX(0)}" y1="${topPad}" x2="${scaleX(0)}" y2="${height - bottomPad}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"></line>
-            <line x1="${leftPad}" y1="${scaleY(0.5)}" x2="${width - rightPad}" y2="${scaleY(0.5)}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"></line>
+            <line x1="${scaleX(0)}" y1="${topPad}" x2="${scaleX(0)}" y2="${height - bottomPad}" stroke="var(--exec-ml-grid)" stroke-width="1" stroke-dasharray="4 4"></line>
+            <line x1="${leftPad}" y1="${scaleY(0.5)}" x2="${width - rightPad}" y2="${scaleY(0.5)}" stroke="var(--exec-ml-grid)" stroke-width="1" stroke-dasharray="4 4"></line>
             ${showPoint ? `
                 <line x1="${scaleX(z)}" y1="${height - bottomPad}" x2="${scaleX(z)}" y2="${scaleY(probability)}" stroke="#9333ea" stroke-width="1.8" stroke-dasharray="5 4"></line>
                 <circle cx="${scaleX(z)}" cy="${scaleY(probability)}" r="6.6" fill="#d8b4fe" stroke="#6b21a8" stroke-width="1.3"></circle>
-                <text x="${scaleX(z) + 8}" y="${scaleY(probability) - 9}" font-size="11" fill="#6d28d9">sigma(z)</text>
+                <text x="${scaleX(z) + 9}" y="${scaleY(probability) - 10}" font-size="11.5" class="exec-ml-text exec-ml-text-query">sigma(z)</text>
             ` : ''}
-            <text x="${leftPad}" y="${height - 10}" font-size="11" fill="#64748b">z</text>
-            <text x="14" y="${topPad + 2}" font-size="11" fill="#64748b">p</text>
-        `, width, height, '3D sigmoid curve');
+            <text x="${leftPad}" y="${height - 10}" font-size="11" class="exec-ml-text exec-ml-text-axis">z</text>
+            <text x="14" y="${topPad + 2}" font-size="11" class="exec-ml-text exec-ml-text-axis">p</text>
+        `, width, height, '3D sigmoid curve', 'exec-3d-ml');
     }
 
     function renderOneDimClusterPlot(points, centroids, assignments = [], options = {}) {
@@ -1137,7 +1260,7 @@
                 <g>
                     <circle cx="${x + (depth * 0.42)}" cy="${axisY - (depth * 0.42)}" r="${r}" fill="${palette.side}" opacity="0.95"></circle>
                     <circle cx="${x}" cy="${axisY}" r="${r}" fill="${palette.top}" stroke="${idx === currentIndex ? '#0f172a' : palette.stroke}" stroke-width="${idx === currentIndex ? '1.8' : '1.1'}"></circle>
-                    <text x="${x}" y="${axisY + 22}" text-anchor="middle" font-size="10.5" fill="#334155">${formatNumber(value)}</text>
+                    <text x="${x}" y="${axisY + 23}" text-anchor="middle" font-size="11" class="exec-ml-text exec-ml-text-muted">${formatNumber(value)}</text>
                 </g>
             `;
         }).join('');
@@ -1152,17 +1275,17 @@
                     <polygon points="${x - 7},${axisY - 30} ${x + 4},${axisY - 38} ${x + 18},${axisY - 38} ${x + 7},${axisY - 30}" fill="${front}" stroke="${stroke}" stroke-width="1"></polygon>
                     <polygon points="${x + 7},${axisY - 30} ${x + 18},${axisY - 38} ${x + 18},${axisY - 18} ${x + 7},${axisY - 10}" fill="${side}" opacity="0.9"></polygon>
                     <rect x="${x - 7}" y="${axisY - 30}" width="14" height="20" rx="3" fill="${front}" stroke="${stroke}" stroke-width="1.4"></rect>
-                    <text x="${x + 21}" y="${axisY - 31}" font-size="11" fill="#334155">C${idx + 1}</text>
+                    <text x="${x + 22}" y="${axisY - 31}" font-size="11.5" class="exec-ml-text exec-ml-text-muted">C${idx + 1}</text>
                 </g>
             `;
         }).join('');
 
         return render3DScene(`
-            <polygon points="${leftPad},${axisY} ${leftPad + depth},${axisY - depth} ${width - rightPad + depth},${axisY - depth} ${width - rightPad},${axisY}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"></polygon>
-            <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="#475569" stroke-width="2"></line>
+            <polygon points="${leftPad},${axisY} ${leftPad + depth},${axisY - depth} ${width - rightPad + depth},${axisY - depth} ${width - rightPad},${axisY}" fill="var(--exec-ml-floor)" stroke="var(--exec-ml-floor-stroke)" stroke-width="1"></polygon>
+            <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="var(--exec-ml-axis-line)" stroke-width="2"></line>
             ${pointMarks}
             ${centroidMarks}
-        `, width, height, '3D K-means 1D plot');
+        `, width, height, '3D K-means 1D plot', 'exec-3d-ml');
     }
 
     function renderKnnPlot(train, queryX, consideredSet = new Set(), topSet = new Set()) {
@@ -1191,21 +1314,21 @@
                 <g>
                     <circle cx="${x + (depth * 0.42)}" cy="${axisY - (depth * 0.42)}" r="${isTop ? '7.7' : '5.6'}" fill="${side}" opacity="0.95"></circle>
                     <circle cx="${x}" cy="${axisY}" r="${isTop ? '7.7' : '5.6'}" fill="${top}" stroke="${stroke}" stroke-width="${consideredSet.has(row.index) ? '1.8' : '0'}"></circle>
-                    <text x="${x}" y="${axisY + 21}" text-anchor="middle" font-size="10.5" fill="#334155">${formatNumber(row.x)}</text>
-                    <text x="${x}" y="${axisY - 13}" text-anchor="middle" font-size="10.5" fill="#334155">${row.label}</text>
+                    <text x="${x}" y="${axisY + 22}" text-anchor="middle" font-size="11" class="exec-ml-text exec-ml-text-muted">${formatNumber(row.x)}</text>
+                    <text x="${x}" y="${axisY - 13}" text-anchor="middle" font-size="11" class="exec-ml-text exec-ml-text-muted">${row.label}</text>
                 </g>
             `;
         }).join('');
 
         return render3DScene(`
-            <polygon points="${leftPad},${axisY} ${leftPad + depth},${axisY - depth} ${width - rightPad + depth},${axisY - depth} ${width - rightPad},${axisY}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"></polygon>
-            <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="#475569" stroke-width="2"></line>
+            <polygon points="${leftPad},${axisY} ${leftPad + depth},${axisY - depth} ${width - rightPad + depth},${axisY - depth} ${width - rightPad},${axisY}" fill="var(--exec-ml-floor)" stroke="var(--exec-ml-floor-stroke)" stroke-width="1"></polygon>
+            <line x1="${leftPad}" y1="${axisY}" x2="${width - rightPad}" y2="${axisY}" stroke="var(--exec-ml-axis-line)" stroke-width="2"></line>
             ${pointMarks}
             <g>
                 <path d="M ${scaleX(queryX)} ${axisY - 22} l 9 9 l -9 9 l -9 -9 z" fill="#d8b4fe" stroke="#6b21a8" stroke-width="1.3"></path>
-                <text x="${scaleX(queryX)}" y="${axisY - 33}" text-anchor="middle" font-size="11" fill="#6d28d9">Query</text>
+                <text x="${scaleX(queryX)}" y="${axisY - 33}" text-anchor="middle" font-size="11.5" class="exec-ml-text exec-ml-text-query">Query</text>
             </g>
-        `, width, height, '3D KNN neighbor plot');
+        `, width, height, '3D KNN neighbor plot', 'exec-3d-ml');
     }
 
     function renderEntropyBars(positive, negative, pPos, pNeg) {
@@ -1227,19 +1350,19 @@
                     <polygon points="${x},${chartBaseY - h} ${x + depth},${chartBaseY - h - depth} ${x + barWidth + depth},${chartBaseY - h - depth} ${x + barWidth},${chartBaseY - h}" fill="${top}"></polygon>
                     <polygon points="${x + barWidth},${chartBaseY - h} ${x + barWidth + depth},${chartBaseY - h - depth} ${x + barWidth + depth},${chartBaseY - depth} ${x + barWidth},${chartBaseY}" fill="${side}" opacity="0.92"></polygon>
                     <rect x="${x}" y="${chartBaseY - h}" width="${barWidth}" height="${h}" rx="8" fill="${front}" stroke="#334155" stroke-width="1.1"></rect>
-                    <text x="${x + (barWidth / 2)}" y="${chartBaseY + 18}" text-anchor="middle" font-size="12" fill="#334155">${label}</text>
-                    <text x="${x + (barWidth / 2)}" y="${chartBaseY - h - 10}" text-anchor="middle" font-size="12" fill="${valueColor}">${valueText}</text>
+                    <text x="${x + (barWidth / 2)}" y="${chartBaseY + 18}" text-anchor="middle" font-size="12.5" class="exec-ml-text exec-ml-text-muted">${label}</text>
+                    <text x="${x + (barWidth / 2)}" y="${chartBaseY - h - 10}" text-anchor="middle" font-size="12.5" class="exec-ml-text ${valueColor}">${valueText}</text>
                 </g>
             `;
         }
 
         return render3DScene(`
-            <polygon points="62,${chartBaseY} 71,${chartBaseY - depth} 370,${chartBaseY - depth} 362,${chartBaseY}" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"></polygon>
-            <line x1="62" y1="${chartBaseY}" x2="362" y2="${chartBaseY}" stroke="#475569" stroke-width="1.8"></line>
-            ${bar3D(firstX, posH, '#86efac', '#16a34a', '#bbf7d0', 'Positive', '#166534', formatNumber(pPos, 3, true))}
-            ${bar3D(secondX, negH, '#fdba74', '#ea580c', '#fed7aa', 'Negative', '#9a3412', formatNumber(pNeg, 3, true))}
-            <text x="12" y="24" font-size="11" fill="#64748b">counts: +${formatNumber(positive)}, -${formatNumber(negative)}</text>
-        `, width, height, '3D class distribution');
+            <polygon points="62,${chartBaseY} 71,${chartBaseY - depth} 370,${chartBaseY - depth} 362,${chartBaseY}" fill="var(--exec-ml-floor)" stroke="var(--exec-ml-floor-stroke)" stroke-width="1"></polygon>
+            <line x1="62" y1="${chartBaseY}" x2="362" y2="${chartBaseY}" stroke="var(--exec-ml-axis-line)" stroke-width="1.8"></line>
+            ${bar3D(firstX, posH, '#86efac', '#16a34a', '#bbf7d0', 'Positive', 'exec-ml-text-positive', formatNumber(pPos, 3, true))}
+            ${bar3D(secondX, negH, '#fdba74', '#ea580c', '#fed7aa', 'Negative', 'exec-ml-text-negative', formatNumber(pNeg, 3, true))}
+            <text x="12" y="24" font-size="11.5" class="exec-ml-text exec-ml-text-axis">counts: +${formatNumber(positive)}, -${formatNumber(negative)}</text>
+        `, width, height, '3D class distribution', 'exec-3d-ml');
     }
 
     function renderScoreBars(spamScore, hamScore) {
@@ -1258,12 +1381,12 @@
         function scoreRow(label, y, widthValue, front, side, top, score) {
             return `
                 <g>
-                    <text x="32" y="${y + 12}" font-size="12" fill="#334155">${label}</text>
-                    <rect x="${trackX}" y="${y}" width="${trackWidth}" height="${trackHeight}" rx="8" fill="#e2e8f0"></rect>
+                    <text x="32" y="${y + 12}" font-size="12.5" class="exec-ml-text exec-ml-text-muted">${label}</text>
+                    <rect x="${trackX}" y="${y}" width="${trackWidth}" height="${trackHeight}" rx="8" fill="var(--exec-ml-floor)"></rect>
                     <polygon points="${trackX},${y} ${trackX + depth},${y - depth} ${trackX + widthValue + depth},${y - depth} ${trackX + widthValue},${y}" fill="${top}"></polygon>
                     <polygon points="${trackX + widthValue},${y} ${trackX + widthValue + depth},${y - depth} ${trackX + widthValue + depth},${y + trackHeight - depth} ${trackX + widthValue},${y + trackHeight}" fill="${side}" opacity="0.9"></polygon>
                     <rect x="${trackX}" y="${y}" width="${widthValue}" height="${trackHeight}" rx="8" fill="${front}"></rect>
-                    <text x="${trackX + trackWidth + 14}" y="${y + 12}" font-size="12" fill="#0f172a">${formatNumber(score, 6, true)}</text>
+                    <text x="${trackX + trackWidth + 14}" y="${y + 12}" font-size="12.5" class="exec-ml-text">${formatNumber(score, 6, true)}</text>
                 </g>
             `;
         }
@@ -1271,7 +1394,7 @@
         return render3DScene(`
             ${scoreRow('Spam', topY, spamWidth, '#fda4af', '#e11d48', '#fecdd3', spamScore)}
             ${scoreRow('Ham', topY + rowGap, hamWidth, '#93c5fd', '#2563eb', '#bfdbfe', hamScore)}
-        `, width, height, '3D posterior score bars');
+        `, width, height, '3D posterior score bars', 'exec-3d-ml');
     }
 
     function renderNeuronDiagram(x1, x2, w1, w2, b, z, output, stage = 'input') {
@@ -1288,7 +1411,7 @@
                 <g>
                     <circle cx="${cx + (depth * 0.45)}" cy="${cy - (depth * 0.45)}" r="${r}" fill="${side}" opacity="0.95"></circle>
                     <circle cx="${cx}" cy="${cy}" r="${r}" fill="${front}" stroke="${stroke}" stroke-width="1.8"></circle>
-                    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#0f172a">${label}</text>
+                    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" class="exec-ml-text">${label}</text>
                 </g>
             `;
         }
@@ -1301,11 +1424,15 @@
             ${nodeBubble(94, 152, 25, '#dcfce7', '#10b981', '#15803d', `x2=${formatNumber(x2)}`, 12)}
             ${nodeBubble(278, 106, 31, '#ffedd5', '#f97316', zStroke, `z=${formatNumber(z, 3, true)}`, 11)}
             ${nodeBubble(430, 106, 29, '#f3e8ff', '#a855f7', outStroke, `${formatNumber(output, 3, true)}`, 11)}
-            <text x="172" y="78" font-size="11" fill="#1d4ed8">w1=${formatNumber(w1, 3, true)}</text>
-            <text x="172" y="148" font-size="11" fill="#047857">w2=${formatNumber(w2, 3, true)}</text>
-            <text x="242" y="54" font-size="11" fill="#9a3412">b=${formatNumber(b, 3, true)}</text>
-            <text x="412" y="66" font-size="11" fill="#6d28d9">sigma(z)</text>
-        `, width, height, '3D single neuron network');
+            <rect x="160" y="66" width="96" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
+            <rect x="160" y="136" width="96" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
+            <rect x="232" y="42" width="92" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
+            <rect x="400" y="54" width="86" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
+            <text x="172" y="78" font-size="11.5" class="exec-ml-text exec-ml-text-muted">w1=${formatNumber(w1, 3, true)}</text>
+            <text x="172" y="148" font-size="11.5" class="exec-ml-text exec-ml-text-muted">w2=${formatNumber(w2, 3, true)}</text>
+            <text x="242" y="54" font-size="11.5" class="exec-ml-text exec-ml-text-muted">b=${formatNumber(b, 3, true)}</text>
+            <text x="412" y="66" font-size="11.5" class="exec-ml-text exec-ml-text-query">sigma(z)</text>
+        `, width, height, '3D single neuron network', 'exec-3d-ml');
     }
 
     function buildVisualizationPrompt(algorithmType, payload) {

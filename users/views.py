@@ -1,17 +1,24 @@
+import secrets
+import time
+from email.utils import formataddr
+
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.views import (
     LoginView,
     PasswordResetCompleteView,
-    PasswordResetConfirmView,
-    PasswordResetDoneView,
-    PasswordResetView,
 )
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.contrib.sites.shortcuts import get_current_site
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse_lazy
+from django.utils.html import strip_tags
+from django.views.generic import FormView
 from rest_framework import generics, permissions
 
 from analytics.services import recommend_next_challenges
@@ -23,6 +30,7 @@ from .forms import (
     CustomAuthenticationForm,
     CustomPasswordResetForm,
     CustomSetPasswordForm,
+    PasswordResetOtpForm,
     SignUpForm,
     UserProfileForm,
     UserSettingsForm,
@@ -31,6 +39,75 @@ from .models import UserProfile
 from .serializers import UserSerializer
 
 XP_PER_LEVEL = 250
+PASSWORD_RESET_OTP_EXPIRY_SECONDS = 10 * 60
+PASSWORD_RESET_OTP_MAX_ATTEMPTS = 5
+PASSWORD_RESET_OTP_SESSION_KEY = 'password_reset_otp_data'
+PASSWORD_RESET_VERIFIED_USER_SESSION_KEY = 'password_reset_verified_user_id'
+
+
+def _mask_email(email):
+    if '@' not in email:
+        return email
+    username, domain = email.split('@', 1)
+    if len(username) <= 2:
+        masked_username = username[0] + '*'
+    else:
+        masked_username = username[0] + ('*' * (len(username) - 2)) + username[-1]
+    return f'{masked_username}@{domain}'
+
+
+def _clear_password_reset_session(request):
+    request.session.pop(PASSWORD_RESET_OTP_SESSION_KEY, None)
+    request.session.pop(PASSWORD_RESET_VERIFIED_USER_SESSION_KEY, None)
+
+
+def _get_branded_from_email():
+    default_from_email = settings.DEFAULT_FROM_EMAIL
+    if '<' in default_from_email and '>' in default_from_email:
+        return default_from_email
+
+    from_name = getattr(settings, 'DEFAULT_FROM_NAME', 'AlgoQuest') or 'AlgoQuest'
+    return formataddr((from_name, default_from_email))
+
+
+def _send_password_reset_otp_email(user, otp):
+    context = {
+        'user': user,
+        'otp': otp,
+        'otp_expiry_minutes': PASSWORD_RESET_OTP_EXPIRY_SECONDS // 60,
+        'product_name': 'AlgoQuest',
+    }
+
+    subject = render_to_string('emails/password_reset_otp_subject.txt', context).strip()
+    text_body = render_to_string('emails/password_reset_otp_body.txt', context)
+    html_body = render_to_string('emails/password_reset_otp_body.html', context)
+
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=strip_tags(text_body),
+        from_email=_get_branded_from_email(),
+        to=[user.email],
+    )
+    message.attach_alternative(html_body, 'text/html')
+    message.send(fail_silently=False)
+
+
+def _is_social_provider_configured(request, provider, env_client_id_key, env_secret_key):
+    env_client_id = getattr(settings, env_client_id_key, '').strip()
+    env_secret = getattr(settings, env_secret_key, '').strip()
+    if env_client_id and env_secret:
+        return True
+
+    try:
+        from allauth.socialaccount.models import SocialApp
+    except Exception:
+        return False
+
+    try:
+        current_site = get_current_site(request)
+        return SocialApp.objects.filter(provider=provider, sites=current_site).exists()
+    except Exception:
+        return False
 
 
 def home(request):
@@ -69,7 +146,7 @@ def signup_view(request):
             except IntegrityError:
                 form.add_error('email', 'An account with this email already exists.')
             else:
-                login(request, user)
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
                 messages.success(request, 'Your account has been created successfully.')
                 return redirect('dashboard')
         messages.error(request, 'Please fix the highlighted signup errors.')
@@ -82,11 +159,12 @@ def signup_view(request):
 def dashboard_view(request):
     profile, _created = UserProfile.objects.get_or_create(user=request.user)
 
-    # Progress should reflect the active level band, not total lifetime XP.
-    level_floor_xp = max(profile.level - 1, 0) * XP_PER_LEVEL
-    xp_in_level = profile.xp - level_floor_xp
-    if xp_in_level < 0 or xp_in_level >= XP_PER_LEVEL:
-        xp_in_level = profile.xp % XP_PER_LEVEL
+    # Keep dashboard progress aligned with XP even if stored level is stale.
+    effective_level = max(1, (profile.xp // XP_PER_LEVEL) + 1)
+    if profile.level != effective_level:
+        profile.level = effective_level
+
+    xp_in_level = profile.xp % XP_PER_LEVEL
     xp_to_next_level = XP_PER_LEVEL - xp_in_level
     xp_percentage = max(0, min(100, int((xp_in_level / XP_PER_LEVEL) * 100)))
 
@@ -171,6 +249,18 @@ class CustomLoginView(LoginView):
     template_name = 'registration/login.html'
     authentication_form = CustomAuthenticationForm
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        google_oauth_configured = _is_social_provider_configured(
+            self.request, 'google', 'GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET'
+        )
+        github_oauth_configured = _is_social_provider_configured(
+            self.request, 'github', 'GITHUB_OAUTH_CLIENT_ID', 'GITHUB_OAUTH_CLIENT_SECRET'
+        )
+        context['google_oauth_configured'] = google_oauth_configured
+        context['github_oauth_configured'] = github_oauth_configured
+        return context
+
     def form_valid(self, form):
         messages.success(self.request, f'Welcome back, {form.get_user().username}.')
         return super().form_valid(form)
@@ -180,29 +270,113 @@ class CustomLoginView(LoginView):
         return super().form_invalid(form)
 
 
-class CustomPasswordResetView(PasswordResetView):
+class CustomPasswordResetView(FormView):
     template_name = 'registration/password_reset_form.html'
-    email_template_name = 'registration/password_reset_email.html'
-    subject_template_name = 'registration/password_reset_subject.txt'
     success_url = reverse_lazy('password_reset_done')
     form_class = CustomPasswordResetForm
 
     def form_valid(self, form):
-        messages.success(self.request, 'If an account exists, a reset link has been sent to that email.')
+        email = form.cleaned_data.get('email', '').strip().lower()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        _clear_password_reset_session(self.request)
+
+        if user:
+            otp = f'{secrets.randbelow(900000) + 100000:06d}'
+            try:
+                _send_password_reset_otp_email(user, otp)
+            except Exception:
+                form.add_error(None, 'Unable to send OTP right now. Please try again.')
+                return self.form_invalid(form)
+
+            self.request.session[PASSWORD_RESET_OTP_SESSION_KEY] = {
+                'user_id': user.id,
+                'email': user.email,
+                'otp': otp,
+                'issued_at': int(time.time()),
+                'attempts': 0,
+            }
+
         return super().form_valid(form)
 
 
-class CustomPasswordResetDoneView(PasswordResetDoneView):
+class CustomPasswordResetDoneView(FormView):
     template_name = 'registration/password_reset_done.html'
+    form_class = PasswordResetOtpForm
+    success_url = reverse_lazy('password_reset_confirm')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        otp_data = self.request.session.get(PASSWORD_RESET_OTP_SESSION_KEY, {})
+        email = otp_data.get('email', '')
+        context['masked_email'] = _mask_email(email) if email else ''
+        context['password_reset_uses_console_email'] = settings.EMAIL_BACKEND == 'django.core.mail.backends.console.EmailBackend'
+        context['otp_expiry_minutes'] = PASSWORD_RESET_OTP_EXPIRY_SECONDS // 60
+        return context
+
+    def form_valid(self, form):
+        otp_data = self.request.session.get(PASSWORD_RESET_OTP_SESSION_KEY)
+        if not otp_data:
+            form.add_error(None, 'No OTP request found. Please request a new OTP.')
+            return self.form_invalid(form)
+
+        if int(time.time()) - int(otp_data.get('issued_at', 0)) > PASSWORD_RESET_OTP_EXPIRY_SECONDS:
+            _clear_password_reset_session(self.request)
+            form.add_error(None, 'OTP expired. Please request a new OTP.')
+            return self.form_invalid(form)
+
+        attempts = int(otp_data.get('attempts', 0))
+        if attempts >= PASSWORD_RESET_OTP_MAX_ATTEMPTS:
+            _clear_password_reset_session(self.request)
+            form.add_error(None, 'Too many invalid attempts. Request a new OTP.')
+            return self.form_invalid(form)
+
+        entered_otp = form.cleaned_data['otp']
+        if entered_otp != otp_data.get('otp'):
+            attempts += 1
+            otp_data['attempts'] = attempts
+            self.request.session[PASSWORD_RESET_OTP_SESSION_KEY] = otp_data
+            if attempts >= PASSWORD_RESET_OTP_MAX_ATTEMPTS:
+                _clear_password_reset_session(self.request)
+                form.add_error('otp', 'Invalid OTP. Request a new OTP.')
+            else:
+                remaining = PASSWORD_RESET_OTP_MAX_ATTEMPTS - attempts
+                form.add_error('otp', f'Invalid OTP. {remaining} attempt(s) left.')
+            return self.form_invalid(form)
+
+        self.request.session[PASSWORD_RESET_VERIFIED_USER_SESSION_KEY] = otp_data['user_id']
+        return super().form_valid(form)
 
 
-class CustomPasswordResetConfirmView(PasswordResetConfirmView):
+class CustomPasswordResetConfirmView(FormView):
     template_name = 'registration/password_reset_confirm.html'
     form_class = CustomSetPasswordForm
     success_url = reverse_lazy('password_reset_complete')
 
+    def dispatch(self, request, *args, **kwargs):
+        self.verified_user = self.get_verified_user()
+        if self.verified_user is None:
+            return redirect('password_reset')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_verified_user(self):
+        user_id = self.request.session.get(PASSWORD_RESET_VERIFIED_USER_SESSION_KEY)
+        if not user_id:
+            return None
+        return User.objects.filter(pk=user_id, is_active=True).first()
+
+    def get_form(self, form_class=None):
+        if form_class is None:
+            form_class = self.get_form_class()
+        return form_class(self.verified_user, **self.get_form_kwargs())
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['validlink'] = True
+        return context
+
     def form_valid(self, form):
-        messages.success(self.request, 'Password reset successful. You can now log in.')
+        form.save()
+        _clear_password_reset_session(self.request)
         return super().form_valid(form)
 
 

@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block content %}
+<link href="{% static 'css/challenge-list.css' %}" rel="stylesheet">
 <div class="fade-in-up challenge-list-page">
     <!-- Page Header -->
     <div class="section-header mb-4">
@@ -71,17 +72,23 @@
         >
             <span class="text-muted fw-semibold quick-filter-label">Quick Filter:</span>
             <div class="quick-filter-search">
+                <span class="quick-filter-search-icon" aria-hidden="true">
+                    <i class="bi bi-search"></i>
+                </span>
                 <label class="visually-hidden" for="quickFilterSearchInput">Search Algorithm</label>
                 <input
                     type="text"
                     id="quickFilterSearchInput"
                     class="quick-filter-search-input"
                     placeholder="Search challenges"
-                    value="{{ search_query|default:'' }}"
+                    value=""
                     autocomplete="off"
                     aria-label="Search challenges"
                 >
-                <button type="button" id="quickFilterClear" class="quick-filter-clear-btn" aria-label="Clear filter">Clear</button>
+                <button type="button" id="quickFilterClear" class="quick-filter-clear-btn" aria-label="Clear filter">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    <span>Clear</span>
+                </button>
             </div>
             {% for category in category_options %}
                 <button type="button" class="category-filter-btn" data-category="{{ category.value }}">
@@ -200,6 +207,5 @@
 {% endblock %}
 
 {% block scripts %}
-<link href="{% static 'css/challenge-list.css' %}" rel="stylesheet">
 <script src="{% static 'js/challenge-list.js' %}"></script>
 {% endblock %}

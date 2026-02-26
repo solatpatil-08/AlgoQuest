@@ -35,6 +35,47 @@
     color: var(--aq-text-secondary);
 }
 
+/* ---- Dashboard achievement badges ---- */
+.dashboard-achievements-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+}
+
+.dashboard-achievement-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem 0.45rem 0.5rem;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--aq-radius-full);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(249, 115, 22, 0.1));
+    color: var(--aq-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.dashboard-achievement-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.2);
+    color: #B45309;
+    flex-shrink: 0;
+}
+
+.dashboard-achievement-icon i {
+    font-size: 0.8rem;
+}
+
+.dashboard-achievement-text {
+    white-space: nowrap;
+}
+
 /* ---- Recommendation card ---- */
 .recommendation-card {
     border: 1px solid var(--aq-border);

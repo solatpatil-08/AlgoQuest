@@ -28,11 +28,12 @@
     display: inline-flex;
     align-items: center;
     flex: 0 0 18rem;
-    min-height: 2.25rem;
+    min-height: 2.5rem;
     border: 1.5px solid var(--aq-border);
     background: var(--aq-card);
     border-radius: var(--aq-radius-full);
-    padding: 0 0.35rem 0 0.75rem;
+    padding: 0 0.35rem 0 0.6rem;
+    gap: 0.35rem;
     transition: all var(--aq-transition-fast);
     max-width: 100%;
 }
@@ -48,30 +49,59 @@
     background: transparent;
     width: 100%;
     min-width: 0;
+    height: 100%;
     font-weight: 600;
     color: var(--aq-text);
-    font-size: 0.8125rem;
-    padding-right: 0.4rem;
+    font-size: 0.85rem;
+    padding: 0.35rem 0.25rem 0.35rem 0;
+}
+
+.quick-filter-search-input::placeholder {
+    color: var(--aq-text-secondary);
+    opacity: 0.8;
 }
 
 .quick-filter-search-input:focus {
     outline: none;
 }
 
+.quick-filter-search-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    color: var(--aq-primary);
+    flex: 0 0 auto;
+}
+
+.quick-filter-search-icon i {
+    font-size: 0.82rem;
+    line-height: 1;
+}
+
 .quick-filter-clear-btn {
-    border: 0;
+    border: 1px solid transparent;
     background: var(--aq-primary-soft-bg);
     border-radius: var(--aq-radius-full);
-    padding: 0.32rem 0.65rem;
+    padding: 0 0.65rem;
+    min-height: 1.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    flex: 0 0 auto;
     font-size: 0.72rem;
     font-weight: 700;
     color: var(--aq-primary);
     line-height: 1;
+    transition: all var(--aq-transition-fast);
 }
 
 .quick-filter-clear-btn:hover,
 .quick-filter-clear-btn:focus-visible {
     background: var(--aq-primary-light);
+    border-color: rgba(37, 99, 235, 0.3);
     outline: none;
 }
 
@@ -177,6 +207,7 @@
 [data-theme="dark"] .challenge-list-page .quick-filter-clear-btn {
     background: rgba(59, 130, 246, 0.28);
     color: #DBEAFE;
+    border-color: rgba(191, 219, 254, 0.25);
 }
 
 [data-theme="dark"] .challenge-list-page .category-filter-btn:hover {
@@ -214,6 +245,7 @@
 
     .quick-filter-clear-btn {
         font-size: 0.68rem;
+        padding: 0 0.55rem;
     }
 
     .category-header {
