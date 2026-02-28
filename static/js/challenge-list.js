@@ -60,9 +60,26 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function submitSearchFilter() {
+    function submitSearchFilter(forceRefresh) {
         var value = searchInput ? searchInput.value.trim() : '';
+        try {
+            var currentUrl = new URL(window.location.href);
+            var currentSearch = (currentUrl.searchParams.get('search') || '').trim();
+            var hasSubtype = currentUrl.searchParams.has('subtype');
+            if (!forceRefresh && value === currentSearch && !hasSubtype) {
+                return;
+            }
+            if (forceRefresh && value === currentSearch && !hasSubtype) {
+                window.location.reload();
+                return;
+            }
+        } catch (error) {
+            // If URL parsing fails, still proceed with update.
+        }
         updateLocation(function (params) {
+            // Search should run across all algorithm types in the current category.
+            // Keeping a stale subtype query narrows results and hides other types.
+            params.delete('subtype');
             if (value) {
                 params.set('search', value);
             } else {
@@ -384,12 +401,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (searchInput) {
         searchInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                searchInput.value = '';
+                submitSearchFilter();
+                return;
+            }
+
             if (event.key !== 'Enter') {
                 return;
             }
 
             event.preventDefault();
-            submitSearchFilter();
+            submitSearchFilter(true);
         });
     }
 

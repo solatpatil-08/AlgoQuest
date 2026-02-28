@@ -988,6 +988,9 @@ def _resolve_best_challenge_variant(challenge):
 
 def _build_subtype_query_string(request_querydict, subtype):
     query_params = request_querydict.copy()
+    # A subtype card click should open level listing for that type.
+    # Carrying an active search term keeps list in subtype-index mode.
+    query_params.pop('search', None)
     query_params['subtype'] = subtype
     encoded = query_params.urlencode()
     if encoded:
@@ -2965,6 +2968,11 @@ def challenge_list_view(request):
     selected_unlocked = request.GET.get('unlocked', 'all')
     sort_by = request.GET.get('sort', 'difficulty')
     search_query = request.GET.get('search', '').strip()
+
+    # Quick search should span all algorithm types for the current category.
+    # If a stale subtype stays in URL, it hides other types from results.
+    if search_query and selected_subtype != 'all':
+        selected_subtype = 'all'
 
     valid_kind_values = {choice[0] for choice in Challenge.ChallengeType.choices}
     valid_difficulty_values = {choice[0] for choice in Challenge.Difficulty.choices}

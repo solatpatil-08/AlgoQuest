@@ -115,7 +115,7 @@
                             
                             <div class="mb-3">
                                 <label for="answerInput" class="form-label text-muted small">Enter your solution:</label>
-                                <textarea id="answerInput" class="form-control" name="answer" rows="4" placeholder="Type or paste your answer..." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
+                                <textarea id="answerInput" class="form-control" name="answer" rows="4" placeholder="You will see your answer here. If correct, click Submit. If not, reattempt." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
                             </div>
                             
                             <div class="d-flex gap-2">
@@ -187,9 +187,9 @@
         const vizOutput = document.getElementById('visualizationOutput');
         const vizTitle = document.getElementById('visualizationTitle');
 
-        if (['bfs', 'dfs', 'dijkstra', 'astar'].includes(algorithmTypeValue) && visualizationType === 'graph') {
+        if (['bfs', 'dfs', 'dijkstra', 'astar', 'bst'].includes((algorithmTypeValue || '').toLowerCase()) && visualizationType === 'graph') {
             if (window.Visualization3D && window.Visualization3D.init) {
-                window.Visualization3D.init('visualizationOutput', algorithmTypeValue);
+                window.Visualization3D.init('visualizationOutput', (algorithmTypeValue || '').toLowerCase());
                 if (vizTitle) {
                     vizTitle.innerHTML = '<i class="bi bi-play-circle me-2" style="color: var(--aq-secondary);"></i>3D Interactive Execution';
                 }
@@ -261,10 +261,22 @@
     const actionPayloadInput = document.getElementById('actionPayloadInput');
     const CATEGORY_SEQUENCE_KEY = 'aqCategorySequenceState';
     let categorySequenceTimer = null;
-
     function setActionPayload(payload) {
         if (actionPayloadInput) {
             actionPayloadInput.value = JSON.stringify(payload || {});
+        }
+    }
+
+    function setAnswerInputLocked(locked) {
+        if (!answerInput) {
+            return;
+        }
+        const shouldLock = Boolean(locked);
+        answerInput.readOnly = shouldLock;
+        if (shouldLock) {
+            answerInput.setAttribute('aria-readonly', 'true');
+        } else {
+            answerInput.removeAttribute('aria-readonly');
         }
     }
 
@@ -272,17 +284,17 @@
         if (!answerInput) {
             return;
         }
-        answerInput.value = String(value);
-        answerInput.readOnly = true;
-        answerInput.setAttribute('aria-readonly', 'true');
+        const nextDerived = String(value ?? '');
+        answerInput.value = nextDerived;
+        setAnswerInputLocked(true);
     }
 
-    function clearDerivedAnswer() {
+    function clearDerivedAnswer(lockInput = false) {
         if (!answerInput) {
             return;
         }
-        answerInput.readOnly = false;
-        answerInput.removeAttribute('aria-readonly');
+        answerInput.value = '';
+        setAnswerInputLocked(lockInput);
     }
 
     function roundTo(value, digits = 3) {
@@ -793,6 +805,8 @@
         if (!Number.isInteger(start) || !nodeSet.has(start)) {
             return false;
         }
+        const isBfsMode = mode === 'bfs';
+        const isDfsMode = mode === 'dfs';
 
         const adjacency = new Map(nodes.map((node) => [node, []]));
         edges.forEach(([left, right]) => {
@@ -830,12 +844,13 @@
                     continue;
                 }
                 visited.add(current);
-                const neighbors = (adjacency.get(current) || []).slice().sort((a, b) => b - a);
-                neighbors.forEach((nextNode) => {
+                const neighbors = adjacency.get(current) || [];
+                for (let idx = neighbors.length - 1; idx >= 0; idx -= 1) {
+                    const nextNode = neighbors[idx];
                     if (!visited.has(nextNode)) {
                         stack.push(nextNode);
                     }
-                });
+                }
                 trace.push({
                     node: current,
                     frontierAfter: stack.slice(),
@@ -850,7 +865,43 @@
             return false;
         }
         const reachable = new Set(expectedOrder);
+        const levelByNode = new Map([[start, 0]]);
+        const depthByNode = new Map([[start, 0]]);
+        if (isBfsMode) {
+            const levelQueue = [start];
+            for (let idx = 0; idx < levelQueue.length; idx += 1) {
+                const current = levelQueue[idx];
+                const currentLevel = levelByNode.get(current) || 0;
+                (adjacency.get(current) || []).forEach((nextNode) => {
+                    if (!levelByNode.has(nextNode)) {
+                        levelByNode.set(nextNode, currentLevel + 1);
+                        levelQueue.push(nextNode);
+                    }
+                });
+            }
+        } else if (isDfsMode) {
+            const dfsStack = [{ node: start, depth: 0 }];
+            const dfsVisited = new Set();
+            while (dfsStack.length) {
+                const entry = dfsStack.pop();
+                if (!entry || dfsVisited.has(entry.node)) {
+                    continue;
+                }
+                dfsVisited.add(entry.node);
+                if (!depthByNode.has(entry.node)) {
+                    depthByNode.set(entry.node, entry.depth);
+                }
+                const neighbors = adjacency.get(entry.node) || [];
+                for (let idx = neighbors.length - 1; idx >= 0; idx -= 1) {
+                    const nextNode = neighbors[idx];
+                    if (!dfsVisited.has(nextNode)) {
+                        dfsStack.push({ node: nextNode, depth: entry.depth + 1 });
+                    }
+                }
+            }
+        }
         const expectedLength = expectedOrder.length;
+        const unreachableCount = Math.max(0, nodes.length - reachable.size);
         const frontierLabel = mode === 'bfs' ? 'Queue' : 'Stack';
 
         const shell = renderActionHostShell(
@@ -863,25 +914,101 @@
             return false;
         }
 
-        shell.body.innerHTML = `
-            <div class="text-muted small mb-2">
-                <strong>Start:</strong> ${start} | <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
-            </div>
-            <div class="d-flex flex-wrap gap-2 mb-3" id="traversalNodeBoard"></div>
-            <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="traversalUndoBtn">Undo</button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="traversalResetBtn">Reset</button>
-            </div>
-            <small class="text-muted" id="traversalMeta"></small>
-        `;
+        if (isBfsMode) {
+            shell.body.classList.add('bfs-route-shell');
+            shell.body.classList.remove('dfs-route-shell');
+            shell.body.innerHTML = `
+                <div class="bfs-route-head">
+                    <div><strong>Start:</strong> ${start}</div>
+                    <div><strong>Reachable:</strong> ${reachable.size}/${nodes.length}${unreachableCount ? ` (${unreachableCount} out)` : ''}</div>
+                </div>
+                <div class="text-muted small bfs-route-edge-list">
+                    <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
+                </div>
+                <div class="bfs-route-legend" aria-hidden="true">
+                    <span class="bfs-route-chip is-visited">Visited</span>
+                    <span class="bfs-route-chip is-next">Next</span>
+                    <span class="bfs-route-chip is-pending">Pending</span>
+                    <span class="bfs-route-chip is-locked">Out</span>
+                </div>
+                <div class="bfs-route-board" id="traversalNodeBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="traversalUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="traversalResetBtn">Reset</button>
+                </div>
+                <div class="bfs-route-status" id="traversalMeta">
+                    <div class="bfs-route-status-line" id="traversalMetaPrimary"></div>
+                    <div class="bfs-route-status-line" id="traversalMetaSecondary"></div>
+                    <div class="bfs-route-status-line" id="traversalMetaTertiary"></div>
+                    <div class="bfs-route-progress-track">
+                        <span class="bfs-route-progress-fill" id="traversalProgressFill"></span>
+                    </div>
+                    <div class="bfs-route-progress-text" id="traversalProgressText"></div>
+                    <div class="bfs-route-hint" id="traversalHint"></div>
+                </div>
+            `;
+        } else if (isDfsMode) {
+            shell.body.classList.remove('bfs-route-shell');
+            shell.body.classList.add('dfs-route-shell');
+            shell.body.innerHTML = `
+                <div class="dfs-route-head">
+                    <div><strong>Start:</strong> ${start}</div>
+                    <div><strong>Reachable:</strong> ${reachable.size}/${nodes.length}${unreachableCount ? ` (${unreachableCount} out)` : ''}</div>
+                </div>
+                <div class="text-muted small dfs-route-edge-list">
+                    <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
+                </div>
+                <div class="dfs-route-legend" aria-hidden="true">
+                    <span class="dfs-route-chip is-visited">Visited</span>
+                    <span class="dfs-route-chip is-next">Stack Top</span>
+                    <span class="dfs-route-chip is-pending">Pending</span>
+                    <span class="dfs-route-chip is-locked">Out</span>
+                </div>
+                <div class="dfs-route-board" id="traversalNodeBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="traversalUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="traversalResetBtn">Reset</button>
+                </div>
+                <div class="dfs-route-status" id="traversalMeta">
+                    <div class="dfs-route-status-line" id="traversalMetaPrimary"></div>
+                    <div class="dfs-route-status-line" id="traversalMetaSecondary"></div>
+                    <div class="dfs-route-status-line" id="traversalMetaTertiary"></div>
+                    <div class="dfs-route-progress-track">
+                        <span class="dfs-route-progress-fill" id="traversalProgressFill"></span>
+                    </div>
+                    <div class="dfs-route-progress-text" id="traversalProgressText"></div>
+                    <div class="dfs-route-hint" id="traversalHint"></div>
+                </div>
+            `;
+        } else {
+            shell.body.classList.remove('bfs-route-shell', 'dfs-route-shell');
+            shell.body.innerHTML = `
+                <div class="text-muted small mb-2">
+                    <strong>Start:</strong> ${start} | <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3" id="traversalNodeBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="traversalUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="traversalResetBtn">Reset</button>
+                </div>
+                <small class="text-muted" id="traversalMeta"></small>
+            `;
+        }
 
         const board = shell.body.querySelector('#traversalNodeBoard');
         const meta = shell.body.querySelector('#traversalMeta');
+        const metaPrimary = shell.body.querySelector('#traversalMetaPrimary');
+        const metaSecondary = shell.body.querySelector('#traversalMetaSecondary');
+        const metaTertiary = shell.body.querySelector('#traversalMetaTertiary');
+        const progressFill = shell.body.querySelector('#traversalProgressFill');
+        const progressText = shell.body.querySelector('#traversalProgressText');
+        const hintText = shell.body.querySelector('#traversalHint');
         const undoBtn = shell.body.querySelector('#traversalUndoBtn');
         const resetBtn = shell.body.querySelector('#traversalResetBtn');
 
         const order = [start];
         const used = new Set([start]);
+        const visitStep = new Map([[start, 1]]);
         let feedback = '';
 
         function renderBoard() {
@@ -892,8 +1019,8 @@
             const isComplete = order.length >= expectedLength;
             board.innerHTML = nodes
                 .map((node) => {
-                    const index = order.indexOf(node);
-                    const isUsed = index !== -1;
+                    const stepNumber = visitStep.get(node);
+                    const isUsed = Number.isInteger(stepNumber);
                     const isReachable = reachable.has(node);
                     const isExpected = Number.isInteger(expectedNext) && node === expectedNext;
                     let btnClass = 'btn-outline-primary';
@@ -904,10 +1031,40 @@
                     } else if (isExpected) {
                         btnClass = 'btn-outline-warning';
                     }
+                    if (isBfsMode) {
+                        const nodeState = !isReachable ? 'locked' : (isUsed ? 'visited' : (isExpected ? 'next' : 'pending'));
+                        const levelValue = levelByNode.has(node) ? levelByNode.get(node) : '?';
+                        const helperText = !isReachable
+                            ? 'Out'
+                            : (isUsed ? `#${stepNumber}` : (isExpected ? 'Next' : `L${levelValue}`));
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn bfs-route-node is-${nodeState}" data-node="${node}" data-state="${nodeState}"
+                                ${!isReachable || isUsed || isComplete ? 'disabled' : ''}
+                                title="${isReachable ? (isUsed ? `Visited at step ${stepNumber}` : `Level ${levelValue}`) : 'Unreachable node'}">
+                                <span class="bfs-route-node-main">${node}</span>
+                                <span class="bfs-route-node-sub">${helperText}</span>
+                            </button>
+                        `;
+                    }
+                    if (isDfsMode) {
+                        const nodeState = !isReachable ? 'locked' : (isUsed ? 'visited' : (isExpected ? 'next' : 'pending'));
+                        const depthValue = depthByNode.has(node) ? depthByNode.get(node) : '?';
+                        const helperText = !isReachable
+                            ? 'Out'
+                            : (isUsed ? `#${stepNumber}` : (isExpected ? 'Top' : `D${depthValue}`));
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn dfs-route-node is-${nodeState}" data-node="${node}" data-state="${nodeState}"
+                                ${!isReachable || isUsed || isComplete ? 'disabled' : ''}
+                                title="${isReachable ? (isUsed ? `Visited at step ${stepNumber}` : `Depth ${depthValue}`) : 'Unreachable node'}">
+                                <span class="dfs-route-node-main">${node}</span>
+                                <span class="dfs-route-node-sub">${helperText}</span>
+                            </button>
+                        `;
+                    }
                     return `
                         <button type="button" class="btn ${btnClass} btn-sm action-value-btn" data-node="${node}"
                             ${!isReachable || isUsed || isComplete ? 'disabled' : ''}>
-                            ${node}${isUsed ? ` (#${index + 1})` : ''}${!isReachable ? ' (out)' : ''}
+                            ${node}${isUsed ? ` (#${stepNumber})` : ''}${!isReachable ? ' (out)' : ''}
                         </button>
                     `;
                 })
@@ -932,6 +1089,7 @@
                     }
                     order.push(node);
                     used.add(node);
+                    visitStep.set(node, order.length);
                     feedback = '';
                     render();
                 });
@@ -944,7 +1102,35 @@
             const expectedNext = expectedOrder[order.length];
             const traceIndex = Math.max(0, Math.min(order.length - 1, traversalTrace.length - 1));
             const frontier = traversalTrace[traceIndex] ? traversalTrace[traceIndex].frontierAfter : [];
-            if (meta) {
+            const completionPercent = expectedLength > 0 ? Math.round((order.length / expectedLength) * 100) : 0;
+            if (isBfsMode || isDfsMode) {
+                const frontierText = `[${frontier.join(', ') || '-'}]`;
+                const frontierTop = frontier.length ? frontier[frontier.length - 1] : '-';
+                if (metaPrimary) {
+                    metaPrimary.textContent = `Traversal: ${order.join(' -> ')}`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `${frontierLabel}: ${frontierText} | ${isComplete ? 'Traversal complete' : `Next: ${expectedNext}`}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = isDfsMode
+                        ? `Top: ${frontierTop} | Depth: ${depthByNode.get(order[order.length - 1]) ?? 0}`
+                        : '';
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${completionPercent}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Visited ${order.length}/${expectedLength} nodes`;
+                }
+                if (hintText) {
+                    hintText.textContent = feedback
+                        || (isComplete
+                            ? `${isBfsMode ? 'BFS' : 'DFS'} complete. Submit if this matches expected traversal.`
+                            : `Choose node ${expectedNext} next.`);
+                    hintText.classList.toggle('error', Boolean(feedback));
+                }
+            } else if (meta) {
                 meta.textContent = `Traversal: ${order.join(' -> ')} | Step ${order.length}/${expectedLength} | ${frontierLabel}: [${frontier.join(', ') || '-'}] | ${isComplete ? 'Traversal complete' : `Next: ${expectedNext}`}${feedback ? ` | ${feedback}` : ''}`;
             }
             if (shell.badge) {
@@ -974,6 +1160,7 @@
                 }
                 const removed = order.pop();
                 used.delete(removed);
+                visitStep.delete(removed);
                 feedback = '';
                 render();
             });
@@ -984,6 +1171,8 @@
                 order.length = 1;
                 used.clear();
                 used.add(start);
+                visitStep.clear();
+                visitStep.set(start, 1);
                 feedback = '';
                 render();
             });
@@ -1016,14 +1205,94 @@
         }
 
         const nodeSet = new Set([source, target]);
+        const adjacency = new Map();
         const edgeMap = new Map();
         edges.forEach(([left, right, weight]) => {
             nodeSet.add(left);
             nodeSet.add(right);
             edgeMap.set(`${left}|${right}`, weight);
             edgeMap.set(`${right}|${left}`, weight);
+            if (!adjacency.has(left)) {
+                adjacency.set(left, []);
+            }
+            if (!adjacency.has(right)) {
+                adjacency.set(right, []);
+            }
+            adjacency.get(left).push({ node: right, weight });
+            adjacency.get(right).push({ node: left, weight });
         });
         const nodes = Array.from(nodeSet).sort((a, b) => a - b);
+        nodes.forEach((node) => {
+            if (!adjacency.has(node)) {
+                adjacency.set(node, []);
+            }
+            adjacency.get(node).sort((left, right) => {
+                if (left.node !== right.node) {
+                    return left.node - right.node;
+                }
+                return left.weight - right.weight;
+            });
+        });
+
+        function buildShortestReference() {
+            const dist = new Map(nodes.map((node) => [node, Infinity]));
+            const previous = new Map();
+            const settled = new Set();
+            dist.set(source, 0);
+
+            while (settled.size < nodes.length) {
+                let current = null;
+                let best = Infinity;
+                nodes.forEach((node) => {
+                    const value = dist.get(node);
+                    if (!settled.has(node) && value < best) {
+                        best = value;
+                        current = node;
+                    }
+                });
+                if (!Number.isInteger(current)) {
+                    break;
+                }
+                settled.add(current);
+                (adjacency.get(current) || []).forEach((entry) => {
+                    if (settled.has(entry.node)) {
+                        return;
+                    }
+                    const candidate = dist.get(current) + entry.weight;
+                    if (candidate < dist.get(entry.node)) {
+                        dist.set(entry.node, candidate);
+                        previous.set(entry.node, current);
+                    }
+                });
+            }
+
+            const targetDistance = dist.get(target);
+            const shortestPath = [];
+            if (Number.isFinite(targetDistance)) {
+                let cursor = target;
+                while (Number.isInteger(cursor)) {
+                    shortestPath.push(cursor);
+                    if (cursor === source) {
+                        break;
+                    }
+                    cursor = previous.get(cursor);
+                }
+                shortestPath.reverse();
+                if (shortestPath[0] !== source) {
+                    shortestPath.length = 0;
+                }
+            }
+
+            return {
+                distanceMap: dist,
+                reachable: new Set(nodes.filter((node) => Number.isFinite(dist.get(node)))),
+                targetDistance,
+                shortestPath,
+            };
+        }
+
+        const reference = buildShortestReference();
+        const targetReachable = Number.isFinite(reference.targetDistance);
 
         const shell = renderActionHostShell(
             'Dijkstra Path Builder',
@@ -1034,25 +1303,56 @@
         }
 
         shell.body.innerHTML = `
-            <div class="text-muted small mb-2"><strong>Source:</strong> ${source} | <strong>Target:</strong> ${target}</div>
-            <div class="text-muted small mb-2">Edges: ${edges.map((edge) => `${edge[0]}-${edge[1]}(${edge[2]})`).join(', ')}</div>
-            <div class="d-flex flex-wrap gap-2 mb-3" id="dijkstraNodeBoard"></div>
-            <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="dijkstraUndoBtn">Undo</button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="dijkstraResetBtn">Reset</button>
-                <button type="button" class="btn btn-outline-warning btn-sm" id="dijkstraUnreachableBtn">Mark Unreachable</button>
+            <div class="dijkstra-route-shell">
+                <div class="dijkstra-route-head">
+                    <div><strong>Source:</strong> ${source}</div>
+                    <div><strong>Target:</strong> ${target}</div>
+                </div>
+                <div class="text-muted small dijkstra-route-edge-list">
+                    <strong>Edges:</strong> ${edges.map((edge) => `${edge[0]}-${edge[1]}(${edge[2]})`).join(', ')}
+                </div>
+                <div class="dijkstra-route-legend" aria-hidden="true">
+                    <span class="dijkstra-route-chip is-path">Path</span>
+                    <span class="dijkstra-route-chip is-next">Neighbor</span>
+                    <span class="dijkstra-route-chip is-pending">Available</span>
+                    <span class="dijkstra-route-chip is-locked">Out</span>
+                </div>
+                <div class="dijkstra-route-board" id="dijkstraNodeBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="dijkstraUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="dijkstraResetBtn">Reset</button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="dijkstraUnreachableBtn">Mark Unreachable</button>
+                </div>
+                <div class="dijkstra-route-status" id="dijkstraMeta">
+                    <div class="dijkstra-route-status-line" id="dijkstraMetaPrimary"></div>
+                    <div class="dijkstra-route-status-line" id="dijkstraMetaSecondary"></div>
+                    <div class="dijkstra-route-status-line" id="dijkstraMetaTertiary"></div>
+                    <div class="dijkstra-route-progress-track">
+                        <span class="dijkstra-route-progress-fill" id="dijkstraProgressFill"></span>
+                    </div>
+                    <div class="dijkstra-route-progress-text" id="dijkstraProgressText"></div>
+                    <div class="dijkstra-route-hint" id="dijkstraHint"></div>
+                </div>
             </div>
-            <small class="text-muted" id="dijkstraMeta"></small>
         `;
 
         const board = shell.body.querySelector('#dijkstraNodeBoard');
         const meta = shell.body.querySelector('#dijkstraMeta');
+        const metaPrimary = shell.body.querySelector('#dijkstraMetaPrimary');
+        const metaSecondary = shell.body.querySelector('#dijkstraMetaSecondary');
+        const metaTertiary = shell.body.querySelector('#dijkstraMetaTertiary');
+        const progressFill = shell.body.querySelector('#dijkstraProgressFill');
+        const progressText = shell.body.querySelector('#dijkstraProgressText');
+        const hintText = shell.body.querySelector('#dijkstraHint');
         const undoBtn = shell.body.querySelector('#dijkstraUndoBtn');
         const resetBtn = shell.body.querySelector('#dijkstraResetBtn');
         const unreachableBtn = shell.body.querySelector('#dijkstraUnreachableBtn');
 
         const path = [source];
+        const pathSet = new Set([source]);
+        const pathStep = new Map([[source, 1]]);
         let isUnreachable = false;
+        let feedback = '';
 
         function pathDistance() {
             let total = 0;
@@ -1066,16 +1366,47 @@
             return total;
         }
 
+        function formatDistance(value) {
+            if (!Number.isFinite(value)) {
+                return 'inf';
+            }
+            if (Number.isInteger(value)) {
+                return String(value);
+            }
+            return value.toFixed(2).replace(/\.?0+$/, '');
+        }
+
         function renderBoard() {
             if (!board) {
                 return;
             }
+            const last = path[path.length - 1];
+            const nextCandidates = new Set(
+                (adjacency.get(last) || [])
+                    .map((entry) => entry.node)
+                    .filter((node) => !pathSet.has(node))
+            );
+
             board.innerHTML = nodes
-                .map((node) => `
-                    <button type="button" class="btn btn-outline-primary btn-sm action-value-btn" data-node="${node}">
-                        ${node}
-                    </button>
-                `)
+                .map((node) => {
+                    const inPath = pathSet.has(node);
+                    const isNext = nextCandidates.has(node);
+                    const isReachable = reference.reachable.has(node);
+                    const state = inPath ? 'path' : (isNext ? 'next' : (isReachable ? 'pending' : 'locked'));
+                    const stepValue = pathStep.get(node);
+                    const helper = inPath
+                        ? `#${stepValue}`
+                        : (isNext ? 'Next' : (isReachable ? `d* ${formatDistance(reference.distanceMap.get(node))}` : 'Out'));
+                    const badge = node === source ? 'SRC' : (node === target ? 'TGT' : helper);
+                    return `
+                        <button type="button" class="btn btn-sm action-value-btn dijkstra-route-node is-${state}" data-node="${node}" data-state="${state}"
+                            ${isUnreachable || !isNext ? 'disabled' : ''}
+                            title="${isReachable ? `Reference dist: ${formatDistance(reference.distanceMap.get(node))}` : 'Unreachable from source'}">
+                            <span class="dijkstra-route-node-main">${node}</span>
+                            <span class="dijkstra-route-node-sub">${badge}</span>
+                        </button>
+                    `;
+                })
                 .join('');
             board.querySelectorAll('.action-value-btn').forEach((button) => {
                 button.addEventListener('click', () => {
@@ -1086,12 +1417,26 @@
                     if (isUnreachable) {
                         isUnreachable = false;
                         path.length = 1;
+                        pathSet.clear();
+                        pathSet.add(source);
+                        pathStep.clear();
+                        pathStep.set(source, 1);
                     }
                     const last = path[path.length - 1];
                     if (!edgeMap.has(`${last}|${node}`)) {
+                        feedback = `No direct edge from ${last} to ${node}.`;
+                        render();
+                        return;
+                    }
+                    if (pathSet.has(node)) {
+                        feedback = `Node ${node} already exists in path.`;
+                        render();
                         return;
                     }
                     path.push(node);
+                    pathSet.add(node);
+                    pathStep.set(node, path.length);
+                    feedback = '';
                     render();
                 });
             });
@@ -1101,24 +1446,75 @@
             renderBoard();
             const distance = pathDistance();
             const finished = !isUnreachable && path[path.length - 1] === target && Number.isFinite(distance);
-            if (meta) {
-                if (isUnreachable) {
-                    meta.textContent = 'Submitted as unreachable.';
-                } else {
-                    meta.textContent = `Path: ${path.join(' -> ')} | Distance: ${Number.isFinite(distance) ? distance : '-'}`;
-                }
+            const optimal = finished && targetReachable && Number(distance) === Number(reference.targetDistance);
+            const last = path[path.length - 1];
+            const neighbors = (adjacency.get(last) || []).map((entry) => `${entry.node}(${entry.weight})`);
+            const progressValue = nodes.length ? Math.min(100, Math.round((path.length / nodes.length) * 100)) : 0;
+
+            if (metaPrimary) {
+                metaPrimary.textContent = isUnreachable ? 'Path: marked unreachable' : `Path: ${path.join(' -> ')}`;
             }
+            if (metaSecondary) {
+                metaSecondary.textContent = `Distance: ${Number.isFinite(distance) ? distance : '-'} | Hops: ${Math.max(0, path.length - 1)} | Current: ${last}`;
+            }
+            if (metaTertiary) {
+                metaTertiary.textContent = `From ${last}: ${neighbors.join(', ') || '-'}`;
+            }
+            if (progressFill) {
+                progressFill.style.width = `${progressValue}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `Path length ${path.length}/${nodes.length} nodes`;
+            }
+            if (meta) {
+                meta.dataset.state = feedback ? 'error' : (optimal ? 'optimal' : (finished ? 'complete' : 'active'));
+            }
+            const unreachableWrong = isUnreachable && targetReachable;
+            if (hintText) {
+                if (feedback) {
+                    hintText.textContent = feedback;
+                } else if (isUnreachable) {
+                    hintText.textContent = targetReachable
+                        ? 'Target is reachable in this graph, so unreachable is not correct.'
+                        : 'Unreachable selected. Submit if this matches the challenge condition.';
+                } else if (finished) {
+                    hintText.textContent = optimal
+                        ? 'Shortest path reached. Submit this answer.'
+                        : 'Target reached, but this path is not shortest. You can reattempt.';
+                } else if (!targetReachable) {
+                    hintText.textContent = 'No source-to-target route exists. Use Mark Unreachable.';
+                } else {
+                    hintText.textContent = `Choose a neighbor from node ${last}.`;
+                }
+                hintText.classList.toggle('error', Boolean(feedback) || unreachableWrong);
+            }
+
             if (shell.badge) {
-                shell.badge.textContent = isUnreachable ? 'Unreachable' : (finished ? `Distance ${distance}` : 'Building Path');
-                shell.badge.classList.toggle('badge-accent', isUnreachable || finished);
-                shell.badge.classList.toggle('badge-primary', !(isUnreachable || finished));
-                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (feedback || unreachableWrong) {
+                    shell.badge.textContent = feedback ? 'Invalid Step' : 'Reachable Graph';
+                    shell.badge.classList.add('badge-danger');
+                } else if (isUnreachable) {
+                    shell.badge.textContent = 'Unreachable';
+                    shell.badge.classList.add('badge-accent');
+                } else if (optimal) {
+                    shell.badge.textContent = `Optimal ${distance}`;
+                    shell.badge.classList.add('badge-accent');
+                } else if (finished) {
+                    shell.badge.textContent = `Distance ${distance}`;
+                    shell.badge.classList.add('badge-primary');
+                } else {
+                    shell.badge.textContent = `At ${last}`;
+                    shell.badge.classList.add('badge-primary');
+                }
             }
             setDerivedAnswer(isUnreachable ? -1 : (finished ? distance : ''));
             setActionPayload({
                 mode: 'dijkstra_path',
                 path_nodes: path.slice(),
                 is_unreachable: isUnreachable,
+                distance: Number.isFinite(distance) ? distance : null,
+                is_optimal: optimal,
             });
         }
 
@@ -1126,11 +1522,15 @@
             undoBtn.addEventListener('click', () => {
                 if (isUnreachable) {
                     isUnreachable = false;
+                    feedback = '';
                     render();
                     return;
                 }
                 if (path.length > 1) {
-                    path.pop();
+                    const removed = path.pop();
+                    pathSet.delete(removed);
+                    pathStep.delete(removed);
+                    feedback = '';
                     render();
                 }
             });
@@ -1138,13 +1538,19 @@
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 path.length = 1;
+                pathSet.clear();
+                pathSet.add(source);
+                pathStep.clear();
+                pathStep.set(source, 1);
                 isUnreachable = false;
+                feedback = '';
                 render();
             });
         }
         if (unreachableBtn) {
             unreachableBtn.addEventListener('click', () => {
                 isUnreachable = true;
+                feedback = '';
                 render();
             });
         }
@@ -1175,6 +1581,11 @@
         }
 
         const goal = [rows - 1, cols - 1];
+        const start = [0, 0];
+        const startKey = `${start[0]},${start[1]}`;
+        const goalKey = `${goal[0]},${goal[1]}`;
+        const startBlocked = blocked.has(startKey);
+        const goalBlocked = blocked.has(goalKey);
         const shell = renderActionHostShell(
             'A* Grid Route',
             'Build a valid 4-direction route from S(0,0) to goal.'
@@ -1183,29 +1594,144 @@
             return false;
         }
 
+        function keyFor(row, col) {
+            return `${row},${col}`;
+        }
+
+        function isInside(row, col) {
+            return row >= 0 && row < rows && col >= 0 && col < cols;
+        }
+
+        function manhattan(row, col) {
+            return Math.abs(goal[0] - row) + Math.abs(goal[1] - col);
+        }
+
+        function neighborsOf(row, col) {
+            const result = [];
+            const deltas = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            deltas.forEach(([dr, dc]) => {
+                const nextRow = row + dr;
+                const nextCol = col + dc;
+                if (!isInside(nextRow, nextCol)) {
+                    return;
+                }
+                if (blocked.has(keyFor(nextRow, nextCol))) {
+                    return;
+                }
+                result.push([nextRow, nextCol]);
+            });
+            return result;
+        }
+
+        function buildReference() {
+            const distanceMap = new Map();
+            const previous = new Map();
+            const reachable = new Set();
+            if (startBlocked || goalBlocked) {
+                return {
+                    distanceMap,
+                    previous,
+                    reachable,
+                    optimalMoves: Infinity,
+                    optimalPath: [],
+                };
+            }
+            const queue = [start];
+            distanceMap.set(startKey, 0);
+            reachable.add(startKey);
+            for (let idx = 0; idx < queue.length; idx += 1) {
+                const [row, col] = queue[idx];
+                const currentKey = keyFor(row, col);
+                const currentDist = distanceMap.get(currentKey) || 0;
+                neighborsOf(row, col).forEach(([nextRow, nextCol]) => {
+                    const nextKey = keyFor(nextRow, nextCol);
+                    if (distanceMap.has(nextKey)) {
+                        return;
+                    }
+                    distanceMap.set(nextKey, currentDist + 1);
+                    previous.set(nextKey, currentKey);
+                    reachable.add(nextKey);
+                    queue.push([nextRow, nextCol]);
+                });
+            }
+
+            const optimalMoves = distanceMap.has(goalKey) ? Number(distanceMap.get(goalKey)) : Infinity;
+            const optimalPath = [];
+            if (Number.isFinite(optimalMoves)) {
+                let cursor = goalKey;
+                while (cursor) {
+                    const parts = cursor.split(',');
+                    optimalPath.push([Number(parts[0]), Number(parts[1])]);
+                    if (cursor === startKey) {
+                        break;
+                    }
+                    cursor = previous.get(cursor);
+                }
+                optimalPath.reverse();
+            }
+            return {
+                distanceMap,
+                previous,
+                reachable,
+                optimalMoves,
+                optimalPath,
+            };
+        }
+
+        const reference = buildReference();
+        const targetReachable = Number.isFinite(reference.optimalMoves);
+
         shell.body.innerHTML = `
-            <div class="text-muted small mb-2"><strong>Grid:</strong> ${rows}x${cols} | <strong>Goal:</strong> (${goal[0]}, ${goal[1]})</div>
-            <div class="d-inline-flex flex-column gap-1 mb-3" id="astarGridBoard"></div>
-            <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="astarUndoBtn">Undo</button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="astarResetBtn">Reset</button>
-                <button type="button" class="btn btn-outline-warning btn-sm" id="astarUnreachableBtn">Mark Unreachable</button>
+            <div class="astar-route-shell">
+                <div class="astar-route-head">
+                    <div><strong>Grid:</strong> ${rows}x${cols}</div>
+                    <div><strong>Blocked:</strong> ${blocked.size}</div>
+                </div>
+                <div class="text-muted small astar-route-meta-line">
+                    <strong>Start:</strong> (${start[0]}, ${start[1]}) | <strong>Goal:</strong> (${goal[0]}, ${goal[1]}) | <strong>Heuristic:</strong> Manhattan
+                </div>
+                <div class="astar-route-legend" aria-hidden="true">
+                    <span class="astar-route-chip is-path">Path</span>
+                    <span class="astar-route-chip is-next">Next</span>
+                    <span class="astar-route-chip is-open">Open</span>
+                    <span class="astar-route-chip is-blocked">Blocked</span>
+                </div>
+                <div class="astar-grid-board" id="astarGridBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="astarUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="astarResetBtn">Reset</button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="astarUnreachableBtn">Mark Unreachable</button>
+                </div>
+                <div class="astar-route-status" id="astarMeta">
+                    <div class="astar-route-status-line" id="astarMetaPrimary"></div>
+                    <div class="astar-route-status-line" id="astarMetaSecondary"></div>
+                    <div class="astar-route-status-line" id="astarMetaTertiary"></div>
+                    <div class="astar-route-progress-track">
+                        <span class="astar-route-progress-fill" id="astarProgressFill"></span>
+                    </div>
+                    <div class="astar-route-progress-text" id="astarProgressText"></div>
+                    <div class="astar-route-hint" id="astarHint"></div>
+                </div>
             </div>
-            <small class="text-muted" id="astarMeta"></small>
         `;
 
         const board = shell.body.querySelector('#astarGridBoard');
         const meta = shell.body.querySelector('#astarMeta');
+        const metaPrimary = shell.body.querySelector('#astarMetaPrimary');
+        const metaSecondary = shell.body.querySelector('#astarMetaSecondary');
+        const metaTertiary = shell.body.querySelector('#astarMetaTertiary');
+        const progressFill = shell.body.querySelector('#astarProgressFill');
+        const progressText = shell.body.querySelector('#astarProgressText');
+        const hintText = shell.body.querySelector('#astarHint');
         const undoBtn = shell.body.querySelector('#astarUndoBtn');
         const resetBtn = shell.body.querySelector('#astarResetBtn');
         const unreachableBtn = shell.body.querySelector('#astarUnreachableBtn');
 
-        const path = [[0, 0]];
+        const path = [[start[0], start[1]]];
+        const pathSet = new Set([startKey]);
+        const pathStep = new Map([[startKey, 1]]);
         let isUnreachable = false;
-
-        function keyFor(row, col) {
-            return `${row},${col}`;
-        }
+        let feedback = '';
 
         function isAdjacent(a, b) {
             return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
@@ -1215,26 +1741,78 @@
             if (!board) {
                 return;
             }
-            const pathKeys = new Set(path.map((cell) => keyFor(cell[0], cell[1])));
+            const last = path[path.length - 1];
+            const lastKey = keyFor(last[0], last[1]);
+            const previousKey = path.length > 1 ? keyFor(path[path.length - 2][0], path[path.length - 2][1]) : null;
+            const nextCandidates = new Set(
+                neighborsOf(last[0], last[1])
+                    .map((cell) => keyFor(cell[0], cell[1]))
+                    .filter((key) => !pathSet.has(key))
+            );
             const rowsHtml = [];
             for (let row = 0; row < rows; row += 1) {
                 const cells = [];
                 for (let col = 0; col < cols; col += 1) {
                     const key = keyFor(row, col);
                     const isBlocked = blocked.has(key);
-                    const inPath = pathKeys.has(key);
-                    let btnClass = 'btn-outline-primary';
-                    if (isBlocked) btnClass = 'btn-outline-dark';
-                    if (inPath) btnClass = 'btn-outline-success';
-                    if (row === 0 && col === 0) btnClass = 'btn-outline-info';
-                    if (row === goal[0] && col === goal[1]) btnClass = inPath ? 'btn-outline-success' : 'btn-outline-warning';
+                    const inPath = pathSet.has(key);
+                    const isStart = row === start[0] && col === start[1];
+                    const isGoal = row === goal[0] && col === goal[1];
+                    const isCurrent = key === lastKey;
+                    const isPrev = previousKey && key === previousKey;
+                    const isNext = nextCandidates.has(key);
+                    const isReachable = reference.reachable.has(key);
+                    const canClick = !isUnreachable
+                        && !isBlocked
+                        && !startBlocked
+                        && !goalBlocked
+                        && (isNext || isPrev);
+
+                    let stateClass = 'is-open';
+                    if (isBlocked) {
+                        stateClass = 'is-blocked';
+                    } else if (inPath && isGoal) {
+                        stateClass = 'is-path-goal';
+                    } else if (inPath) {
+                        stateClass = 'is-path';
+                    } else if (isNext) {
+                        stateClass = 'is-next';
+                    } else if (!isReachable) {
+                        stateClass = 'is-locked';
+                    }
+                    if (isStart) {
+                        stateClass += ' is-start';
+                    }
+                    if (isGoal) {
+                        stateClass += ' is-goal';
+                    }
+                    if (isCurrent) {
+                        stateClass += ' is-current';
+                    }
+
+                    const step = pathStep.get(key);
+                    const heuristic = manhattan(row, col);
+                    let subLabel = `h${heuristic}`;
+                    if (isBlocked) {
+                        subLabel = 'X';
+                    } else if (isStart) {
+                        subLabel = 'S';
+                    } else if (isGoal) {
+                        subLabel = 'G';
+                    } else if (Number.isInteger(step)) {
+                        subLabel = `#${step}`;
+                    } else if (isNext) {
+                        subLabel = 'Next';
+                    }
+
                     cells.push(
-                        `<button type="button" class="btn ${btnClass} btn-sm action-grid-btn" data-row="${row}" data-col="${col}" ${isBlocked ? 'disabled' : ''}>
-                            ${row},${col}
+                        `<button type="button" class="btn btn-sm action-grid-btn astar-grid-cell ${stateClass}" data-row="${row}" data-col="${col}" ${canClick ? '' : 'disabled'}>
+                            <span class="astar-grid-main">${row},${col}</span>
+                            <span class="astar-grid-sub">${subLabel}</span>
                         </button>`
                     );
                 }
-                rowsHtml.push(`<div class="d-flex gap-1">${cells.join('')}</div>`);
+                rowsHtml.push(`<div class="astar-grid-row">${cells.join('')}</div>`);
             }
             board.innerHTML = rowsHtml.join('');
             board.querySelectorAll('.action-grid-btn').forEach((button) => {
@@ -1247,21 +1825,37 @@
                     if (isUnreachable) {
                         isUnreachable = false;
                         path.length = 1;
+                        pathSet.clear();
+                        pathSet.add(startKey);
+                        pathStep.clear();
+                        pathStep.set(startKey, 1);
                     }
                     const cell = [row, col];
                     const last = path[path.length - 1];
                     if (path.length >= 2 && row === path[path.length - 2][0] && col === path[path.length - 2][1]) {
-                        path.pop();
+                        const removed = path.pop();
+                        const removedKey = keyFor(removed[0], removed[1]);
+                        pathSet.delete(removedKey);
+                        pathStep.delete(removedKey);
+                        feedback = '';
                         render();
                         return;
                     }
                     if (!isAdjacent(last, cell)) {
+                        feedback = `Cell (${row},${col}) is not adjacent to current cell (${last[0]},${last[1]}).`;
+                        render();
                         return;
                     }
                     if (path.some((item) => item[0] === row && item[1] === col)) {
+                        feedback = `Cell (${row},${col}) is already in route.`;
+                        render();
                         return;
                     }
                     path.push(cell);
+                    const newKey = keyFor(row, col);
+                    pathSet.add(newKey);
+                    pathStep.set(newKey, path.length);
+                    feedback = '';
                     render();
                 });
             });
@@ -1269,26 +1863,87 @@
 
         function render() {
             renderBoard();
-            const reachedGoal = !isUnreachable && path[path.length - 1][0] === goal[0] && path[path.length - 1][1] === goal[1];
+            const current = path[path.length - 1];
+            const currentKey = keyFor(current[0], current[1]);
+            const gCost = Math.max(0, path.length - 1);
+            const hCost = manhattan(current[0], current[1]);
+            const fCost = gCost + hCost;
+            const reachedGoal = !isUnreachable && current[0] === goal[0] && current[1] === goal[1];
             const moves = reachedGoal ? path.length - 1 : null;
+            const optimalMoves = reference.optimalMoves;
+            const optimal = reachedGoal && Number.isFinite(optimalMoves) && moves === optimalMoves;
+            const unreachableWrong = isUnreachable && targetReachable;
+            const progressValue = Number.isFinite(optimalMoves)
+                ? Math.min(100, Math.round(((moves ?? gCost) / Math.max(1, optimalMoves)) * 100))
+                : Math.min(100, Math.round((path.length / Math.max(1, (rows * cols) - blocked.size)) * 100));
+
+            const neighbors = neighborsOf(current[0], current[1]).map((cell) => `${cell[0]},${cell[1]}`);
+            if (metaPrimary) {
+                metaPrimary.textContent = isUnreachable ? 'Route: marked unreachable' : `Route: ${path.map((cell) => `(${cell[0]},${cell[1]})`).join(' -> ')}`;
+            }
+            if (metaSecondary) {
+                metaSecondary.textContent = `g=${gCost} | h=${hCost} | f=${fCost} | Moves: ${moves ?? '-'}`;
+            }
+            if (metaTertiary) {
+                metaTertiary.textContent = `From ${currentKey}: ${neighbors.join(' | ') || '-'}`;
+            }
+            if (progressFill) {
+                progressFill.style.width = `${progressValue}%`;
+            }
+            if (progressText) {
+                progressText.textContent = Number.isFinite(optimalMoves)
+                    ? `Progress ${moves ?? gCost}/${optimalMoves} (optimal moves)`
+                    : `Exploration progress ${path.length} cells`;
+            }
             if (meta) {
-                if (isUnreachable) {
-                    meta.textContent = 'Submitted as unreachable.';
+                meta.dataset.state = feedback ? 'error' : (optimal ? 'optimal' : (reachedGoal ? 'complete' : 'active'));
+            }
+            if (hintText) {
+                if (feedback) {
+                    hintText.textContent = feedback;
+                } else if (startBlocked || goalBlocked) {
+                    hintText.textContent = 'Start or goal is blocked, so route is unreachable.';
+                } else if (isUnreachable) {
+                    hintText.textContent = targetReachable
+                        ? 'A route exists in this grid, so unreachable is not correct.'
+                        : 'Unreachable selected. Submit if this matches the challenge.';
+                } else if (reachedGoal) {
+                    hintText.textContent = optimal
+                        ? 'Optimal A* route reached. Submit this answer.'
+                        : 'Goal reached, but this route is not optimal. You can reattempt.';
+                } else if (!targetReachable) {
+                    hintText.textContent = 'No valid path to goal exists. Use Mark Unreachable.';
                 } else {
-                    meta.textContent = `Path length: ${path.length} | Moves: ${moves ?? '-'} | Route: ${path.map((cell) => `(${cell[0]},${cell[1]})`).join(' -> ')}`;
+                    hintText.textContent = `Choose one highlighted adjacent cell from (${current[0]},${current[1]}).`;
                 }
+                hintText.classList.toggle('error', Boolean(feedback) || unreachableWrong);
             }
             if (shell.badge) {
-                shell.badge.textContent = isUnreachable ? 'Unreachable' : (reachedGoal ? `Moves ${moves}` : 'Building Route');
-                shell.badge.classList.toggle('badge-accent', isUnreachable || reachedGoal);
-                shell.badge.classList.toggle('badge-primary', !(isUnreachable || reachedGoal));
-                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (feedback || unreachableWrong) {
+                    shell.badge.textContent = feedback ? 'Invalid Move' : 'Route Exists';
+                    shell.badge.classList.add('badge-danger');
+                } else if (isUnreachable) {
+                    shell.badge.textContent = 'Unreachable';
+                    shell.badge.classList.add('badge-accent');
+                } else if (optimal) {
+                    shell.badge.textContent = `Optimal ${moves}`;
+                    shell.badge.classList.add('badge-accent');
+                } else if (reachedGoal) {
+                    shell.badge.textContent = `Moves ${moves}`;
+                    shell.badge.classList.add('badge-primary');
+                } else {
+                    shell.badge.textContent = `f=${fCost}`;
+                    shell.badge.classList.add('badge-primary');
+                }
             }
             setDerivedAnswer(isUnreachable ? -1 : (reachedGoal ? moves : ''));
             setActionPayload({
                 mode: 'astar_grid_route',
                 path: path.map((cell) => [cell[0], cell[1]]),
                 is_unreachable: isUnreachable,
+                moves: reachedGoal ? moves : null,
+                is_optimal: optimal,
             });
         }
 
@@ -1296,11 +1951,16 @@
             undoBtn.addEventListener('click', () => {
                 if (isUnreachable) {
                     isUnreachable = false;
+                    feedback = '';
                     render();
                     return;
                 }
                 if (path.length > 1) {
-                    path.pop();
+                    const removed = path.pop();
+                    const removedKey = keyFor(removed[0], removed[1]);
+                    pathSet.delete(removedKey);
+                    pathStep.delete(removedKey);
+                    feedback = '';
                     render();
                 }
             });
@@ -1308,13 +1968,19 @@
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 path.length = 1;
+                pathSet.clear();
+                pathSet.add(startKey);
+                pathStep.clear();
+                pathStep.set(startKey, 1);
                 isUnreachable = false;
+                feedback = '';
                 render();
             });
         }
         if (unreachableBtn) {
             unreachableBtn.addEventListener('click', () => {
                 isUnreachable = true;
+                feedback = '';
                 render();
             });
         }
@@ -1439,38 +2105,72 @@
         if (!data.length || !Number.isFinite(target)) {
             return false;
         }
+        const expectedIndex = data.findIndex((value) => Math.abs(value - target) <= 1e-9);
 
         const shell = renderActionHostShell(
             'Linear Search Trail',
-            'Walk left to right. Mark match when current value equals target.'
+            'Scan left to right. Confirm first match or submit -1 after full scan.'
         );
         if (!shell || !shell.body) {
             return false;
         }
 
         shell.body.innerHTML = `
-            <div class="text-muted small mb-2"><strong>Target:</strong> ${target}</div>
-            <div class="d-flex flex-wrap gap-2 mb-3" id="linearSearchBoard"></div>
-            <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-outline-success btn-sm" id="linearFoundBtn">Match Found</button>
-                <button type="button" class="btn btn-outline-primary btn-sm" id="linearNextBtn">Not Equal, Next</button>
-                <button type="button" class="btn btn-outline-warning btn-sm" id="linearNotFoundBtn">Mark Not Found</button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="linearResetBtn">Reset</button>
+            <div class="linear-search-shell">
+                <div class="linear-search-head">
+                    <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
+                    <div><strong>Length:</strong> ${data.length}</div>
+                </div>
+                <div class="linear-search-legend" aria-hidden="true">
+                    <span class="linear-search-chip is-visited">Visited</span>
+                    <span class="linear-search-chip is-current">Current</span>
+                    <span class="linear-search-chip is-pending">Pending</span>
+                    <span class="linear-search-chip is-match">Match</span>
+                </div>
+                <div class="linear-search-board" id="linearSearchBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-success btn-sm" id="linearFoundBtn">Match Found</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="linearNextBtn">Not Equal, Next</button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="linearNotFoundBtn">Submit -1</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="linearUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="linearResetBtn">Reset</button>
+                </div>
+                <div class="linear-search-status">
+                    <div class="linear-search-status-line" id="linearMetaPrimary"></div>
+                    <div class="linear-search-status-line" id="linearMetaSecondary"></div>
+                    <div class="linear-search-status-line" id="linearMetaTertiary"></div>
+                    <div class="linear-search-progress-track">
+                        <span class="linear-search-progress-fill" id="linearProgressFill"></span>
+                    </div>
+                    <div class="linear-search-progress-text" id="linearProgressText"></div>
+                    <div class="linear-search-hint" id="linearHint"></div>
+                </div>
             </div>
-            <small class="text-muted" id="linearSearchMeta"></small>
         `;
 
         const board = shell.body.querySelector('#linearSearchBoard');
-        const meta = shell.body.querySelector('#linearSearchMeta');
+        const metaPrimary = shell.body.querySelector('#linearMetaPrimary');
+        const metaSecondary = shell.body.querySelector('#linearMetaSecondary');
+        const metaTertiary = shell.body.querySelector('#linearMetaTertiary');
+        const progressFill = shell.body.querySelector('#linearProgressFill');
+        const progressText = shell.body.querySelector('#linearProgressText');
+        const hintText = shell.body.querySelector('#linearHint');
         const foundBtn = shell.body.querySelector('#linearFoundBtn');
         const nextBtn = shell.body.querySelector('#linearNextBtn');
         const notFoundBtn = shell.body.querySelector('#linearNotFoundBtn');
+        const undoBtn = shell.body.querySelector('#linearUndoBtn');
         const resetBtn = shell.body.querySelector('#linearResetBtn');
 
         let pointer = 0;
         let selectedIndex = null;
         const inspected = [];
         let finished = false;
+        let feedback = '';
+        const undoStack = [];
+
+        function isDone() {
+            return finished || selectedIndex !== null;
+        }
 
         function inspectCurrent() {
             if (!inspected.includes(pointer) && pointer >= 0 && pointer < data.length) {
@@ -1478,19 +2178,42 @@
             }
         }
 
+        function currentMatches() {
+            return pointer >= 0 && pointer < data.length && Math.abs(data[pointer] - target) <= 1e-9;
+        }
+
+        function pushUndoState() {
+            undoStack.push({
+                pointer,
+                selectedIndex,
+                finished,
+                inspected: inspected.slice(),
+            });
+        }
+
         function renderBoard() {
             if (!board) {
                 return;
             }
+            const done = isDone();
             board.innerHTML = data
                 .map((value, idx) => {
-                    const isPointer = !finished && idx === pointer;
+                    const isPointer = !done && idx === pointer && pointer < data.length;
                     const isInspected = inspected.includes(idx);
-                    const baseClass = isPointer ? 'btn-outline-warning' : (isInspected ? 'btn-outline-secondary' : 'btn-outline-primary');
+                    const isAnswer = selectedIndex === idx;
+                    const isMatchState = isAnswer || (isPointer && currentMatches());
+                    const state = isMatchState
+                        ? 'match'
+                        : (isPointer ? 'current' : (isInspected ? 'visited' : 'pending'));
+                    const helper = isAnswer
+                        ? 'Answer'
+                        : (isPointer
+                            ? (isMatchState ? 'Match' : 'Current')
+                            : (isInspected ? 'Seen' : `idx ${idx}`));
                     return `
-                        <button type="button" class="btn ${baseClass} btn-sm" disabled>
-                            <span class="d-block">${value}</span>
-                            <small class="d-block">idx ${idx}</small>
+                        <button type="button" class="btn btn-sm action-value-btn linear-search-node is-${state}" disabled>
+                            <span class="linear-search-main">${formatActionNumber(value, 3, false)}</span>
+                            <span class="linear-search-sub">${helper}</span>
                         </button>
                     `;
                 })
@@ -1500,7 +2223,10 @@
         function render() {
             renderBoard();
             const currentValue = pointer >= 0 && pointer < data.length ? data[pointer] : null;
-            const done = finished || selectedIndex !== null;
+            const done = isDone();
+            const scannedCount = inspected.length;
+            const progress = data.length ? Math.round((scannedCount / data.length) * 100) : 0;
+            const inspectedLabel = inspected.length ? inspected.join(', ') : '-';
 
             if (foundBtn) {
                 foundBtn.disabled = done || pointer >= data.length;
@@ -1511,30 +2237,64 @@
             if (notFoundBtn) {
                 notFoundBtn.disabled = done;
             }
+            if (undoBtn) {
+                undoBtn.disabled = undoStack.length === 0;
+            }
 
-            if (meta) {
+            if (metaPrimary) {
                 if (selectedIndex === null) {
-                    meta.textContent = pointer < data.length
-                        ? `Pointer at idx ${pointer} (value ${currentValue}).`
+                    metaPrimary.textContent = pointer < data.length
+                        ? `Pointer at idx ${pointer} (value ${formatActionNumber(currentValue, 3, false)}).`
                         : 'Reached end of array.';
                 } else if (selectedIndex === -1) {
-                    meta.textContent = `Submitted not found. Checked: [${inspected.join(', ')}].`;
+                    metaPrimary.textContent = 'Submitted -1 (not found).';
                 } else {
-                    meta.textContent = `Submitted index ${selectedIndex}. Checked: [${inspected.join(', ')}].`;
+                    metaPrimary.textContent = `Submitted index ${selectedIndex}.`;
                 }
+            }
+            if (metaSecondary) {
+                metaSecondary.textContent = `Scanned indices: [${inspectedLabel}]`;
+            }
+            if (metaTertiary) {
+                metaTertiary.textContent = selectedIndex === null
+                    ? (pointer < data.length
+                        ? `Current check: ${formatActionNumber(currentValue, 3, false)} ${currentMatches() ? '= target' : '!= target'}`
+                        : 'No more values to scan.')
+                    : (selectedIndex === -1
+                        ? 'Result accepted: target does not exist in this array.'
+                        : `Result accepted: first target occurrence at idx ${selectedIndex}.`);
+            }
+            if (progressFill) {
+                progressFill.style.width = `${progress}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `Scanned ${scannedCount}/${data.length} values`;
+            }
+            if (hintText) {
+                hintText.textContent = feedback
+                    || (done
+                        ? 'Linear search attempt complete. Submit this answer.'
+                        : (pointer >= data.length
+                            ? 'End reached. Submit -1 if target was not found.'
+                            : (currentMatches()
+                                ? 'Current value matches target. Click Match Found.'
+                                : 'If current value is not target, click Not Equal, Next.')));
+                hintText.classList.toggle('error', Boolean(feedback));
             }
 
             if (shell.badge) {
-                if (selectedIndex === null) {
-                    shell.badge.textContent = pointer < data.length ? `idx ${pointer}` : 'End reached';
-                    shell.badge.classList.add('badge-primary');
-                    shell.badge.classList.remove('badge-accent');
-                    shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (feedback) {
+                    shell.badge.textContent = 'Wrong step';
+                    shell.badge.classList.add('badge-danger');
+                } else if (selectedIndex === null) {
+                    shell.badge.textContent = pointer < data.length
+                        ? (currentMatches() ? `Match @ ${pointer}` : `idx ${pointer}`)
+                        : 'End reached';
+                    shell.badge.classList.add(currentMatches() ? 'badge-accent' : 'badge-primary');
                 } else {
                     shell.badge.textContent = selectedIndex === -1 ? 'Not Found' : `Found @ ${selectedIndex}`;
                     shell.badge.classList.add('badge-accent');
-                    shell.badge.classList.remove('badge-primary');
-                    shell.badge.classList.remove('badge-danger');
                 }
             }
 
@@ -1542,40 +2302,85 @@
             setActionPayload({
                 mode: 'linear_search_trace',
                 selected_index: selectedIndex,
+                pointer,
                 inspected_indices: inspected.slice(),
+                is_complete: done,
+                feedback: feedback || null,
             });
         }
 
         if (foundBtn) {
             foundBtn.addEventListener('click', () => {
-                if (finished || pointer >= data.length) {
+                if (isDone() || pointer >= data.length) {
                     return;
                 }
+                if (!currentMatches()) {
+                    feedback = `Incorrect. ${formatActionNumber(data[pointer], 3, false)} is not equal to target ${formatActionNumber(target, 3, false)}.`;
+                    render();
+                    return;
+                }
+                pushUndoState();
                 inspectCurrent();
                 selectedIndex = pointer;
                 finished = true;
+                feedback = '';
                 render();
             });
         }
 
         if (nextBtn) {
             nextBtn.addEventListener('click', () => {
-                if (finished || pointer >= data.length) {
+                if (isDone() || pointer >= data.length) {
                     return;
                 }
+                if (currentMatches()) {
+                    feedback = `Target found at idx ${pointer}. Click Match Found.`;
+                    render();
+                    return;
+                }
+                pushUndoState();
                 inspectCurrent();
                 pointer += 1;
+                feedback = '';
                 render();
             });
         }
 
         if (notFoundBtn) {
             notFoundBtn.addEventListener('click', () => {
-                if (finished) {
+                if (isDone()) {
                     return;
                 }
+                if (expectedIndex !== -1) {
+                    feedback = 'Incorrect. Target exists in the array, continue scanning to first match.';
+                    render();
+                    return;
+                }
+                if (pointer < data.length) {
+                    feedback = 'Scan all values before submitting -1.';
+                    render();
+                    return;
+                }
+                pushUndoState();
                 selectedIndex = -1;
                 finished = true;
+                feedback = '';
+                render();
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                const previous = undoStack.pop();
+                if (!previous) {
+                    return;
+                }
+                pointer = previous.pointer;
+                selectedIndex = previous.selectedIndex;
+                finished = previous.finished;
+                inspected.length = 0;
+                previous.inspected.forEach((idx) => inspected.push(idx));
+                feedback = '';
                 render();
             });
         }
@@ -1586,6 +2391,8 @@
                 selectedIndex = null;
                 inspected.length = 0;
                 finished = false;
+                feedback = '';
+                undoStack.length = 0;
                 render();
             });
         }
@@ -1602,6 +2409,7 @@
         if (!data.length || !Number.isFinite(target)) {
             return false;
         }
+        const isSorted = data.every((value, idx) => idx === 0 || data[idx - 1] <= value);
 
         const shell = renderActionHostShell(
             'Binary Search Navigator',
@@ -1612,35 +2420,100 @@
         }
 
         shell.body.innerHTML = `
-            <div class="text-muted small mb-2"><strong>Target:</strong> ${target}</div>
-            <div class="d-flex flex-wrap gap-2 mb-3" id="binarySearchBoard"></div>
-            <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="binaryLessBtn">Target &lt; Mid</button>
-                <button type="button" class="btn btn-outline-success btn-sm" id="binaryEqualBtn">Target = Mid</button>
-                <button type="button" class="btn btn-outline-primary btn-sm" id="binaryGreaterBtn">Target &gt; Mid</button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="binaryResetBtn">Reset</button>
+            <div class="binary-search-shell">
+                <div class="binary-search-head">
+                    <div><strong>Target:</strong> ${target}</div>
+                    <div><strong>Length:</strong> ${data.length}</div>
+                </div>
+                <div class="binary-search-legend" aria-hidden="true">
+                    <span class="binary-search-chip is-window">Window</span>
+                    <span class="binary-search-chip is-mid">Mid</span>
+                    <span class="binary-search-chip is-found">Found</span>
+                    <span class="binary-search-chip is-discarded">Discarded</span>
+                </div>
+                <div class="binary-search-board" id="binarySearchBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="binaryLessBtn">Target &lt; Mid</button>
+                    <button type="button" class="btn btn-outline-success btn-sm" id="binaryEqualBtn">Target = Mid</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="binaryGreaterBtn">Target &gt; Mid</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="binaryUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="binaryResetBtn">Reset</button>
+                </div>
+                <div class="binary-search-status" id="binarySearchMeta">
+                    <div class="binary-search-status-line" id="binaryMetaPrimary"></div>
+                    <div class="binary-search-status-line" id="binaryMetaSecondary"></div>
+                    <div class="binary-search-status-line" id="binaryMetaTrace"></div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" id="binaryProgressFill"></span>
+                    </div>
+                    <div class="binary-search-progress-text" id="binaryProgressText"></div>
+                    <div class="binary-search-hint" id="binaryHint"></div>
+                </div>
             </div>
-            <small class="text-muted" id="binarySearchMeta"></small>
         `;
 
         const board = shell.body.querySelector('#binarySearchBoard');
         const meta = shell.body.querySelector('#binarySearchMeta');
+        const metaPrimary = shell.body.querySelector('#binaryMetaPrimary');
+        const metaSecondary = shell.body.querySelector('#binaryMetaSecondary');
+        const metaTrace = shell.body.querySelector('#binaryMetaTrace');
+        const progressFill = shell.body.querySelector('#binaryProgressFill');
+        const progressText = shell.body.querySelector('#binaryProgressText');
+        const hintText = shell.body.querySelector('#binaryHint');
         const lessBtn = shell.body.querySelector('#binaryLessBtn');
         const equalBtn = shell.body.querySelector('#binaryEqualBtn');
         const greaterBtn = shell.body.querySelector('#binaryGreaterBtn');
+        const undoBtn = shell.body.querySelector('#binaryUndoBtn');
         const resetBtn = shell.body.querySelector('#binaryResetBtn');
 
         let low = 0;
         let high = data.length - 1;
         let selectedIndex = null;
         let finished = false;
+        let feedback = '';
         const trace = [];
+        const undoStack = [];
 
         function currentMid() {
             if (low > high) {
                 return null;
             }
             return Math.floor((low + high) / 2);
+        }
+
+        function decisionLabel(decision) {
+            if (decision === 'lt') {
+                return 'target < mid';
+            }
+            if (decision === 'gt') {
+                return 'target > mid';
+            }
+            return 'target = mid';
+        }
+
+        function expectedDecision(mid) {
+            if (!Number.isInteger(mid)) {
+                return null;
+            }
+            const midValue = data[mid];
+            if (target < midValue) {
+                return 'lt';
+            }
+            if (target > midValue) {
+                return 'gt';
+            }
+            return 'eq';
+        }
+
+        function pushUndoState() {
+            undoStack.push({
+                low,
+                high,
+                selectedIndex,
+                finished,
+                feedback,
+                trace: trace.slice(),
+            });
         }
 
         function renderBoard() {
@@ -1650,21 +2523,57 @@
             const mid = currentMid();
             board.innerHTML = data
                 .map((value, idx) => {
-                    let btnClass = 'btn-outline-primary';
-                    if (!finished && idx >= low && idx <= high) {
-                        btnClass = 'btn-outline-secondary';
+                    const inWindow = !finished && idx >= low && idx <= high;
+                    const isMid = !finished && idx === mid;
+                    const isLow = !finished && idx === low;
+                    const isHigh = !finished && idx === high;
+                    const isFound = finished && selectedIndex === idx;
+                    const isMiss = finished && selectedIndex === -1;
+                    const isDiscarded = !finished && !inWindow;
+                    const classTokens = ['binary-search-cell'];
+                    if (inWindow) {
+                        classTokens.push('is-window');
                     }
-                    if (!finished && idx === mid) {
-                        btnClass = 'btn-outline-warning';
+                    if (isDiscarded || isMiss) {
+                        classTokens.push('is-discarded');
                     }
-                    if (finished && selectedIndex === idx) {
-                        btnClass = 'btn-outline-success';
+                    if (isLow) {
+                        classTokens.push('is-low');
+                    }
+                    if (isHigh) {
+                        classTokens.push('is-high');
+                    }
+                    if (isMid) {
+                        classTokens.push('is-mid');
+                    }
+                    if (isFound) {
+                        classTokens.push('is-found');
+                    }
+                    const tags = [];
+                    if (isLow) {
+                        tags.push('L');
+                    }
+                    if (isMid) {
+                        tags.push('M');
+                    }
+                    if (isHigh) {
+                        tags.push('H');
+                    }
+                    if (isFound) {
+                        tags.length = 0;
+                        tags.push('FOUND');
+                    }
+                    if (!tags.length && isDiscarded) {
+                        tags.push('OUT');
+                    }
+                    if (!tags.length && isMiss) {
+                        tags.push('MISS');
                     }
                     return `
-                        <button type="button" class="btn ${btnClass} btn-sm" disabled>
-                            <span class="d-block">${value}</span>
-                            <small class="d-block">idx ${idx}</small>
-                        </button>
+                        <div class="${classTokens.join(' ')}" aria-hidden="true">
+                            <span class="binary-search-main">${value}</span>
+                            <span class="binary-search-sub">idx ${idx}${tags.length ? ` | ${tags.join('/')}` : ''}</span>
+                        </div>
                     `;
                 })
                 .join('');
@@ -1676,45 +2585,95 @@
         }
 
         function render() {
-            renderBoard();
-            const mid = currentMid();
-            const done = finished || selectedIndex !== null;
-
-            if (lessBtn) {
-                lessBtn.disabled = done || mid === null;
-            }
-            if (equalBtn) {
-                equalBtn.disabled = done || mid === null;
-            }
-            if (greaterBtn) {
-                greaterBtn.disabled = done || mid === null;
-            }
-
-            if (!finished && mid === null) {
+            if (!finished && currentMid() === null) {
                 finalizeNotFound();
             }
+            renderBoard();
+            const mid = currentMid();
+            const done = selectedIndex !== null;
+            const canAct = isSorted && !done && mid !== null;
+            const windowSize = (!done && low <= high) ? (high - low + 1) : 0;
+            const discarded = Math.max(0, data.length - windowSize);
+            const progress = data.length > 0 ? Math.round((discarded / data.length) * 100) : 0;
+            const expected = expectedDecision(mid);
+            const midValue = Number.isInteger(mid) ? data[mid] : null;
 
-            if (meta) {
-                if (selectedIndex === null) {
-                    meta.textContent = `Range: [${low}, ${high}] | Mid: ${mid === null ? '-' : mid}`;
+            if (lessBtn) {
+                lessBtn.textContent = Number.isFinite(midValue) ? `Target < ${midValue}` : 'Target < Mid';
+                lessBtn.disabled = !canAct;
+            }
+            if (equalBtn) {
+                equalBtn.textContent = Number.isFinite(midValue) ? `Target = ${midValue}` : 'Target = Mid';
+                equalBtn.disabled = !canAct;
+            }
+            if (greaterBtn) {
+                greaterBtn.textContent = Number.isFinite(midValue) ? `Target > ${midValue}` : 'Target > Mid';
+                greaterBtn.disabled = !canAct;
+            }
+            if (undoBtn) {
+                undoBtn.disabled = undoStack.length === 0;
+            }
+            if (resetBtn) {
+                resetBtn.disabled = false;
+            }
+
+            if (metaPrimary) {
+                if (!isSorted) {
+                    metaPrimary.textContent = 'Input array is not sorted in non-decreasing order.';
+                } else if (selectedIndex === null) {
+                    metaPrimary.textContent = `Window [${low}, ${high}] | low=${low}, mid=${mid}, high=${high}`;
                 } else if (selectedIndex === -1) {
-                    meta.textContent = `Target not found after ${trace.length} step(s).`;
+                    metaPrimary.textContent = `Target not found after ${trace.length} step(s).`;
                 } else {
-                    meta.textContent = `Target found at index ${selectedIndex} in ${trace.length} step(s).`;
+                    metaPrimary.textContent = `Target found at index ${selectedIndex} in ${trace.length} step(s).`;
                 }
+            }
+            if (metaSecondary) {
+                metaSecondary.textContent = `Remaining window: ${windowSize}/${data.length} | Discarded: ${discarded}`;
+            }
+            if (metaTrace) {
+                const recent = trace.slice(-3);
+                metaTrace.textContent = recent.length
+                    ? `Recent: ${recent.map((entry, idx) => `#${trace.length - recent.length + idx + 1} [${entry.low},${entry.high}] m${entry.mid} (${decisionLabel(entry.decision)})`).join(' | ')}`
+                    : 'Recent: -';
+            }
+            if (progressFill) {
+                progressFill.style.width = `${progress}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `Search space reduced ${progress}%`;
+            }
+            if (meta) {
+                meta.dataset.state = (!isSorted || feedback) ? 'error' : (selectedIndex === null ? 'active' : 'complete');
+            }
+            if (hintText) {
+                if (!isSorted) {
+                    hintText.textContent = 'Binary search requires a sorted array. Fix payload data order first.';
+                } else if (feedback) {
+                    hintText.textContent = feedback;
+                } else if (selectedIndex === null) {
+                    hintText.textContent = Number.isInteger(mid)
+                        ? `Choose comparison for target ${target} vs arr[${mid}] = ${midValue}. Expected: ${decisionLabel(expected)}`
+                        : 'Window exhausted.';
+                } else if (selectedIndex === -1) {
+                    hintText.textContent = 'No matching value exists in the array.';
+                } else {
+                    hintText.textContent = 'Correct midpoint reached. Submit this index.';
+                }
+                hintText.classList.toggle('error', !isSorted || Boolean(feedback));
             }
 
             if (shell.badge) {
-                if (selectedIndex === null) {
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (!isSorted || feedback) {
+                    shell.badge.textContent = !isSorted ? 'Invalid Input' : 'Wrong Compare';
+                    shell.badge.classList.add('badge-danger');
+                } else if (selectedIndex === null) {
                     shell.badge.textContent = mid === null ? 'Not Found' : `mid=${mid}`;
                     shell.badge.classList.add('badge-primary');
-                    shell.badge.classList.remove('badge-accent');
-                    shell.badge.classList.remove('badge-danger');
                 } else {
                     shell.badge.textContent = selectedIndex === -1 ? 'Not Found' : `Found @ ${selectedIndex}`;
                     shell.badge.classList.add('badge-accent');
-                    shell.badge.classList.remove('badge-primary');
-                    shell.badge.classList.remove('badge-danger');
                 }
             }
 
@@ -1722,12 +2681,16 @@
             setActionPayload({
                 mode: 'binary_search_trace',
                 selected_index: selectedIndex,
+                low,
+                high,
+                mid,
+                is_sorted: isSorted,
                 trace: trace.slice(),
             });
         }
 
         function applyDecision(decision) {
-            if (finished) {
+            if (finished || !isSorted) {
                 return;
             }
             const mid = currentMid();
@@ -1736,7 +2699,15 @@
                 render();
                 return;
             }
-            trace.push({ low, high, mid, decision });
+            const expected = expectedDecision(mid);
+            if (!expected || decision !== expected) {
+                feedback = `Incorrect comparison. For target ${target} and arr[${mid}] = ${data[mid]}, choose "${decisionLabel(expected)}".`;
+                render();
+                return;
+            }
+            pushUndoState();
+            feedback = '';
+            trace.push({ low, high, mid, decision, mid_value: data[mid] });
             if (decision === 'lt') {
                 high = mid - 1;
             } else if (decision === 'gt') {
@@ -1760,13 +2731,326 @@
         if (greaterBtn) {
             greaterBtn.addEventListener('click', () => applyDecision('gt'));
         }
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                if (!undoStack.length) {
+                    return;
+                }
+                const previous = undoStack.pop();
+                if (!previous) {
+                    return;
+                }
+                low = previous.low;
+                high = previous.high;
+                selectedIndex = previous.selectedIndex;
+                finished = previous.finished;
+                feedback = '';
+                trace.length = 0;
+                previous.trace.forEach((entry) => trace.push(entry));
+                render();
+            });
+        }
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 low = 0;
                 high = data.length - 1;
                 selectedIndex = null;
                 finished = false;
+                feedback = '';
+                undoStack.length = 0;
                 trace.length = 0;
+                render();
+            });
+        }
+
+        render();
+        return true;
+    }
+
+    function buildBstMode() {
+        const sequence = (
+            Array.isArray(challengeVisualizationPayload.insert_sequence)
+                ? challengeVisualizationPayload.insert_sequence
+                : (Array.isArray(challengeVisualizationPayload.data) ? challengeVisualizationPayload.data : [])
+        )
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        if (!sequence.length) {
+            return false;
+        }
+
+        const shell = renderActionHostShell(
+            'BST Route Builder',
+            'Select the next insertion in sequence. Final derived answer is inorder traversal.'
+        );
+        if (!shell || !shell.body) {
+            return false;
+        }
+
+        shell.body.innerHTML = `
+            <div class="bst-route-shell">
+                <div class="bst-route-head">
+                    <div><strong>Insert Sequence:</strong> [${sequence.map((value) => formatActionNumber(value, 3, false)).join(', ')}]</div>
+                    <div><strong>Total Values:</strong> ${sequence.length}</div>
+                </div>
+                <div class="bst-route-legend" aria-hidden="true">
+                    <span class="bst-route-chip is-inserted">Inserted</span>
+                    <span class="bst-route-chip is-next">Next</span>
+                    <span class="bst-route-chip is-pending">Pending</span>
+                </div>
+                <div class="bst-insert-board" id="bstInsertBoard"></div>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="bstUndoBtn">Undo</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="bstResetBtn">Reset</button>
+                </div>
+                <div class="bst-route-status" id="bstMeta">
+                    <div class="bst-route-status-line" id="bstMetaPrimary"></div>
+                    <div class="bst-route-status-line" id="bstMetaSecondary"></div>
+                    <div class="bst-route-status-line" id="bstMetaTertiary"></div>
+                    <div class="bst-route-progress-track">
+                        <span class="bst-route-progress-fill" id="bstProgressFill"></span>
+                    </div>
+                    <div class="bst-route-progress-text" id="bstProgressText"></div>
+                    <div class="bst-route-hint" id="bstHint"></div>
+                </div>
+                <div class="bst-route-board" id="bstTreeBoard"></div>
+            </div>
+        `;
+
+        const insertBoard = shell.body.querySelector('#bstInsertBoard');
+        const undoBtn = shell.body.querySelector('#bstUndoBtn');
+        const resetBtn = shell.body.querySelector('#bstResetBtn');
+        const metaPrimary = shell.body.querySelector('#bstMetaPrimary');
+        const metaSecondary = shell.body.querySelector('#bstMetaSecondary');
+        const metaTertiary = shell.body.querySelector('#bstMetaTertiary');
+        const progressFill = shell.body.querySelector('#bstProgressFill');
+        const progressText = shell.body.querySelector('#bstProgressText');
+        const hintText = shell.body.querySelector('#bstHint');
+        const treeBoard = shell.body.querySelector('#bstTreeBoard');
+
+        let applied = 0;
+        let feedback = '';
+
+        function createNode(value) {
+            return { value, left: null, right: null };
+        }
+
+        function insertWithTrace(root, value) {
+            if (!root) {
+                return {
+                    root: createNode(value),
+                    trace: `Tree is empty. ${formatActionNumber(value, 3, false)} becomes root.`,
+                };
+            }
+
+            let current = root;
+            while (current) {
+                if (value < current.value) {
+                    if (!current.left) {
+                        current.left = createNode(value);
+                        return {
+                            root,
+                            trace: `${formatActionNumber(value, 3, false)} < ${formatActionNumber(current.value, 3, false)} -> insert as left child of ${formatActionNumber(current.value, 3, false)}.`,
+                        };
+                    }
+                    current = current.left;
+                    continue;
+                }
+                if (value > current.value) {
+                    if (!current.right) {
+                        current.right = createNode(value);
+                        return {
+                            root,
+                            trace: `${formatActionNumber(value, 3, false)} > ${formatActionNumber(current.value, 3, false)} -> insert as right child of ${formatActionNumber(current.value, 3, false)}.`,
+                        };
+                    }
+                    current = current.right;
+                    continue;
+                }
+                return {
+                    root,
+                    trace: `${formatActionNumber(value, 3, false)} equals existing node ${formatActionNumber(current.value, 3, false)} -> duplicate ignored.`,
+                };
+            }
+
+            return { root, trace: 'No insertion performed.' };
+        }
+
+        function inorderTraversal(root, out) {
+            if (!root) {
+                return;
+            }
+            inorderTraversal(root.left, out);
+            out.push(root.value);
+            inorderTraversal(root.right, out);
+        }
+
+        function collectTreeRows(root) {
+            if (!root) {
+                return [];
+            }
+            const queue = [root];
+            const rows = [];
+            while (queue.length) {
+                const node = queue.shift();
+                const leftLabel = node.left ? formatActionNumber(node.left.value, 3, false) : 'null';
+                const rightLabel = node.right ? formatActionNumber(node.right.value, 3, false) : 'null';
+                rows.push({
+                    value: formatActionNumber(node.value, 3, false),
+                    relation: `L:${leftLabel} | R:${rightLabel}`,
+                });
+                if (node.left) queue.push(node.left);
+                if (node.right) queue.push(node.right);
+            }
+            return rows;
+        }
+
+        function computeState(count) {
+            let root = null;
+            let lastTrace = 'BST is empty.';
+            for (let idx = 0; idx < count; idx += 1) {
+                const result = insertWithTrace(root, sequence[idx]);
+                root = result.root;
+                lastTrace = result.trace;
+            }
+            const inorder = [];
+            inorderTraversal(root, inorder);
+            const rows = collectTreeRows(root);
+            return { root, inorder, rows, lastTrace };
+        }
+
+        function renderTree(rows) {
+            if (!treeBoard) {
+                return;
+            }
+            if (!rows.length) {
+                treeBoard.innerHTML = '<div class="bst-route-empty">BST is empty.</div>';
+                return;
+            }
+            treeBoard.innerHTML = rows
+                .map((entry) => `
+                    <div class="bst-route-node">
+                        <div class="bst-route-node-main">Node ${entry.value}</div>
+                        <div class="bst-route-node-sub">${entry.relation}</div>
+                    </div>
+                `)
+                .join('');
+        }
+
+        function renderInsertBoard() {
+            if (!insertBoard) {
+                return;
+            }
+            const complete = applied >= sequence.length;
+            insertBoard.innerHTML = sequence
+                .map((value, idx) => {
+                    const state = idx < applied
+                        ? 'inserted'
+                        : (idx === applied ? 'next' : 'pending');
+                    const helper = idx < applied ? `#${idx + 1}` : (idx === applied ? 'Next' : `#${idx + 1}`);
+                    return `
+                        <button type="button" class="btn btn-sm action-value-btn bst-insert-node is-${state}" data-index="${idx}"
+                            ${complete || idx < applied ? 'disabled' : ''}>
+                            <span class="bst-route-node-main">${formatActionNumber(value, 3, false)}</span>
+                            <span class="bst-route-node-sub">${helper}</span>
+                        </button>
+                    `;
+                })
+                .join('');
+
+            insertBoard.querySelectorAll('.bst-insert-node').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const idx = Number(button.dataset.index);
+                    if (!Number.isInteger(idx) || applied >= sequence.length) {
+                        return;
+                    }
+                    if (idx !== applied) {
+                        feedback = `Wrong step. Choose position #${applied + 1} (${formatActionNumber(sequence[applied], 3, false)}) next.`;
+                        render();
+                        return;
+                    }
+                    applied += 1;
+                    feedback = '';
+                    render();
+                });
+            });
+        }
+
+        function render() {
+            const state = computeState(applied);
+            const done = applied >= sequence.length;
+            const nextValue = done ? null : sequence[applied];
+            const inorderAnswer = state.inorder.map((value) => formatActionNumber(value, 3, false)).join(' ');
+
+            renderInsertBoard();
+            renderTree(state.rows);
+
+            if (metaPrimary) {
+                metaPrimary.textContent = done
+                    ? `All ${sequence.length} values processed.`
+                    : `Inserted ${applied}/${sequence.length}. Next: ${formatActionNumber(nextValue, 3, false)}`;
+            }
+            if (metaSecondary) {
+                metaSecondary.textContent = `Inorder: ${inorderAnswer || '-'}`;
+            }
+            if (metaTertiary) {
+                metaTertiary.textContent = `Last step: ${state.lastTrace}`;
+            }
+            if (progressFill) {
+                const progress = sequence.length ? Math.round((applied / sequence.length) * 100) : 0;
+                progressFill.style.width = `${progress}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `Inserted ${applied}/${sequence.length} values`;
+            }
+            if (hintText) {
+                hintText.textContent = feedback
+                    || (done
+                        ? 'BST insertion complete. Submit the inorder answer.'
+                        : `Choose ${formatActionNumber(nextValue, 3, false)} at position #${applied + 1}.`);
+                hintText.classList.toggle('error', Boolean(feedback));
+            }
+
+            if (undoBtn) undoBtn.disabled = applied === 0;
+
+            if (shell.badge) {
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (feedback) {
+                    shell.badge.textContent = 'Wrong step';
+                    shell.badge.classList.add('badge-danger');
+                } else if (done) {
+                    shell.badge.textContent = 'Ready to Submit';
+                    shell.badge.classList.add('badge-accent');
+                } else {
+                    shell.badge.textContent = `Next ${formatActionNumber(nextValue, 3, false)}`;
+                    shell.badge.classList.add('badge-primary');
+                }
+            }
+
+            setDerivedAnswer(done ? inorderAnswer : '');
+            setActionPayload({
+                mode: 'bst_inorder_trace',
+                inserted_count: applied,
+                inserted_values: sequence.slice(0, applied),
+                inorder: state.inorder.slice(),
+                is_complete: done,
+                feedback: feedback || null,
+            });
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                if (applied > 0) {
+                    applied -= 1;
+                    feedback = '';
+                    render();
+                }
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                applied = 0;
+                feedback = '';
                 render();
             });
         }
@@ -3265,6 +4549,7 @@
             string_algorithm: buildStringAlgorithmMode,
             array_algorithm: buildArrayAlgorithmMode,
             hashing_algorithm: buildHashingAlgorithmMode,
+            bst: buildBstMode,
             bubble_sort: buildSortingMode,
             selection_sort: buildSortingMode,
             insertion_sort: buildSortingMode,
@@ -3280,12 +4565,16 @@
             neural_network: buildNeuralNetworkMode,
         };
         const builder = builders[algo];
-        if (!builder || !builder()) {
+        const built = Boolean(builder && builder());
+        if (!built) {
             actionGameHost.classList.add('d-none');
             actionGameHost.innerHTML = '';
-            clearDerivedAnswer();
+            clearDerivedAnswer(false);
             setActionPayload({});
+            setAnswerInputLocked(false);
+            return;
         }
+        setAnswerInputLocked(true);
     }
 
     initializeActionGameMode();
@@ -3529,13 +4818,7 @@
     }
 
     function supportsEntryExecution(entry) {
-        if (entry && entry.isUnlocked === false) {
-            return false;
-        }
-        if (!entry || !entry.algorithmType || typeof window.hasExecutionVisualizationSupport !== 'function') {
-            return true;
-        }
-        return window.hasExecutionVisualizationSupport(entry.algorithmType);
+        return Boolean(entry && entry.url);
     }
 
     function findSequenceIndex(entries, startIndex, direction) {
@@ -3599,13 +4882,7 @@
             const currentEntry = state.entries[state.index];
             const prevIndex = findSequenceIndex(state.entries, state.index - 1, -1);
             const nextIndex = findSequenceIndex(state.entries, state.index + 1, 1);
-            let executionNote = '';
-            if (currentEntry && currentEntry.isUnlocked === false) {
-                executionNote = ' (locked; skipped)';
-            } else if (!supportsEntryExecution(currentEntry)) {
-                executionNote = ' (skipped: no execution model)';
-            }
-            statusNode.textContent = `${state.index + 1}/${state.entries.length} - ${currentEntry.label}${executionNote}`;
+            statusNode.textContent = `${state.index + 1}/${state.entries.length} - ${currentEntry.label}`;
             prevBtn.disabled = prevIndex < 0;
             nextBtn.disabled = nextIndex < 0;
             playBtn.disabled = state.entries.length < 2;
@@ -3700,7 +4977,7 @@
         initializeCategorySequenceControls();
         initializeMobileTabs();
         
-        const isThreeDGraphAlgorithm = ['bfs', 'dfs', 'dijkstra', 'astar'].includes((algorithmType || '').toLowerCase());
+        const isThreeDGraphAlgorithm = ['bfs', 'dfs', 'dijkstra', 'astar', 'bst'].includes((algorithmType || '').toLowerCase());
         if (visualizationType === 'graph' && !isThreeDGraphAlgorithm) {
             if (window.VisualizationEngine && window.VisualizationEngine.renderPreview) {
                 window.VisualizationEngine.renderPreview(algorithmType);

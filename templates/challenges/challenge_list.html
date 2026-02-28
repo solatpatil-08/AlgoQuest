@@ -81,7 +81,7 @@
                     id="quickFilterSearchInput"
                     class="quick-filter-search-input"
                     placeholder="Search challenges"
-                    value=""
+                    value="{{ search_query|default:'' }}"
                     autocomplete="off"
                     aria-label="Search challenges"
                 >
@@ -200,7 +200,12 @@
     {% if not show_landing_placeholder and not grouped_by_category %}
         <div class="empty-state">
             <div class="empty-icon"><i class="bi bi-puzzle"></i></div>
-            <p>No challenges available yet. Check back soon!</p>
+            {% if search_query %}
+                <p class="mb-1">No results found for "<strong>{{ search_query }}</strong>".</p>
+                <p class="text-muted mb-0">Try another keyword or click Clear in Quick Filter.</p>
+            {% else %}
+                <p>No challenges available yet. Check back soon!</p>
+            {% endif %}
         </div>
     {% endif %}
 </div>

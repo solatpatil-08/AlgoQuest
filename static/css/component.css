@@ -862,10 +862,10 @@
 }
 
 .btn-github {
-    background: #111827;
-    border: 1.5px solid #111827;
+    background: var(--aq-card);
+    border: 1.5px solid var(--aq-border);
     border-radius: var(--aq-radius-md);
-    color: #F9FAFB;
+    color: var(--aq-text);
     font-size: 0.9375rem;
     font-weight: 600;
     box-shadow: none;
@@ -873,15 +873,15 @@
 
 .btn-github:hover,
 .btn-github:focus-visible {
-    background: #0F172A;
-    border-color: #0F172A;
-    color: #FFFFFF;
+    background: var(--aq-primary-soft-bg);
+    border-color: var(--aq-primary);
+    color: var(--aq-primary-dark);
     box-shadow: var(--aq-focus-ring);
     transform: none;
 }
 
 .btn-github i {
-    color: #FFFFFF;
+    color: currentColor;
     font-size: 1rem;
 }
 

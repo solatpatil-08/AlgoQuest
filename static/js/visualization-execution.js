@@ -116,38 +116,79 @@
         if (!Array.isArray(values) || !values.length) {
             return '<p class="concept-muted mb-0">Array unavailable.</p>';
         }
-        const cellWidth = 64;
-        const gap = 10;
-        const leftPad = 24;
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
         const topPad = 24;
-        const baseY = 66;
-        const height = 140;
-        const width = Math.max(420, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
-        const depth = 10;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 164 : 176;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execStrip${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.05)"></stop>
+                    <stop offset="45%" stop-color="rgba(59,130,246,0.2)"></stop>
+                    <stop offset="100%" stop-color="rgba(16,185,129,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.85"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.7"></polygon>
+            </g>
+        `;
+
         const cells = values.map((value, idx) => {
             const x = leftPad + (idx * (cellWidth + gap));
             const isHighlight = highlightSet.has(idx);
             const isCurrent = currentSet.has(idx);
-            const front = isCurrent ? '#facc15' : (isHighlight ? '#86efac' : '#dbeafe');
-            const top = isCurrent ? '#fde68a' : (isHighlight ? '#bbf7d0' : '#eff6ff');
-            const side = isCurrent ? '#ca8a04' : (isHighlight ? '#16a34a' : '#3b82f6');
-            const stroke = isCurrent ? '#92400e' : '#1e3a8a';
+            const front = isCurrent ? '#fde047' : (isHighlight ? '#86efac' : '#dbeafe');
+            const top = isCurrent ? '#fef3c7' : (isHighlight ? '#dcfce7' : '#eff6ff');
+            const side = isCurrent ? '#d97706' : (isHighlight ? '#16a34a' : '#2563eb');
+            const stroke = isCurrent ? '#92400e' : (isHighlight ? '#166534' : '#1e3a8a');
+            const tag = isCurrent ? 'focus' : (isHighlight ? 'window' : '');
             return `
-                <g>
-                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${top}" opacity="0.95"></polygon>
-                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + 38 - depth} ${x + cellWidth},${baseY + 38}" fill="${side}" opacity="0.92"></polygon>
-                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="38" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${isCurrent ? '2.8' : '1.7'}"></rect>
-                    <text x="${x + (cellWidth / 2)}" y="${baseY + 23}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
-                    <text x="${x + (cellWidth / 2)}" y="${baseY + 56}" text-anchor="middle" font-size="10.5" fill="#64748b">${escapeHtml(indexLabel)} ${idx}</text>
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isCurrent ? '2.9' : (isHighlight ? '2.1' : '1.7')}"></rect>
+                    ${tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${isCurrent ? '#f59e0b' : '#22c55e'}"></rect>` : ''}
+                    ${tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${escapeHtml(tag.toUpperCase())}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">${escapeHtml(indexLabel)} ${idx}</text>
                 </g>
             `;
         }).join('');
+
         const legend = `
             <g>
-                <text x="${leftPad}" y="18" font-size="10.5" fill="#64748b">3D state board</text>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D State Board</text>
+                <rect x="${width - 186}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 172}" y="${topPad - 5}" font-size="9.5" fill="#334155">Node</text>
+                <rect x="${width - 126}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#86efac" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 112}" y="${topPad - 5}" font-size="9.5" fill="#334155">Window</text>
+                <rect x="${width - 62}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde047" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 48}" y="${topPad - 5}" font-size="9.5" fill="#334155">Focus</text>
             </g>
         `;
-        return render3DScene(`${legend}${cells}`, width, height, '3D array strip');
+
+        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D array strip', 'exec-3d-strip');
     }
 
     function renderEuclidState3D(a, b, remainder = null) {
@@ -847,6 +888,358 @@
         }).join('');
 
         return render3DScene(`${edges.join('')}${nodes}`, width, height, '3D heap visualization');
+    }
+
+    function renderBstTree3D(root, options = {}) {
+        if (!root) {
+            return '<p class="concept-muted mb-0">BST unavailable.</p>';
+        }
+
+        const focusValue = Number.isFinite(Number(options.focusValue)) ? Number(options.focusValue) : null;
+        const nodeWidth = 54;
+        const nodeHeight = 34;
+        const depth = 8;
+        const hGap = 80;
+        const vGap = 76;
+        const leftPad = 32;
+        const topPad = 26;
+        const floorPad = 18;
+
+        const nodes = [];
+        const edges = [];
+        const nodeIdByRef = new Map();
+        let maxDepth = 0;
+
+        function collect(node, depthLevel, parentId = null) {
+            if (!node) {
+                return;
+            }
+            const id = nodes.length;
+            nodeIdByRef.set(node, id);
+            nodes.push({
+                id,
+                value: node.value,
+                depth: depthLevel,
+                hasLeft: Boolean(node.left),
+                hasRight: Boolean(node.right),
+                xOrder: 0,
+            });
+            if (parentId !== null) {
+                edges.push([parentId, id]);
+            }
+            if (depthLevel > maxDepth) {
+                maxDepth = depthLevel;
+            }
+            collect(node.left, depthLevel + 1, id);
+            collect(node.right, depthLevel + 1, id);
+        }
+
+        let inorderOrder = 0;
+        function assignInorderX(node) {
+            if (!node) {
+                return;
+            }
+            assignInorderX(node.left);
+            const id = nodeIdByRef.get(node);
+            if (Number.isInteger(id) && nodes[id]) {
+                nodes[id].xOrder = inorderOrder;
+                inorderOrder += 1;
+            }
+            assignInorderX(node.right);
+        }
+
+        collect(root, 0, null);
+        assignInorderX(root);
+
+        const width = Math.max(460, leftPad * 2 + Math.max(1, inorderOrder - 1) * hGap + nodeWidth + depth + 10);
+        const height = Math.max(220, topPad + ((maxDepth + 1) * vGap) + nodeHeight + 28);
+        const uniqueId = `execBst${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="4.8" stdDeviation="4" flood-color="#1e293b" flood-opacity="0.24"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <rect x="${leftPad - floorPad}" y="${height - 24}" width="${width - (leftPad - floorPad) * 2}" height="16" rx="8" fill="url(#${uniqueId}Floor)" opacity="0.84"></rect>
+        `;
+
+        const edgeSvg = edges.map(([fromId, toId]) => {
+            const from = nodes[fromId];
+            const to = nodes[toId];
+            if (!from || !to) {
+                return '';
+            }
+            const x1 = leftPad + (from.xOrder * hGap) + (nodeWidth / 2);
+            const y1 = topPad + (from.depth * vGap) + nodeHeight;
+            const x2 = leftPad + (to.xOrder * hGap) + (nodeWidth / 2);
+            const y2 = topPad + (to.depth * vGap);
+            return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="1.8"></line>`;
+        }).join('');
+
+        const nodeSvg = nodes.map((entry) => {
+            const x = leftPad + (entry.xOrder * hGap);
+            const y = topPad + (entry.depth * vGap);
+            const isFocus = focusValue !== null && Number(entry.value) === focusValue;
+            const isLeaf = !entry.hasLeft && !entry.hasRight;
+            const palette = isFocus
+                ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e' }
+                : isLeaf
+                    ? { front: '#dcfce7', top: '#ecfdf5', side: '#16a34a', stroke: '#166534' }
+                    : { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a' };
+            const tag = isFocus ? `<rect x="${x + 7}" y="${y - 13}" width="${nodeWidth - 14}" height="11" rx="5" fill="#f59e0b"></rect>
+                <text x="${x + (nodeWidth / 2)}" y="${y - 4}" text-anchor="middle" font-size="8.6" font-weight="700" fill="#ffffff">NEXT</text>` : '';
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (nodeWidth / 2) + (depth / 2)}" cy="${y + nodeHeight + 9}" rx="${(nodeWidth / 2) + 8}" ry="5.4" fill="rgba(15,23,42,0.22)"></ellipse>
+                    <polygon points="${x},${y} ${x + depth},${y - depth} ${x + nodeWidth + depth},${y - depth} ${x + nodeWidth},${y}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + nodeWidth},${y} ${x + nodeWidth + depth},${y - depth} ${x + nodeWidth + depth},${y + nodeHeight - depth} ${x + nodeWidth},${y + nodeHeight}" fill="${palette.side}" opacity="0.92"></polygon>
+                    <rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isFocus ? '2.7' : '1.8'}"></rect>
+                    ${tag}
+                    <text x="${x + (nodeWidth / 2)}" y="${y + 21}" text-anchor="middle" font-size="12.2" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(entry.value))}</text>
+                    <text x="${x + (nodeWidth / 2)}" y="${y + nodeHeight + 14}" text-anchor="middle" font-size="9.5" fill="#475569">d${entry.depth}</text>
+                </g>
+            `;
+        }).join('');
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D BST Tree</text>
+                <rect x="${width - 186}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 172}" y="${topPad - 5}" font-size="9.5" fill="#334155">Node</text>
+                <rect x="${width - 126}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dcfce7" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 112}" y="${topPad - 5}" font-size="9.5" fill="#334155">Leaf</text>
+                <rect x="${width - 62}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 48}" y="${topPad - 5}" font-size="9.5" fill="#334155">Next</text>
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${edgeSvg}${legend}${nodeSvg}`, width, height, '3D BST tree visualization', 'exec-3d-bst');
+    }
+
+    function renderLinearSearchTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const visitedSet = options.visitedSet instanceof Set ? options.visitedSet : new Set();
+        const currentIndex = Number.isInteger(options.currentIndex) ? options.currentIndex : null;
+        const matchIndex = Number.isInteger(options.matchIndex) ? options.matchIndex : null;
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 164 : 176;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execLinear${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bbf7d0"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(34,197,94,0.07)"></stop>
+                    <stop offset="50%" stop-color="rgba(59,130,246,0.18)"></stop>
+                    <stop offset="100%" stop-color="rgba(249,115,22,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const isMatch = matchIndex === idx;
+            const isCurrent = currentIndex === idx;
+            const isVisited = visitedSet.has(idx);
+            const palette = isMatch
+                ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'MATCH', tagColor: '#16a34a' }
+                : isCurrent
+                    ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'CHECK', tagColor: '#f59e0b' }
+                    : isVisited
+                        ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'SEEN', tagColor: '#2563eb' }
+                        : { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: '', tagColor: '#64748b' };
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isCurrent || isMatch ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Linear Search Board</text>
+                <rect x="${width - 236}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1"></rect>
+                <text x="${width - 222}" y="${topPad - 5}" font-size="9.5" fill="#334155">Pending</text>
+                <rect x="${width - 172}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 158}" y="${topPad - 5}" font-size="9.5" fill="#334155">Visited</text>
+                <rect x="${width - 112}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 98}" y="${topPad - 5}" font-size="9.5" fill="#334155">Current</text>
+                <rect x="${width - 52}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 38}" y="${topPad - 5}" font-size="9.5" fill="#334155">Match</text>
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D linear search visualization', 'exec-3d-bst');
+    }
+
+    function renderBinarySearchTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const low = Number.isInteger(options.low) ? options.low : null;
+        const high = Number.isInteger(options.high) ? options.high : null;
+        const mid = Number.isInteger(options.mid) ? options.mid : null;
+        const foundIndex = Number.isInteger(options.foundIndex) ? options.foundIndex : null;
+        const visitedMidSet = options.visitedMids instanceof Set
+            ? options.visitedMids
+            : new Set(Array.isArray(options.visitedMids) ? options.visitedMids.filter((idx) => Number.isInteger(idx)) : []);
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+        const hasWindow = Number.isInteger(low) && Number.isInteger(high) && low <= high;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 176 : 188;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execBinary${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="50%" stop-color="rgba(14,165,233,0.18)"></stop>
+                    <stop offset="100%" stop-color="rgba(249,115,22,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const inWindow = hasWindow ? idx >= low && idx <= high : false;
+            const isFound = foundIndex === idx;
+            const isMid = !isFound && mid === idx;
+            const wasMid = !isFound && !isMid && visitedMidSet.has(idx);
+            const isLow = Number.isInteger(low) && idx === low;
+            const isHigh = Number.isInteger(high) && idx === high;
+            const palette = isFound
+                ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'FOUND', tagColor: '#16a34a' }
+                : isMid
+                    ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'MID', tagColor: '#f59e0b' }
+                    : wasMid
+                        ? { front: '#ede9fe', top: '#f5f3ff', side: '#7c3aed', stroke: '#5b21b6', tag: 'CHECKED', tagColor: '#7c3aed' }
+                    : inWindow
+                        ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'WINDOW', tagColor: '#2563eb' }
+                        : { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: '', tagColor: '#64748b' };
+            const tags = [];
+            if (isLow && isHigh) {
+                tags.push('L/H');
+            } else if (isLow) {
+                tags.push('L');
+            } else if (isHigh) {
+                tags.push('H');
+            }
+            if (wasMid) {
+                tags.push('C');
+            }
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isFound || isMid ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}${tags.length ? ` | ${tags.join('/')}` : ''}</text>
+                </g>
+            `;
+        }).join('');
+
+        const windowOverlay = hasWindow
+            ? (() => {
+                const startX = leftPad + (low * (cellWidth + gap));
+                const endX = leftPad + (high * (cellWidth + gap)) + cellWidth;
+                const y = baseY - 24;
+                return `
+                    <g>
+                        <line x1="${startX}" y1="${y}" x2="${endX}" y2="${y}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${startX}" y1="${y - 6}" x2="${startX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${endX}" y1="${y - 6}" x2="${endX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <text x="${startX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">L=${low}</text>
+                        <text x="${endX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">H=${high}</text>
+                        <text x="${Math.round((startX + endX) / 2)}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0369a1">Active Window</text>
+                    </g>
+                `;
+            })()
+            : '';
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Binary Search Board</text>
+                <rect x="${width - 296}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1"></rect>
+                <text x="${width - 282}" y="${topPad - 5}" font-size="9.5" fill="#334155">Discarded</text>
+                <rect x="${width - 232}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 218}" y="${topPad - 5}" font-size="9.5" fill="#334155">Window</text>
+                <rect x="${width - 176}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#ede9fe" stroke="#5b21b6" stroke-width="1"></rect>
+                <text x="${width - 162}" y="${topPad - 5}" font-size="9.5" fill="#334155">Checked</text>
+                <rect x="${width - 118}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 104}" y="${topPad - 5}" font-size="9.5" fill="#334155">Mid</text>
+                <rect x="${width - 58}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 44}" y="${topPad - 5}" font-size="9.5" fill="#334155">Found</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Step Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${windowOverlay}${legend}${cells}`, width, height, '3D binary search visualization', 'exec-3d-bst');
     }
 
     // Hash table visualization with buckets
@@ -2568,7 +2961,11 @@
     }
 
     function buildBstModel(payload) {
-        const insertSequence = normalizeNumberArray(payload.insert_sequence);
+        const rawInsertSequence =
+            Array.isArray(payload.insert_sequence) && payload.insert_sequence.length
+                ? payload.insert_sequence
+                : payload.data;
+        const insertSequence = normalizeNumberArray(rawInsertSequence);
         if (!insertSequence.length) {
             return null;
         }
@@ -2584,9 +2981,9 @@
             inorderTraversal(root.right, result);
         }
 
-        function describeTree(root) {
+        function renderTreeBoard(root, focusValue = null) {
             if (!root) {
-                return '<div class="exec-summary">Tree: [empty]</div>';
+                return '<div class="bst-route-empty">BST is empty.</div>';
             }
             const queue = [root];
             const rows = [];
@@ -2594,11 +2991,35 @@
                 const node = queue.shift();
                 const left = node.left ? formatNumber(node.left.value) : 'null';
                 const right = node.right ? formatNumber(node.right.value) : 'null';
-                rows.push(`<div class="exec-list-row">Node ${formatNumber(node.value)} -> L:${left}, R:${right}</div>`);
+                const isFocus = focusValue !== null && Number(node.value) === Number(focusValue);
+                const stateClass = isFocus ? 'is-next' : 'is-inserted';
+                rows.push(`
+                    <div class="bst-insert-node ${stateClass}">
+                        <span class="bst-route-node-main">Node ${formatNumber(node.value)}</span>
+                        <span class="bst-route-node-sub">L:${left} | R:${right}</span>
+                    </div>
+                `);
                 if (node.left) queue.push(node.left);
                 if (node.right) queue.push(node.right);
             }
-            return `<div class="exec-list">${rows.join('')}</div>`;
+            return `<div class="bst-insert-board">${rows.join('')}</div>`;
+        }
+
+        function renderBstStatus(insertedValues, inorderValues, nextValue = null) {
+            const insertedLabel = insertedValues.length
+                ? insertedValues.map((value) => formatNumber(value)).join(', ')
+                : '-';
+            const inorderLabel = inorderValues.length
+                ? inorderValues.map((value) => formatNumber(value)).join(' ')
+                : '-';
+            const nextLabel = nextValue === null ? 'none' : formatNumber(nextValue);
+            return `
+                <div class="bst-route-status">
+                    <div class="bst-route-status-line"><strong>Inserted:</strong> [${insertedLabel}]</div>
+                    <div class="bst-route-status-line"><strong>Inorder:</strong> ${inorderLabel}</div>
+                    <div class="bst-route-status-line"><strong>Next:</strong> ${nextLabel}</div>
+                </div>
+            `;
         }
 
         function insertWithTrace(root, value) {
@@ -2640,7 +3061,10 @@
                 'Initialize BST',
                 'Start with an empty BST and insert values one by one.',
                 `
-                    ${renderIndexedStrip3D(insertSequence)}
+                    ${renderIndexedStrip3D(insertSequence, new Set(), new Set([0]))}
+                    ${renderBstStatus([], [], insertSequence[0])}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = inorder layout, Y = tree depth, Z = depth cue.</em></div>
+                    <div class="exec-summary">Await first insertion to build BST root.</div>
                     <div class="exec-summary">BST is empty.</div>
                 `,
                 '<code>For each value: if value &lt; node go left, else go right</code>'
@@ -2652,13 +3076,20 @@
             root = result.root;
             const inorder = [];
             inorderTraversal(root, inorder);
+            const insertedIndices = new Set(
+                Array.from({ length: idx + 1 }, (_, position) => position)
+            );
+            const currentIndices = new Set([idx]);
+            const nextValue = idx + 1 < insertSequence.length ? insertSequence[idx + 1] : null;
             steps.push(
                 makeStep(
                     `Insert ${formatNumber(value)}`,
                     result.trace.join(' '),
                     `
-                        ${renderIndexedStrip3D(insertSequence, new Set([idx]), new Set([idx]))}
-                        ${describeTree(root)}
+                        ${renderIndexedStrip3D(insertSequence, insertedIndices, currentIndices)}
+                        ${renderBstStatus(insertSequence.slice(0, idx + 1), inorder, nextValue)}
+                        ${renderBstTree3D(root, { focusValue: value })}
+                        ${renderTreeBoard(root, value)}
                         <div class="exec-summary">Inorder so far: ${inorder.map((entry) => formatNumber(entry)).join(' ')}</div>
                     `,
                     `<code>Insertion rule applied at each comparison for ${formatNumber(value)}</code>`
@@ -2669,12 +3100,18 @@
         const finalInorder = [];
         inorderTraversal(root, finalInorder);
         const answer = finalInorder.map((value) => formatNumber(value)).join(' ');
+        const allInsertedIndices = new Set(
+            Array.from({ length: insertSequence.length }, (_, position) => position)
+        );
         steps.push(
             makeStep(
                 'Final Answer',
                 `Inorder traversal yields sorted order: ${answer}.`,
                 `
-                    ${describeTree(root)}
+                    ${renderIndexedStrip3D(insertSequence, allInsertedIndices, new Set())}
+                    ${renderBstStatus(insertSequence, finalInorder, null)}
+                    ${renderBstTree3D(root)}
+                    ${renderTreeBoard(root)}
                     <div class="exec-summary success">Answer: ${answer}</div>
                 `,
                 '<code>inorder(node) = inorder(left), node, inorder(right)</code>'
@@ -3077,14 +3514,21 @@
         adjacency.forEach((neighbors) => neighbors.sort((a, b) => a - b));
 
         const nodeIndex = new Map(nodes.map((node, idx) => [node, idx]));
+        
+        const dimensionTexts = {
+            bfs: '<strong>3D Axes:</strong> X = graph layout, Y = graph layout, Z = traversal layer/depth',
+            dfs: '<strong>3D Axes:</strong> X = graph layout, Y = graph layout, Z = traversal layer/depth',
+        };
+        
         const steps = [
             makeStep(
                 `${mode.toUpperCase()} Setup`,
-                `Start traversal from node ${start}.`,
+                `Start traversal from node ${start}. ${dimensionTexts[mode] || ''}`,
                 `
                     ${renderArrayVisualization(nodes, new Set([nodeIndex.get(start)]), new Set([nodeIndex.get(start)]))}
                     ${renderIndexedStrip(nodes, new Set([nodeIndex.get(start)]))}
                     <div class="exec-summary">Edges: ${parsedEdges.map(([u, v]) => `(${u}-${v})`).join(', ')}</div>
+                    <div class="exec-summary"><em>${dimensionTexts[mode] || ''}</em></div>
                 `,
                 mode === 'bfs'
                     ? '<code>Queue-based level traversal, lower neighbors first</code>'
@@ -3251,10 +3695,11 @@
         const steps = [
             makeStep(
                 'Initialize Distances',
-                `Source=${source}, Target=${target}.`,
+                `Source=${source}, Target=${target}. <strong>3D Axes:</strong> X = node layout, Y = node layout, Z = path-cost context.`,
                 `
                     ${distanceTable(source)}
                     <div class="exec-summary">Frontier: [(${source}, 0)]</div>
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = node layout, Y = node layout, Z = path-cost context</em></div>
                 `,
                 '<code>dist[source]=0, all others=inf; relax edges from smallest tentative node</code>'
             ),
@@ -3471,8 +3916,11 @@
         const steps = [
             makeStep(
                 'Initialize A*',
-                `Grid ${rows}x${cols}, start=(0,0), goal=(${goal[0]},${goal[1]}).`,
-                renderGrid(startKey, new Set(), new Set([startKey]), new Set()),
+                `Grid ${rows}x${cols}, start=(0,0), goal=(${goal[0]},${goal[1]}). <strong>3D Axes:</strong> X = column, Y = row, Z = heuristic/cost.`,
+                `
+                    ${renderGrid(startKey, new Set(), new Set([startKey]), new Set())}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = column, Y = row, Z = heuristic/cost</em></div>
+                `,
                 '<code>f(n)=g(n)+h(n), h=Manhattan distance</code>'
             ),
         ];
@@ -3738,12 +4186,39 @@
         if (!data.length || !Number.isFinite(target)) {
             return null;
         }
+        const epsilon = 1e-9;
+
+        function renderLinearStatus(visitedSet, currentIndex = null, resolvedIndex = null) {
+            const checked = Array.from(visitedSet).sort((a, b) => a - b);
+            const checkedLabel = checked.length ? checked.join(', ') : '-';
+            const currentLabel = Number.isInteger(currentIndex) ? `${currentIndex} (${formatNumber(data[currentIndex])})` : '-';
+            const progress = data.length ? Math.round((checked.length / data.length) * 100) : 0;
+            const resultLabel = resolvedIndex === null
+                ? 'Pending'
+                : (resolvedIndex >= 0 ? `Found at idx ${resolvedIndex}` : 'Not Found (-1)');
+            return `
+                <div class="linear-search-status">
+                    <div class="linear-search-status-line"><strong>Target:</strong> ${formatNumber(target)}</div>
+                    <div class="linear-search-status-line"><strong>Current:</strong> ${currentLabel}</div>
+                    <div class="linear-search-status-line"><strong>Checked:</strong> [${checkedLabel}]</div>
+                    <div class="linear-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="linear-search-progress-track">
+                        <span class="linear-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="linear-search-progress-text">Scanned ${checked.length}/${data.length} values</div>
+                </div>
+            `;
+        }
 
         const steps = [
             makeStep(
                 'Initialize Search',
                 `Scan left-to-right for first target occurrence (${formatNumber(target)}).`,
-                renderIndexedStrip3D(data),
+                `
+                    ${renderLinearSearchTrack3D(data, { visitedSet: new Set(), currentIndex: 0 })}
+                    ${renderLinearStatus(new Set(), 0, null)}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = index, Y = state lane, Z = scan depth cue.</em></div>
+                `,
                 '<code>for i in [0..n-1]: if arr[i] == target return i</code>'
             ),
         ];
@@ -3752,7 +4227,7 @@
         let answerIndex = -1;
         for (let idx = 0; idx < data.length; idx += 1) {
             visited.add(idx);
-            const matched = Math.abs(data[idx] - target) <= 1e-9;
+            const matched = Math.abs(data[idx] - target) <= epsilon;
             steps.push(
                 makeStep(
                     `Check index ${idx}`,
@@ -3760,9 +4235,13 @@
                         ? `arr[${idx}] = ${formatNumber(data[idx])} matches target. Stop at first match.`
                         : `arr[${idx}] = ${formatNumber(data[idx])} does not match target.`,
                     `
-                        ${renderArrayVisualization(data, visited, new Set([idx]))}
-                        ${renderIndexedStrip3D(data, visited, new Set([idx]))}
-                        <div class="exec-summary">Visited: [${Array.from(visited).join(', ')}]</div>
+                        ${renderLinearSearchTrack3D(data, {
+                            visitedSet: visited,
+                            currentIndex: idx,
+                            matchIndex: matched ? idx : null,
+                        })}
+                        ${renderLinearStatus(visited, idx, matched ? idx : null)}
+                        <div class="exec-summary">Visited: [${Array.from(visited).sort((a, b) => a - b).join(', ')}]</div>
                     `,
                     `<code>compare ${formatNumber(data[idx])} with ${formatNumber(target)}</code>`
                 )
@@ -3779,9 +4258,14 @@
                 answerIndex >= 0
                     ? `First matching index is ${answerIndex}.`
                     : 'Target not found, answer is -1.',
-                answerIndex >= 0
-                    ? `${renderArrayVisualization(data, new Set([answerIndex]), new Set([answerIndex]))}${renderIndexedStrip3D(data, new Set([answerIndex]), new Set([answerIndex]))}`
-                    : `${renderArrayVisualization(data)}${renderIndexedStrip3D(data)}`,
+                `
+                    ${renderLinearSearchTrack3D(data, {
+                        visitedSet: visited,
+                        currentIndex: answerIndex >= 0 ? answerIndex : null,
+                        matchIndex: answerIndex >= 0 ? answerIndex : null,
+                    })}
+                    ${renderLinearStatus(visited, answerIndex >= 0 ? answerIndex : null, answerIndex)}
+                `,
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -3806,11 +4290,51 @@
             }
         }
 
+        const epsilon = 1e-9;
+        let comparisons = 0;
+        const midHistory = [];
+        const estimatedWorst = Math.max(1, Math.ceil(Math.log2(data.length + 1)));
+
+        function renderBinaryStatus(low, high, mid = null, resolvedIndex = null) {
+            const hasWindow = Number.isInteger(low) && Number.isInteger(high) && low <= high;
+            const windowLabel = hasWindow ? `[${low}..${high}]` : 'empty';
+            const midLabel = Number.isInteger(mid) ? `${mid} (${formatNumber(data[mid])})` : '-';
+            const resultLabel = resolvedIndex === null
+                ? 'Pending'
+                : (resolvedIndex >= 0 ? `Found @ ${resolvedIndex}` : 'Not Found (-1)');
+            const eliminated = hasWindow ? Math.max(0, data.length - (high - low + 1)) : data.length;
+            const progress = data.length ? Math.round((eliminated / data.length) * 100) : 0;
+            const checkedLabel = midHistory.length ? midHistory.join(' -> ') : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Target:</strong> ${formatNumber(target)}</div>
+                    <div class="binary-search-status-line"><strong>Window:</strong> ${windowLabel}</div>
+                    <div class="binary-search-status-line"><strong>Mid:</strong> ${midLabel}</div>
+                    <div class="binary-search-status-line"><strong>Checked mids:</strong> ${checkedLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Comparisons ${comparisons}/${estimatedWorst} (typical max) | Eliminated ${eliminated}/${data.length}</div>
+                </div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Search Window',
                 `Binary search on sorted array for target ${formatNumber(target)}.`,
-                renderIndexedStrip3D(data),
+                `
+                    ${renderBinarySearchTrack3D(data, {
+                        low: 0,
+                        high: data.length - 1,
+                        mid: Math.floor((data.length - 1) / 2),
+                        visitedMids: new Set(midHistory),
+                        stepDepth: comparisons,
+                    })}
+                    ${renderBinaryStatus(0, data.length - 1, Math.floor((data.length - 1) / 2), null)}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = sorted index layout, Y = state lane, Z = search-window depth cue.</em></div>
+                `,
                 '<code>while low <= high: mid=(low+high)//2</code>'
             ),
         ];
@@ -3822,34 +4346,46 @@
         while (low <= high) {
             const mid = Math.floor((low + high) / 2);
             const midValue = data[mid];
-            const windowHighlight = new Set();
-            for (let cursor = low; cursor <= high; cursor += 1) {
-                windowHighlight.add(cursor);
+            comparisons += 1;
+            if (midHistory[midHistory.length - 1] !== mid) {
+                midHistory.push(mid);
             }
-            const highlight = new Set([low, mid, high]);
 
             steps.push(
                 makeStep(
                     `Window [${low}..${high}], mid=${mid}`,
                     `Compare target ${formatNumber(target)} with arr[${mid}] = ${formatNumber(midValue)}.`,
                     `
-                        ${renderArrayVisualization(data, windowHighlight, highlight)}
-                        ${renderIndexedStrip3D(data, windowHighlight, highlight)}
+                        ${renderBinarySearchTrack3D(data, {
+                            low,
+                            high,
+                            mid,
+                            visitedMids: new Set(midHistory),
+                            stepDepth: comparisons,
+                        })}
+                        ${renderBinaryStatus(low, high, mid, null)}
                         <div class="exec-summary">low=${low}, mid=${mid}, high=${high}</div>
                     `,
                     `<code>mid = floor((${low}+${high})/2)</code>`
                 )
             );
 
-            if (Math.abs(midValue - target) <= 1e-9) {
+            if (Math.abs(midValue - target) <= epsilon) {
                 answerIndex = mid;
                 steps.push(
                     makeStep(
                         'Target Found',
                         `arr[${mid}] equals target.`,
                         `
-                            ${renderArrayVisualization(data, new Set([mid]), new Set([mid]))}
-                            ${renderIndexedStrip3D(data, new Set([mid]), new Set([mid]))}
+                            ${renderBinarySearchTrack3D(data, {
+                                low,
+                                high,
+                                mid,
+                                foundIndex: mid,
+                                visitedMids: new Set(midHistory),
+                                stepDepth: comparisons,
+                            })}
+                            ${renderBinaryStatus(low, high, mid, mid)}
                         `,
                         `<code>return ${mid}</code>`
                     )
@@ -3864,8 +4400,19 @@
                         'Move Right',
                         `${formatNumber(midValue)} < ${formatNumber(target)} so discard left half.`,
                         `
-                            ${renderArrayVisualization(data, windowHighlight, highlight)}
-                            ${renderIndexedStrip3D(data, windowHighlight, highlight)}
+                            ${renderBinarySearchTrack3D(data, {
+                                low: nextLow,
+                                high,
+                                mid: nextLow <= high ? Math.floor((nextLow + high) / 2) : null,
+                                visitedMids: new Set(midHistory),
+                                stepDepth: comparisons,
+                            })}
+                            ${renderBinaryStatus(
+                                nextLow,
+                                high,
+                                nextLow <= high ? Math.floor((nextLow + high) / 2) : null,
+                                null
+                            )}
                         `,
                         `<code>low = mid + 1 = ${nextLow}</code>`
                     )
@@ -3878,8 +4425,19 @@
                         'Move Left',
                         `${formatNumber(midValue)} > ${formatNumber(target)} so discard right half.`,
                         `
-                            ${renderArrayVisualization(data, windowHighlight, highlight)}
-                            ${renderIndexedStrip3D(data, windowHighlight, highlight)}
+                            ${renderBinarySearchTrack3D(data, {
+                                low,
+                                high: nextHigh,
+                                mid: low <= nextHigh ? Math.floor((low + nextHigh) / 2) : null,
+                                visitedMids: new Set(midHistory),
+                                stepDepth: comparisons,
+                            })}
+                            ${renderBinaryStatus(
+                                low,
+                                nextHigh,
+                                low <= nextHigh ? Math.floor((low + nextHigh) / 2) : null,
+                                null
+                            )}
                         `,
                         `<code>high = mid - 1 = ${nextHigh}</code>`
                     )
@@ -3894,8 +4452,14 @@
                     'Window Exhausted',
                     'low crossed high, target is absent.',
                     `
-                        ${renderArrayVisualization(data)}
-                        ${renderIndexedStrip3D(data)}
+                        ${renderBinarySearchTrack3D(data, {
+                            low,
+                            high,
+                            mid: null,
+                            visitedMids: new Set(midHistory),
+                            stepDepth: comparisons,
+                        })}
+                        ${renderBinaryStatus(low, high, null, -1)}
                     `,
                     '<code>if low > high: return -1</code>'
                 )
@@ -3908,9 +4472,22 @@
                 answerIndex >= 0
                     ? `Target index is ${answerIndex}.`
                     : 'Target not found, answer is -1.',
-                answerIndex >= 0
-                    ? `${renderArrayVisualization(data, new Set([answerIndex]), new Set([answerIndex]))}${renderIndexedStrip3D(data, new Set([answerIndex]), new Set([answerIndex]))}`
-                    : `${renderArrayVisualization(data)}${renderIndexedStrip3D(data)}`,
+                `
+                    ${renderBinarySearchTrack3D(data, {
+                        low: answerIndex >= 0 ? answerIndex : low,
+                        high: answerIndex >= 0 ? answerIndex : high,
+                        mid: answerIndex >= 0 ? answerIndex : null,
+                        foundIndex: answerIndex >= 0 ? answerIndex : null,
+                        visitedMids: new Set(midHistory),
+                        stepDepth: comparisons,
+                    })}
+                    ${renderBinaryStatus(
+                        answerIndex >= 0 ? answerIndex : low,
+                        answerIndex >= 0 ? answerIndex : high,
+                        answerIndex >= 0 ? answerIndex : null,
+                        answerIndex
+                    )}
+                `,
                 `<code>answer = ${answerIndex}</code>`
             )
         );
