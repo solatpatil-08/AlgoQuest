@@ -1242,6 +1242,695 @@
         return render3DScene(`${defs}${floor}${windowOverlay}${legend}${cells}`, width, height, '3D binary search visualization', 'exec-3d-bst');
     }
 
+    function renderBubbleSortTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const compareLeft = Number.isInteger(options.compareLeft) ? options.compareLeft : null;
+        const compareRight = Number.isInteger(options.compareRight) ? options.compareRight : null;
+        const sortedFrom = Number.isInteger(options.sortedFrom) ? options.sortedFrom : values.length;
+        const swappedPair = Array.isArray(options.swappedPair) ? options.swappedPair : [];
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 176 : 188;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execBubble${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="48%" stop-color="rgba(14,165,233,0.17)"></stop>
+                    <stop offset="100%" stop-color="rgba(34,197,94,0.11)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const isFixed = idx >= sortedFrom;
+            const isPair = idx === compareLeft || idx === compareRight;
+            const isSwapped = swappedPair.includes(idx);
+            const palette = isSwapped
+                ? { front: '#fce7f3', top: '#fdf2f8', side: '#db2777', stroke: '#9d174d', tag: 'SWAP', tagColor: '#db2777' }
+                : isPair
+                    ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'PAIR', tagColor: '#f59e0b' }
+                    : isFixed
+                        ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'FIXED', tagColor: '#16a34a' }
+                        : { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: '', tagColor: '#2563eb' };
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isPair || isSwapped ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const pairOverlay = Number.isInteger(compareLeft) && Number.isInteger(compareRight)
+            ? (() => {
+                const start = Math.min(compareLeft, compareRight);
+                const end = Math.max(compareLeft, compareRight);
+                const startX = leftPad + (start * (cellWidth + gap));
+                const endX = leftPad + (end * (cellWidth + gap)) + cellWidth;
+                const y = baseY - 24;
+                return `
+                    <g>
+                        <line x1="${startX}" y1="${y}" x2="${endX}" y2="${y}" stroke="#d97706" stroke-width="2.2"></line>
+                        <line x1="${startX}" y1="${y - 6}" x2="${startX}" y2="${y + 6}" stroke="#d97706" stroke-width="2.2"></line>
+                        <line x1="${endX}" y1="${y - 6}" x2="${endX}" y2="${y + 6}" stroke="#d97706" stroke-width="2.2"></line>
+                        <text x="${Math.round((startX + endX) / 2)}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#92400e">Compare Pair</text>
+                    </g>
+                `;
+            })()
+            : '';
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Bubble Sort Board</text>
+                <rect x="${width - 250}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 236}" y="${topPad - 5}" font-size="9.5" fill="#334155">Unsorted</text>
+                <rect x="${width - 184}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 170}" y="${topPad - 5}" font-size="9.5" fill="#334155">Pair</text>
+                <rect x="${width - 130}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fce7f3" stroke="#9d174d" stroke-width="1"></rect>
+                <text x="${width - 116}" y="${topPad - 5}" font-size="9.5" fill="#334155">Swapped</text>
+                <rect x="${width - 68}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 54}" y="${topPad - 5}" font-size="9.5" fill="#334155">Fixed</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Pass Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${pairOverlay}${legend}${cells}`, width, height, '3D bubble sort visualization', 'exec-3d-bst');
+    }
+
+    function renderSelectionSortTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const fixedUntil = Number.isInteger(options.fixedUntil) ? options.fixedUntil : 0;
+        const scanIndex = Number.isInteger(options.scanIndex) ? options.scanIndex : null;
+        const minIndex = Number.isInteger(options.minIndex) ? options.minIndex : null;
+        const slotIndex = Number.isInteger(options.slotIndex) ? options.slotIndex : null;
+        const placedIndex = Number.isInteger(options.placedIndex) ? options.placedIndex : null;
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 176 : 188;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execSelect${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="45%" stop-color="rgba(14,165,233,0.16)"></stop>
+                    <stop offset="100%" stop-color="rgba(34,197,94,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const isFixed = idx < fixedUntil;
+            const isPlaced = Number.isInteger(placedIndex) && idx === placedIndex;
+            const isMin = Number.isInteger(minIndex) && idx === minIndex;
+            const isScan = Number.isInteger(scanIndex) && idx === scanIndex;
+            const isSlot = Number.isInteger(slotIndex) && idx === slotIndex;
+
+            const palette = isPlaced
+                ? { front: '#fce7f3', top: '#fdf2f8', side: '#db2777', stroke: '#9d174d', tag: 'PLACE', tagColor: '#db2777' }
+                : isMin
+                    ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'MIN', tagColor: '#f59e0b' }
+                    : isScan
+                        ? { front: '#e0f2fe', top: '#f0f9ff', side: '#0284c7', stroke: '#0c4a6e', tag: 'SCAN', tagColor: '#0284c7' }
+                        : isFixed
+                            ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'FIXED', tagColor: '#16a34a' }
+                            : { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: isSlot ? 'SLOT' : '', tagColor: '#2563eb' };
+
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isMin || isScan || isPlaced ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Selection Sort Board</text>
+                <rect x="${width - 308}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 294}" y="${topPad - 5}" font-size="9.5" fill="#334155">Unsorted</text>
+                <rect x="${width - 244}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e0f2fe" stroke="#0c4a6e" stroke-width="1"></rect>
+                <text x="${width - 230}" y="${topPad - 5}" font-size="9.5" fill="#334155">Scan</text>
+                <rect x="${width - 192}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 178}" y="${topPad - 5}" font-size="9.5" fill="#334155">Min</text>
+                <rect x="${width - 136}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fce7f3" stroke="#9d174d" stroke-width="1"></rect>
+                <text x="${width - 122}" y="${topPad - 5}" font-size="9.5" fill="#334155">Placed</text>
+                <rect x="${width - 74}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 60}" y="${topPad - 5}" font-size="9.5" fill="#334155">Fixed</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Pass Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D selection sort visualization', 'exec-3d-bst');
+    }
+
+    function renderInsertionSortTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const sortedUntil = Number.isInteger(options.sortedUntil) ? options.sortedUntil : 1;
+        const keyIndex = Number.isInteger(options.keyIndex) ? options.keyIndex : null;
+        const scanIndex = Number.isInteger(options.scanIndex) ? options.scanIndex : null;
+        const insertedIndex = Number.isInteger(options.insertedIndex) ? options.insertedIndex : null;
+        const shiftedIndex = Number.isInteger(options.shiftedIndex) ? options.shiftedIndex : null;
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 176 : 188;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execInsert${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="45%" stop-color="rgba(14,165,233,0.16)"></stop>
+                    <stop offset="100%" stop-color="rgba(34,197,94,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const inSortedPrefix = idx < sortedUntil;
+            const isKey = Number.isInteger(keyIndex) && idx === keyIndex;
+            const isScan = Number.isInteger(scanIndex) && idx === scanIndex;
+            const isInserted = Number.isInteger(insertedIndex) && idx === insertedIndex;
+            const isShifted = Number.isInteger(shiftedIndex) && idx === shiftedIndex;
+
+            const palette = isInserted
+                ? { front: '#fce7f3', top: '#fdf2f8', side: '#db2777', stroke: '#9d174d', tag: 'INSERT', tagColor: '#db2777' }
+                : isShifted
+                    ? { front: '#e0f2fe', top: '#f0f9ff', side: '#0284c7', stroke: '#0c4a6e', tag: 'SHIFT', tagColor: '#0284c7' }
+                    : isKey
+                        ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'KEY', tagColor: '#f59e0b' }
+                        : isScan
+                            ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'SCAN', tagColor: '#2563eb' }
+                            : inSortedPrefix
+                                ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'SORTED', tagColor: '#16a34a' }
+                                : { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: '', tagColor: '#2563eb' };
+
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isInserted || isShifted || isKey || isScan ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Insertion Sort Board</text>
+                <rect x="${width - 304}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 290}" y="${topPad - 5}" font-size="9.5" fill="#334155">Sorted Prefix</text>
+                <rect x="${width - 220}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 206}" y="${topPad - 5}" font-size="9.5" fill="#334155">Key</text>
+                <rect x="${width - 172}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 158}" y="${topPad - 5}" font-size="9.5" fill="#334155">Scan</text>
+                <rect x="${width - 120}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e0f2fe" stroke="#0c4a6e" stroke-width="1"></rect>
+                <text x="${width - 106}" y="${topPad - 5}" font-size="9.5" fill="#334155">Shift</text>
+                <rect x="${width - 66}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fce7f3" stroke="#9d174d" stroke-width="1"></rect>
+                <text x="${width - 52}" y="${topPad - 5}" font-size="9.5" fill="#334155">Insert</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Pass Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D insertion sort visualization', 'exec-3d-bst');
+    }
+
+    function renderMergeSortTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const left = Number.isInteger(options.left) ? options.left : 0;
+        const mid = Number.isInteger(options.mid) ? options.mid : 0;
+        const right = Number.isInteger(options.right) ? options.right : values.length;
+        const headLeft = Number.isInteger(options.headLeft) ? options.headLeft : null;
+        const headRight = Number.isInteger(options.headRight) ? options.headRight : null;
+        const writtenUntil = Number.isInteger(options.writtenUntil) ? options.writtenUntil : left;
+        const mergedSet = options.mergedSet instanceof Set ? options.mergedSet : new Set();
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 176 : 188;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execMerge${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="45%" stop-color="rgba(14,165,233,0.16)"></stop>
+                    <stop offset="100%" stop-color="rgba(34,197,94,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const segmentActive = left < right;
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const inLeftRun = segmentActive && idx >= left && idx < mid;
+            const inRightRun = segmentActive && idx >= mid && idx < right;
+            const isHeadLeft = headLeft === idx;
+            const isHeadRight = headRight === idx;
+            const isWritten = mergedSet.has(idx) || (segmentActive && idx < writtenUntil && idx >= left);
+
+            const palette = isWritten
+                ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'MERGED', tagColor: '#16a34a' }
+                : isHeadLeft || isHeadRight
+                    ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'HEAD', tagColor: '#f59e0b' }
+                    : inLeftRun
+                        ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'LEFT', tagColor: '#2563eb' }
+                        : inRightRun
+                            ? { front: '#e0f2fe', top: '#f0f9ff', side: '#0284c7', stroke: '#0c4a6e', tag: 'RIGHT', tagColor: '#0284c7' }
+                            : { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: '', tagColor: '#64748b' };
+
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isHeadLeft || isHeadRight ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const bandOverlay = segmentActive
+            ? (() => {
+                const startX = leftPad + (left * (cellWidth + gap));
+                const midX = leftPad + (mid * (cellWidth + gap));
+                const endX = leftPad + ((right - 1) * (cellWidth + gap)) + cellWidth;
+                const y = baseY - 24;
+                return `
+                    <g>
+                        <line x1="${startX}" y1="${y}" x2="${endX}" y2="${y}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${startX}" y1="${y - 6}" x2="${startX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${endX}" y1="${y - 6}" x2="${endX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        ${mid > left && mid < right ? `<line x1="${midX}" y1="${y - 8}" x2="${midX}" y2="${y + 8}" stroke="#f59e0b" stroke-width="2"></line>` : ''}
+                        <text x="${startX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">L=${left}</text>
+                        <text x="${endX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">R=${right - 1}</text>
+                    </g>
+                `;
+            })()
+            : '';
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Merge Sort Board</text>
+                <rect x="${width - 300}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 286}" y="${topPad - 5}" font-size="9.5" fill="#334155">Left Run</text>
+                <rect x="${width - 240}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e0f2fe" stroke="#0c4a6e" stroke-width="1"></rect>
+                <text x="${width - 226}" y="${topPad - 5}" font-size="9.5" fill="#334155">Right Run</text>
+                <rect x="${width - 180}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 166}" y="${topPad - 5}" font-size="9.5" fill="#334155">Head</text>
+                <rect x="${width - 126}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 112}" y="${topPad - 5}" font-size="9.5" fill="#334155">Merged</text>
+                <rect x="${width - 68}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1"></rect>
+                <text x="${width - 54}" y="${topPad - 5}" font-size="9.5" fill="#334155">Other</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Merge Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${bandOverlay}${legend}${cells}`, width, height, '3D merge sort visualization', 'exec-3d-bst');
+    }
+
+    function renderQuickSortTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const low = Number.isInteger(options.low) ? options.low : 0;
+        const high = Number.isInteger(options.high) ? options.high : values.length - 1;
+        const scanIndex = Number.isInteger(options.scanIndex) ? options.scanIndex : null;
+        const boundaryIndex = Number.isInteger(options.boundaryIndex) ? options.boundaryIndex : null;
+        const pivotIndex = Number.isInteger(options.pivotIndex) ? options.pivotIndex : null;
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+        const swappedPair = Array.isArray(options.swappedPair) ? options.swappedPair : [];
+        const fixedSet = options.fixedSet instanceof Set ? options.fixedSet : new Set();
+        const hasActiveSegment = low >= 0 && high >= 0 && low <= high && high < values.length;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 178 : 190;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execQuick${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="45%" stop-color="rgba(14,165,233,0.16)"></stop>
+                    <stop offset="100%" stop-color="rgba(34,197,94,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const inSegment = hasActiveSegment && idx >= low && idx <= high;
+            const inLeftZone = hasActiveSegment && Number.isInteger(boundaryIndex) && idx >= low && idx <= boundaryIndex;
+            const isScan = Number.isInteger(scanIndex) && idx === scanIndex;
+            const isPivot = Number.isInteger(pivotIndex) && idx === pivotIndex;
+            const isFixed = fixedSet.has(idx);
+            const isSwapped = swappedPair.includes(idx);
+
+            const palette = isSwapped
+                ? { front: '#fce7f3', top: '#fdf2f8', side: '#db2777', stroke: '#9d174d', tag: 'SWAP', tagColor: '#db2777' }
+                : isFixed
+                    ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'FIXED', tagColor: '#16a34a' }
+                    : isPivot
+                        ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'PIVOT', tagColor: '#f59e0b' }
+                        : isScan
+                            ? { front: '#e0f2fe', top: '#f0f9ff', side: '#0284c7', stroke: '#0c4a6e', tag: 'SCAN', tagColor: '#0284c7' }
+                            : inLeftZone
+                                ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'LEFT', tagColor: '#2563eb' }
+                                : inSegment
+                                    ? { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: 'RIGHT', tagColor: '#64748b' }
+                                    : { front: '#f1f5f9', top: '#f8fafc', side: '#94a3b8', stroke: '#64748b', tag: '', tagColor: '#64748b' };
+
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isPivot || isScan || isSwapped ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const segmentOverlay = hasActiveSegment
+            ? (() => {
+                const startX = leftPad + (low * (cellWidth + gap));
+                const endX = leftPad + (high * (cellWidth + gap)) + cellWidth;
+                const y = baseY - 24;
+                const boundaryX = Number.isInteger(boundaryIndex) && boundaryIndex >= low && boundaryIndex <= high
+                    ? leftPad + (boundaryIndex * (cellWidth + gap)) + cellWidth
+                    : null;
+                return `
+                    <g>
+                        <line x1="${startX}" y1="${y}" x2="${endX}" y2="${y}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${startX}" y1="${y - 6}" x2="${startX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${endX}" y1="${y - 6}" x2="${endX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        ${boundaryX ? `<line x1="${boundaryX}" y1="${y - 8}" x2="${boundaryX}" y2="${y + 8}" stroke="#2563eb" stroke-width="2"></line>` : ''}
+                        <text x="${startX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">L=${low}</text>
+                        <text x="${endX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">R=${high}</text>
+                    </g>
+                `;
+            })()
+            : '';
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Quick Sort Board</text>
+                <rect x="${width - 332}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 318}" y="${topPad - 5}" font-size="9.5" fill="#334155">Left Zone</text>
+                <rect x="${width - 266}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1"></rect>
+                <text x="${width - 252}" y="${topPad - 5}" font-size="9.5" fill="#334155">Right Zone</text>
+                <rect x="${width - 196}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e0f2fe" stroke="#0c4a6e" stroke-width="1"></rect>
+                <text x="${width - 182}" y="${topPad - 5}" font-size="9.5" fill="#334155">Scan</text>
+                <rect x="${width - 140}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 126}" y="${topPad - 5}" font-size="9.5" fill="#334155">Pivot</text>
+                <rect x="${width - 86}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 72}" y="${topPad - 5}" font-size="9.5" fill="#334155">Fixed</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Partition Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${segmentOverlay}${legend}${cells}`, width, height, '3D quick sort visualization', 'exec-3d-bst');
+    }
+
+    function renderHeapSortTrack3D(values, options = {}) {
+        if (!Array.isArray(values) || !values.length) {
+            return '<p class="concept-muted mb-0">Array unavailable.</p>';
+        }
+        const heapSize = Number.isInteger(options.heapSize) ? Math.max(0, Math.min(values.length, options.heapSize)) : values.length;
+        const rootIndex = Number.isInteger(options.rootIndex) ? options.rootIndex : null;
+        const leftIndex = Number.isInteger(options.leftIndex) ? options.leftIndex : null;
+        const rightIndex = Number.isInteger(options.rightIndex) ? options.rightIndex : null;
+        const candidateIndex = Number.isInteger(options.candidateIndex) ? options.candidateIndex : null;
+        const stepDepth = Number.isInteger(options.stepDepth) ? Math.max(0, options.stepDepth) : 0;
+        const swappedPair = Array.isArray(options.swappedPair) ? options.swappedPair : [];
+        const fixedSet = options.fixedSet instanceof Set ? options.fixedSet : new Set();
+        const hasActiveHeap = heapSize > 0;
+
+        const compact = values.length >= 14;
+        const cellWidth = compact ? 56 : 66;
+        const cellHeight = compact ? 34 : 38;
+        const gap = compact ? 8 : 10;
+        const leftPad = 26;
+        const topPad = 24;
+        const baseY = compact ? 76 : 80;
+        const depth = compact ? 8 : 10;
+        const stageHeight = compact ? 178 : 190;
+        const width = Math.max(440, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+        const height = stageHeight;
+        const uniqueId = `execHeap${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+        const defs = `
+            <defs>
+                <linearGradient id="${uniqueId}Floor" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#e2e8f0"></stop>
+                    <stop offset="100%" stop-color="#bfdbfe"></stop>
+                </linearGradient>
+                <linearGradient id="${uniqueId}BackGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(59,130,246,0.07)"></stop>
+                    <stop offset="45%" stop-color="rgba(14,165,233,0.16)"></stop>
+                    <stop offset="100%" stop-color="rgba(34,197,94,0.1)"></stop>
+                </linearGradient>
+                <filter id="${uniqueId}SoftShadow" x="-40%" y="-40%" width="180%" height="220%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="4.2" flood-color="#1e293b" flood-opacity="0.26"></feDropShadow>
+                </filter>
+            </defs>
+        `;
+
+        const floor = `
+            <g>
+                <rect x="${leftPad - 14}" y="${baseY + cellHeight + 10}" width="${Math.max(220, values.length * (cellWidth + gap) - gap + 28)}" height="20" rx="10" fill="url(#${uniqueId}Floor)" opacity="0.86"></rect>
+                <polygon points="${leftPad - 8},${baseY + 6} ${leftPad + 24},${baseY - 18} ${width - leftPad + 8},${baseY - 18} ${width - leftPad - 24},${baseY + 6}" fill="url(#${uniqueId}BackGlow)" opacity="0.72"></polygon>
+            </g>
+        `;
+
+        const cells = values.map((value, idx) => {
+            const x = leftPad + (idx * (cellWidth + gap));
+            const inHeap = idx < heapSize;
+            const isRoot = Number.isInteger(rootIndex) && idx === rootIndex;
+            const isChild = idx === leftIndex || idx === rightIndex;
+            const isCandidate = Number.isInteger(candidateIndex) && idx === candidateIndex;
+            const isSwapped = swappedPair.includes(idx);
+            const isFixed = fixedSet.has(idx) || (!inHeap && heapSize < values.length);
+
+            const palette = isSwapped
+                ? { front: '#fce7f3', top: '#fdf2f8', side: '#db2777', stroke: '#9d174d', tag: 'SWAP', tagColor: '#db2777' }
+                : isFixed
+                    ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'FIXED', tagColor: '#16a34a' }
+                    : isRoot
+                        ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'ROOT', tagColor: '#f59e0b' }
+                        : isCandidate
+                            ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'BEST', tagColor: '#2563eb' }
+                            : isChild
+                                ? { front: '#e0f2fe', top: '#f0f9ff', side: '#0284c7', stroke: '#0c4a6e', tag: 'CHILD', tagColor: '#0284c7' }
+                                : inHeap
+                                    ? { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: 'HEAP', tagColor: '#64748b' }
+                                    : { front: '#f1f5f9', top: '#f8fafc', side: '#94a3b8', stroke: '#64748b', tag: '', tagColor: '#64748b' };
+
+            return `
+                <g filter="url(#${uniqueId}SoftShadow)">
+                    <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
+                    <polygon points="${x},${baseY} ${x + depth},${baseY - depth} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth},${baseY}" fill="${palette.top}" opacity="0.96"></polygon>
+                    <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
+                    <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isRoot || isCandidate || isSwapped ? '2.8' : '1.8'}"></rect>
+                    ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
+                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                </g>
+            `;
+        }).join('');
+
+        const heapOverlay = hasActiveHeap
+            ? (() => {
+                const startX = leftPad;
+                const endX = leftPad + ((heapSize - 1) * (cellWidth + gap)) + cellWidth;
+                const y = baseY - 24;
+                return `
+                    <g>
+                        <line x1="${startX}" y1="${y}" x2="${endX}" y2="${y}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${startX}" y1="${y - 6}" x2="${startX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <line x1="${endX}" y1="${y - 6}" x2="${endX}" y2="${y + 6}" stroke="#0284c7" stroke-width="2.2"></line>
+                        <text x="${startX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">heap[0]</text>
+                        <text x="${endX}" y="${y - 8}" text-anchor="middle" font-size="9.4" font-weight="700" fill="#0c4a6e">heap[${heapSize - 1}]</text>
+                    </g>
+                `;
+            })()
+            : '';
+
+        const legend = `
+            <g>
+                <text x="${leftPad}" y="${topPad - 2}" font-size="11" font-weight="700" fill="#334155">3D Heap Sort Board</text>
+                <rect x="${width - 324}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1"></rect>
+                <text x="${width - 310}" y="${topPad - 5}" font-size="9.5" fill="#334155">Heap</text>
+                <rect x="${width - 278}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde68a" stroke="#92400e" stroke-width="1"></rect>
+                <text x="${width - 264}" y="${topPad - 5}" font-size="9.5" fill="#334155">Root</text>
+                <rect x="${width - 224}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#e0f2fe" stroke="#0c4a6e" stroke-width="1"></rect>
+                <text x="${width - 210}" y="${topPad - 5}" font-size="9.5" fill="#334155">Child</text>
+                <rect x="${width - 168}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
+                <text x="${width - 154}" y="${topPad - 5}" font-size="9.5" fill="#334155">Best</text>
+                <rect x="${width - 116}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fce7f3" stroke="#9d174d" stroke-width="1"></rect>
+                <text x="${width - 102}" y="${topPad - 5}" font-size="9.5" fill="#334155">Swap</text>
+                <rect x="${width - 62}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#bbf7d0" stroke="#166534" stroke-width="1"></rect>
+                <text x="${width - 48}" y="${topPad - 5}" font-size="9.5" fill="#334155">Fixed</text>
+                ${stepDepth > 0 ? `<text x="${leftPad}" y="${topPad + 12}" font-size="9.5" fill="#0369a1">Heapify Depth: ${stepDepth}</text>` : ''}
+            </g>
+        `;
+
+        return render3DScene(`${defs}${floor}${heapOverlay}${legend}${cells}`, width, height, '3D heap sort visualization', 'exec-3d-bst');
+    }
+
     // Hash table visualization with buckets
     function renderHashTableVisualization(keys, buckets, highlightKey = null) {
         if (!buckets || !buckets.length) {
@@ -2336,11 +3025,39 @@
         }
 
         const visited = new Set();
+        const visitedOrder = [];
+        let comparisons = 0;
+
+        function renderLinkedStatus(currentIndex, resultLabel = 'Pending') {
+            const visitedCount = visited.size;
+            const progress = values.length ? Math.round((visitedCount / values.length) * 100) : 100;
+            const currentLabel = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < values.length
+                ? `${currentIndex} (${formatNumber(values[currentIndex])})`
+                : '-';
+            const visitedLabel = visitedOrder.length ? visitedOrder.join(' -> ') : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Target:</strong> ${formatNumber(target)}</div>
+                    <div class="binary-search-status-line"><strong>Current node:</strong> ${currentLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons}</div>
+                    <div class="binary-search-status-line"><strong>Visited order:</strong> ${visitedLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Visited ${visitedCount}/${values.length} nodes</div>
+                </div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Start at Head',
                 `Traverse nodes left-to-right to find target ${formatNumber(target)}.`,
-                renderLinkedListDiagram3D(values, { mode: 'singly', currentIndex: 0, visitedSet: visited }),
+                `
+                    ${renderLinkedListDiagram3D(values, { mode: 'singly', currentIndex: 0, visitedSet: visited })}
+                    ${renderLinkedStatus(0, 'Start')}
+                `,
                 '<code>idx = 0; while idx &lt; n: check node[idx], idx += 1</code>'
             ),
         ];
@@ -2348,6 +3065,8 @@
         let answerIndex = -1;
         for (let idx = 0; idx < values.length; idx += 1) {
             visited.add(idx);
+            visitedOrder.push(idx);
+            comparisons += 1;
             const matched = values[idx] === target;
             steps.push(
                 makeStep(
@@ -2362,7 +3081,7 @@
                             matchedIndex: matched ? idx : null,
                             visitedSet: visited,
                         })}
-                        <div class="exec-summary">Visited: [${Array.from(visited).join(', ')}]</div>
+                        ${renderLinkedStatus(idx, matched ? 'Match found' : 'No match, move next')}
                     `,
                     `<code>compare node[${idx}] (${formatNumber(values[idx])}) with target (${formatNumber(target)})</code>`
                 )
@@ -2379,14 +3098,17 @@
                 answerIndex >= 0
                     ? `First matching index is ${answerIndex}.`
                     : 'Target not found in list, answer is -1.',
-                answerIndex >= 0
-                    ? renderLinkedListDiagram3D(values, {
+                `
+                    ${answerIndex >= 0
+                        ? renderLinkedListDiagram3D(values, {
                         mode: 'singly',
                         currentIndex: answerIndex,
                         matchedIndex: answerIndex,
                         visitedSet: visited,
                     })
-                    : renderLinkedListDiagram3D(values, { mode: 'singly', visitedSet: visited }),
+                        : renderLinkedListDiagram3D(values, { mode: 'singly', visitedSet: visited })}
+                    ${renderLinkedStatus(answerIndex >= 0 ? answerIndex : null, answerIndex >= 0 ? `Found at idx ${answerIndex}` : 'Not found')}
+                `,
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -2418,17 +3140,46 @@
         }
 
         const visited = new Set();
+        const visitedOrder = [];
+        let comparisons = 0;
+
+        function renderDoublyStatus(currentIndex, resultLabel = 'Pending') {
+            const visitedCount = visited.size;
+            const progress = values.length ? Math.round((visitedCount / values.length) * 100) : 100;
+            const currentLabel = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < values.length
+                ? `${currentIndex} (${formatNumber(values[currentIndex])})`
+                : '-';
+            const visitedLabel = visitedOrder.length ? visitedOrder.join(' -> ') : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Direction:</strong> ${traverseFromTail ? 'tail -> head (prev)' : 'head -> tail (next)'}</div>
+                    <div class="binary-search-status-line"><strong>Target:</strong> ${formatNumber(target)}</div>
+                    <div class="binary-search-status-line"><strong>Current node:</strong> ${currentLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons}</div>
+                    <div class="binary-search-status-line"><strong>Visited order:</strong> ${visitedLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Visited ${visitedCount}/${values.length} nodes</div>
+                </div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 traverseFromTail ? 'Start at Tail' : 'Start at Head',
                 traverseFromTail
                     ? `Use prev pointers from tail to find target ${formatNumber(target)}.`
                     : `Use next pointers from head to find target ${formatNumber(target)}.`,
-                renderLinkedListDiagram3D(values, {
-                    mode: 'doubly',
-                    currentIndex: order[0],
-                    visitedSet: visited,
-                }),
+                `
+                    ${renderLinkedListDiagram3D(values, {
+                        mode: 'doubly',
+                        currentIndex: order[0],
+                        visitedSet: visited,
+                    })}
+                    ${renderDoublyStatus(order[0], 'Start')}
+                `,
                 traverseFromTail
                     ? '<code>idx = n-1; while idx &gt;= 0: check node[idx], idx -= 1</code>'
                     : '<code>idx = 0; while idx &lt; n: check node[idx], idx += 1</code>'
@@ -2439,6 +3190,8 @@
         for (let position = 0; position < order.length; position += 1) {
             const idx = order[position];
             visited.add(idx);
+            visitedOrder.push(idx);
+            comparisons += 1;
             const matched = values[idx] === target;
             steps.push(
                 makeStep(
@@ -2453,7 +3206,7 @@
                             matchedIndex: matched ? idx : null,
                             visitedSet: visited,
                         })}
-                        <div class="exec-summary">Visited in order: [${Array.from(visited).join(', ')}]</div>
+                        ${renderDoublyStatus(idx, matched ? 'Match found' : 'No match, follow pointer')}
                     `,
                     `<code>compare node[${idx}] (${formatNumber(values[idx])}) with target (${formatNumber(target)})</code>`
                 )
@@ -2470,14 +3223,17 @@
                 answerIndex >= 0
                     ? `Traversal result index is ${answerIndex}.`
                     : 'Target not found, answer is -1.',
-                answerIndex >= 0
-                    ? renderLinkedListDiagram3D(values, {
-                        mode: 'doubly',
-                        currentIndex: answerIndex,
-                        matchedIndex: answerIndex,
-                        visitedSet: visited,
-                    })
-                    : renderLinkedListDiagram3D(values, { mode: 'doubly', visitedSet: visited }),
+                `
+                    ${answerIndex >= 0
+                        ? renderLinkedListDiagram3D(values, {
+                            mode: 'doubly',
+                            currentIndex: answerIndex,
+                            matchedIndex: answerIndex,
+                            visitedSet: visited,
+                        })
+                        : renderLinkedListDiagram3D(values, { mode: 'doubly', visitedSet: visited })}
+                    ${renderDoublyStatus(answerIndex >= 0 ? answerIndex : null, answerIndex >= 0 ? `Found at idx ${answerIndex}` : 'Not found')}
+                `,
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -2509,16 +3265,46 @@
         }
 
         const visited = new Set();
+        const visitedOrder = [];
+        let comparisons = 0;
+
+        function renderCircularStatus(currentIndex, resultLabel = 'Pending') {
+            const visitedCount = visited.size;
+            const progress = values.length ? Math.round((visitedCount / values.length) * 100) : 100;
+            const currentLabel = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < values.length
+                ? `${currentIndex} (${formatNumber(values[currentIndex])})`
+                : '-';
+            const visitedLabel = visitedOrder.length ? visitedOrder.join(' -> ') : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Direction:</strong> head follows next (circular)</div>
+                    <div class="binary-search-status-line"><strong>Start index:</strong> ${startIndex}</div>
+                    <div class="binary-search-status-line"><strong>Target:</strong> ${formatNumber(target)}</div>
+                    <div class="binary-search-status-line"><strong>Current node:</strong> ${currentLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons}</div>
+                    <div class="binary-search-status-line"><strong>Visited order:</strong> ${visitedLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Visited ${visitedCount}/${values.length} nodes</div>
+                </div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Start Circular Walk',
                 `Begin at index ${startIndex}, stop after one full cycle, target ${formatNumber(target)}.`,
-                renderLinkedListDiagram3D(values, {
-                    mode: 'circular',
-                    currentIndex: startIndex,
-                    visitedSet: visited,
-                    startIndex,
-                }),
+                `
+                    ${renderLinkedListDiagram3D(values, {
+                        mode: 'circular',
+                        currentIndex: startIndex,
+                        visitedSet: visited,
+                        startIndex,
+                    })}
+                    ${renderCircularStatus(startIndex, 'Start')}
+                `,
                 '<code>idx = (start + step) % n, for step in [0..n-1]</code>'
             ),
         ];
@@ -2527,6 +3313,8 @@
         for (let step = 0; step < order.length; step += 1) {
             const idx = order[step];
             visited.add(idx);
+            visitedOrder.push(idx);
+            comparisons += 1;
             const matched = values[idx] === target;
             steps.push(
                 makeStep(
@@ -2542,7 +3330,7 @@
                             visitedSet: visited,
                             startIndex,
                         })}
-                        <div class="exec-summary">Visited this cycle: [${Array.from(visited).join(', ')}]</div>
+                        ${renderCircularStatus(idx, matched ? 'Match found' : 'No match, move next (wrap if needed)')}
                     `,
                     `<code>idx = (${startIndex} + ${step}) mod ${values.length} = ${idx}</code>`
                 )
@@ -2559,15 +3347,18 @@
                 answerIndex >= 0
                     ? `First match in circular traversal is index ${answerIndex}.`
                     : 'Completed one cycle with no match, answer is -1.',
-                answerIndex >= 0
-                    ? renderLinkedListDiagram3D(values, {
-                        mode: 'circular',
-                        currentIndex: answerIndex,
-                        matchedIndex: answerIndex,
-                        visitedSet: visited,
-                        startIndex,
-                    })
-                    : renderLinkedListDiagram3D(values, { mode: 'circular', visitedSet: visited, startIndex }),
+                `
+                    ${answerIndex >= 0
+                        ? renderLinkedListDiagram3D(values, {
+                            mode: 'circular',
+                            currentIndex: answerIndex,
+                            matchedIndex: answerIndex,
+                            visitedSet: visited,
+                            startIndex,
+                        })
+                        : renderLinkedListDiagram3D(values, { mode: 'circular', visitedSet: visited, startIndex })}
+                    ${renderCircularStatus(answerIndex >= 0 ? answerIndex : null, answerIndex >= 0 ? `Found at idx ${answerIndex}` : 'Not found')}
+                `,
                 `<code>answer = ${answerIndex}</code>`
             )
         );
@@ -3125,7 +3916,1271 @@
         };
     }
 
+    function buildBubbleSortModel(payload) {
+        const values = normalizeNumberArray(payload.data);
+        if (!values.length) {
+            return null;
+        }
+
+        const arr = values.slice();
+        const steps = [];
+        const n = arr.length;
+        let comparisons = 0;
+        let totalSwaps = 0;
+        let sortedFrom = n;
+
+        function renderBubbleStatus(passNo, compareLeft = null, compareRight = null, passSwaps = 0, resultLabel = 'Pending') {
+            const sortedCount = Math.max(0, n - sortedFrom);
+            const progress = n ? Math.round((sortedCount / n) * 100) : 0;
+            const pairLabel = Number.isInteger(compareLeft) && Number.isInteger(compareRight)
+                ? `[${compareLeft}, ${compareRight}]`
+                : '-';
+            const sortedTailLabel = sortedFrom < n
+                ? `[${sortedFrom}..${n - 1}]`
+                : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Pass:</strong> ${passNo}</div>
+                    <div class="binary-search-status-line"><strong>Compare pair:</strong> ${pairLabel}</div>
+                    <div class="binary-search-status-line"><strong>Fixed suffix:</strong> ${sortedTailLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons}</div>
+                    <div class="binary-search-status-line"><strong>Swaps:</strong> ${totalSwaps} (this pass: ${passSwaps})</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Fixed ${sortedCount}/${n} values in final position</div>
+                </div>
+            `;
+        }
+
+        steps.push(
+            makeStep(
+                'Load Array',
+                'Bubble Sort compares adjacent pairs and bubbles larger values to the right.',
+                `
+                    ${renderBubbleSortTrack3D(arr, { sortedFrom, stepDepth: 0 })}
+                    ${renderBubbleStatus(1, 0, arr.length > 1 ? 1 : null, 0, 'Start')}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = index, Y = state lane, Z = pass depth cue.</em></div>
+                `,
+                '<code>for each pass: compare adjacent pairs and swap if left > right</code>'
+            )
+        );
+
+        for (let i = 0; i < n - 1; i += 1) {
+            const passNo = i + 1;
+            let passSwaps = 0;
+            for (let j = 0; j < n - i - 1; j += 1) {
+                comparisons += 1;
+                const leftValue = arr[j];
+                const rightValue = arr[j + 1];
+                const shouldSwap = leftValue > rightValue;
+                steps.push(
+                    makeStep(
+                        `Pass ${passNo}, compare [${j}, ${j + 1}]`,
+                        shouldSwap
+                            ? `${formatNumber(leftValue)} > ${formatNumber(rightValue)}, swap required.`
+                            : `${formatNumber(leftValue)} <= ${formatNumber(rightValue)}, keep order.`,
+                        `
+                            ${renderBubbleSortTrack3D(arr, {
+                                compareLeft: j,
+                                compareRight: j + 1,
+                                sortedFrom,
+                                stepDepth: passNo,
+                            })}
+                            ${renderBubbleStatus(passNo, j, j + 1, passSwaps, shouldSwap ? 'Swap needed' : 'No swap')}
+                        `,
+                        '<code>if arr[j] > arr[j+1]: swap</code>'
+                    )
+                );
+
+                if (shouldSwap) {
+                    const temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    passSwaps += 1;
+                    totalSwaps += 1;
+                    steps.push(
+                        makeStep(
+                            `Swap ${j} <-> ${j + 1}`,
+                            'Larger value moves one position right.',
+                            `
+                                ${renderBubbleSortTrack3D(arr, {
+                                    compareLeft: j,
+                                    compareRight: j + 1,
+                                    sortedFrom,
+                                    swappedPair: [j, j + 1],
+                                    stepDepth: passNo,
+                                })}
+                                ${renderBubbleStatus(passNo, j, j + 1, passSwaps, 'Adjacent swap applied')}
+                            `,
+                            '<code>swap(arr[j], arr[j+1])</code>'
+                        )
+                    );
+                }
+            }
+
+            sortedFrom = n - i - 1;
+            steps.push(
+                makeStep(
+                    `Pass ${passNo} complete`,
+                    `Index ${sortedFrom} is now fixed in final position.`,
+                    `
+                        ${renderBubbleSortTrack3D(arr, { sortedFrom, stepDepth: passNo })}
+                        ${renderBubbleStatus(passNo, null, null, passSwaps, `Pass ${passNo} sealed`)}
+                    `,
+                    '<code>after each pass, the largest unsorted element is fixed at the end</code>'
+                )
+            );
+
+            if (passSwaps === 0) {
+                sortedFrom = 0;
+                steps.push(
+                    makeStep(
+                        'Early Stop',
+                        'No swaps in this pass, array is already sorted.',
+                        `
+                            ${renderBubbleSortTrack3D(arr, { sortedFrom, stepDepth: passNo })}
+                            ${renderBubbleStatus(passNo, null, null, passSwaps, 'Sorted early')}
+                        `,
+                        '<code>if pass has 0 swaps: break</code>'
+                    )
+                );
+                break;
+            }
+        }
+
+        sortedFrom = 0;
+        steps.push(
+            makeStep(
+                'Final Answer',
+                `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
+                `
+                    ${renderBubbleSortTrack3D(arr, { sortedFrom, stepDepth: n - 1 })}
+                    ${renderBubbleStatus(Math.max(1, n - 1), null, null, 0, 'Sorted')}
+                `,
+                '<code>array is sorted in non-decreasing order</code>'
+            )
+        );
+
+        return {
+            title: 'Execution Visualization - Bubble Sort',
+            subtitle: 'Adjacent comparisons with pass-by-pass bubbling.',
+            steps,
+        };
+    }
+
+    function buildSelectionSortModel(payload) {
+        const values = normalizeNumberArray(payload.data);
+        if (!values.length) {
+            return null;
+        }
+
+        const arr = values.slice();
+        const steps = [];
+        const n = arr.length;
+        let comparisons = 0;
+        let swaps = 0;
+        let fixedUntil = 0;
+
+        function renderSelectionStatus(passNo, slotIndex, minIndex, scanIndex = null, resultLabel = 'Pending') {
+            const progress = n ? Math.round((fixedUntil / n) * 100) : 0;
+            const scanLabel = Number.isInteger(scanIndex) ? scanIndex : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Pass:</strong> ${passNo}</div>
+                    <div class="binary-search-status-line"><strong>Slot:</strong> ${slotIndex}</div>
+                    <div class="binary-search-status-line"><strong>Current Min Index:</strong> ${minIndex}</div>
+                    <div class="binary-search-status-line"><strong>Scan Index:</strong> ${scanLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons} | <strong>Swaps:</strong> ${swaps}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Fixed prefix: ${fixedUntil}/${n}</div>
+                </div>
+            `;
+        }
+
+        steps.push(
+            makeStep(
+                'Load Array',
+                'Selection Sort chooses the minimum from unsorted suffix and places it at current slot.',
+                `
+                    ${renderSelectionSortTrack3D(arr, {
+                        fixedUntil: 0,
+                        slotIndex: 0,
+                        minIndex: 0,
+                        scanIndex: n > 1 ? 1 : null,
+                        stepDepth: 0,
+                    })}
+                    ${renderSelectionStatus(1, 0, 0, n > 1 ? 1 : null, 'Start')}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = index, Y = state lane, Z = pass depth cue.</em></div>
+                `,
+                '<code>for each slot i: find min in [i..n-1], then place at i</code>'
+            )
+        );
+
+        for (let i = 0; i < n - 1; i += 1) {
+            let minIndex = i;
+            steps.push(
+                makeStep(
+                    `Pass ${i + 1} setup`,
+                    `Start with minIndex = ${i}.`,
+                    `
+                        ${renderSelectionSortTrack3D(arr, {
+                            fixedUntil,
+                            slotIndex: i,
+                            minIndex,
+                            scanIndex: i + 1 < n ? i + 1 : null,
+                            stepDepth: i + 1,
+                        })}
+                        ${renderSelectionStatus(i + 1, i, minIndex, i + 1 < n ? i + 1 : null, 'Searching minimum')}
+                    `,
+                    '<code>minIndex = i</code>'
+                )
+            );
+
+            for (let j = i + 1; j < n; j += 1) {
+                comparisons += 1;
+                if (arr[j] < arr[minIndex]) {
+                    minIndex = j;
+                    steps.push(
+                        makeStep(
+                            `Pass ${i + 1}, scan idx ${j}`,
+                            `Found new minimum at idx ${j}: ${formatNumber(arr[j])}.`,
+                            `
+                                ${renderSelectionSortTrack3D(arr, {
+                                    fixedUntil,
+                                    slotIndex: i,
+                                    minIndex,
+                                    scanIndex: j,
+                                    stepDepth: i + 1,
+                                })}
+                                ${renderSelectionStatus(i + 1, i, minIndex, j, 'Min updated')}
+                            `,
+                            '<code>if arr[j] < arr[minIndex]: minIndex = j</code>'
+                        )
+                    );
+                } else {
+                    steps.push(
+                        makeStep(
+                            `Pass ${i + 1}, scan idx ${j}`,
+                            `${formatNumber(arr[j])} is not smaller than current minimum ${formatNumber(arr[minIndex])}.`,
+                            `
+                                ${renderSelectionSortTrack3D(arr, {
+                                    fixedUntil,
+                                    slotIndex: i,
+                                    minIndex,
+                                    scanIndex: j,
+                                    stepDepth: i + 1,
+                                })}
+                                ${renderSelectionStatus(i + 1, i, minIndex, j, 'Keep current min')}
+                            `,
+                            '<code>continue scanning suffix</code>'
+                        )
+                    );
+                }
+            }
+
+            if (minIndex !== i) {
+                const temp = arr[i];
+                arr[i] = arr[minIndex];
+                arr[minIndex] = temp;
+                swaps += 1;
+                steps.push(
+                    makeStep(
+                        `Place minimum at slot ${i}`,
+                        `Swap idx ${i} with min idx ${minIndex}.`,
+                        `
+                            ${renderSelectionSortTrack3D(arr, {
+                                fixedUntil,
+                                slotIndex: i,
+                                minIndex: i,
+                                scanIndex: null,
+                                placedIndex: i,
+                                stepDepth: i + 1,
+                            })}
+                            ${renderSelectionStatus(i + 1, i, i, null, 'Minimum placed')}
+                        `,
+                        '<code>swap(arr[i], arr[minIndex])</code>'
+                    )
+                );
+            } else {
+                steps.push(
+                    makeStep(
+                        `Slot ${i} already minimum`,
+                        'No swap required for this pass.',
+                        `
+                            ${renderSelectionSortTrack3D(arr, {
+                                fixedUntil,
+                                slotIndex: i,
+                                minIndex: i,
+                                scanIndex: null,
+                                stepDepth: i + 1,
+                            })}
+                            ${renderSelectionStatus(i + 1, i, i, null, 'No swap')}
+                        `,
+                        '<code>if minIndex == i: keep as-is</code>'
+                    )
+                );
+            }
+
+            fixedUntil = i + 1;
+            steps.push(
+                makeStep(
+                    `Pass ${i + 1} complete`,
+                    `Prefix [0..${fixedUntil - 1}] is fixed.`,
+                    `
+                        ${renderSelectionSortTrack3D(arr, {
+                            fixedUntil,
+                            slotIndex: fixedUntil < n ? fixedUntil : null,
+                            minIndex: fixedUntil < n ? fixedUntil : null,
+                            scanIndex: null,
+                            stepDepth: i + 1,
+                        })}
+                        ${renderSelectionStatus(i + 1, fixedUntil < n ? fixedUntil : n - 1, fixedUntil < n ? fixedUntil : n - 1, null, 'Pass sealed')}
+                    `,
+                    '<code>advance to next slot</code>'
+                )
+            );
+        }
+
+        fixedUntil = n;
+        steps.push(
+            makeStep(
+                'Final Answer',
+                `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
+                `
+                    ${renderSelectionSortTrack3D(arr, {
+                        fixedUntil,
+                        slotIndex: null,
+                        minIndex: null,
+                        scanIndex: null,
+                        stepDepth: Math.max(1, n - 1),
+                    })}
+                    ${renderSelectionStatus(Math.max(1, n - 1), n - 1, n - 1, null, 'Sorted')}
+                `,
+                '<code>array is sorted in non-decreasing order</code>'
+            )
+        );
+
+        return {
+            title: 'Execution Visualization - Selection Sort',
+            subtitle: 'Find minimum in suffix, place it at current slot.',
+            steps,
+        };
+    }
+
+    function buildInsertionSortModel(payload) {
+        const values = normalizeNumberArray(payload.data);
+        if (!values.length) {
+            return null;
+        }
+
+        const arr = values.slice();
+        const steps = [];
+        const n = arr.length;
+        let comparisons = 0;
+        let shifts = 0;
+        let sortedUntil = 1;
+
+        function renderInsertionStatus(passNo, keyValue, scanIndex, insertIndex, resultLabel = 'Pending') {
+            const progress = n ? Math.round((sortedUntil / n) * 100) : 0;
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Pass:</strong> ${passNo}</div>
+                    <div class="binary-search-status-line"><strong>Key:</strong> ${formatNumber(keyValue)}</div>
+                    <div class="binary-search-status-line"><strong>Scan Index:</strong> ${Number.isInteger(scanIndex) ? scanIndex : '-'}</div>
+                    <div class="binary-search-status-line"><strong>Insert Index:</strong> ${insertIndex}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons} | <strong>Shifts:</strong> ${shifts}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Sorted prefix: ${sortedUntil}/${n}</div>
+                </div>
+            `;
+        }
+
+        steps.push(
+            makeStep(
+                'Load Array',
+                'Insertion Sort keeps left prefix sorted and inserts each new key at correct position.',
+                `
+                    ${renderInsertionSortTrack3D(arr, {
+                        sortedUntil,
+                        keyIndex: 1 < n ? 1 : 0,
+                        scanIndex: 0,
+                        stepDepth: 0,
+                    })}
+                    ${renderInsertionStatus(1, n > 1 ? arr[1] : arr[0], 0, 1, 'Start')}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = index, Y = state lane, Z = pass depth cue.</em></div>
+                `,
+                '<code>for i from 1 to n-1: insert key arr[i] into sorted prefix</code>'
+            )
+        );
+
+        for (let i = 1; i < n; i += 1) {
+            const key = arr[i];
+            let j = i - 1;
+            steps.push(
+                makeStep(
+                    `Pass ${i}: pick key at idx ${i}`,
+                    `Key = ${formatNumber(key)}.`,
+                    `
+                        ${renderInsertionSortTrack3D(arr, {
+                            sortedUntil,
+                            keyIndex: i,
+                            scanIndex: j,
+                            stepDepth: i,
+                        })}
+                        ${renderInsertionStatus(i, key, j, j + 1, 'Key selected')}
+                    `,
+                    '<code>key = arr[i], j = i - 1</code>'
+                )
+            );
+
+            while (j >= 0) {
+                comparisons += 1;
+                if (arr[j] > key) {
+                    arr[j + 1] = arr[j];
+                    shifts += 1;
+                    steps.push(
+                        makeStep(
+                            `Shift idx ${j} to ${j + 1}`,
+                            `${formatNumber(arr[j + 1])} > key, shift right.`,
+                            `
+                                ${renderInsertionSortTrack3D(arr, {
+                                    sortedUntil,
+                                    keyIndex: j + 1,
+                                    scanIndex: j,
+                                    shiftedIndex: j + 1,
+                                    stepDepth: i,
+                                })}
+                                ${renderInsertionStatus(i, key, j, j, 'Shift right')}
+                            `,
+                            '<code>while arr[j] > key: arr[j+1] = arr[j]; j--</code>'
+                        )
+                    );
+                    j -= 1;
+                } else {
+                    steps.push(
+                        makeStep(
+                            `Stop shifting at idx ${j}`,
+                            `${formatNumber(arr[j])} <= key, stop shifting.`,
+                            `
+                                ${renderInsertionSortTrack3D(arr, {
+                                    sortedUntil,
+                                    keyIndex: j + 1,
+                                    scanIndex: j,
+                                    stepDepth: i,
+                                })}
+                                ${renderInsertionStatus(i, key, j, j + 1, 'Position found')}
+                            `,
+                            '<code>if arr[j] <= key: break</code>'
+                        )
+                    );
+                    break;
+                }
+            }
+
+            const insertAt = j + 1;
+            arr[insertAt] = key;
+            steps.push(
+                makeStep(
+                    `Insert key at idx ${insertAt}`,
+                    `Placed key ${formatNumber(key)}.`,
+                    `
+                        ${renderInsertionSortTrack3D(arr, {
+                            sortedUntil: i + 1,
+                            keyIndex: insertAt,
+                            scanIndex: j,
+                            insertedIndex: insertAt,
+                            stepDepth: i,
+                        })}
+                        ${renderInsertionStatus(i, key, j, insertAt, 'Key inserted')}
+                    `,
+                    '<code>arr[j+1] = key</code>'
+                )
+            );
+
+            sortedUntil = i + 1;
+        }
+
+        sortedUntil = n;
+        steps.push(
+            makeStep(
+                'Final Answer',
+                `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
+                `
+                    ${renderInsertionSortTrack3D(arr, {
+                        sortedUntil,
+                        keyIndex: null,
+                        scanIndex: null,
+                        insertedIndex: null,
+                        stepDepth: Math.max(1, n - 1),
+                    })}
+                    ${renderInsertionStatus(Math.max(1, n - 1), arr[n - 1], null, n - 1, 'Sorted')}
+                `,
+                '<code>array is sorted in non-decreasing order</code>'
+            )
+        );
+
+        return {
+            title: 'Execution Visualization - Insertion Sort',
+            subtitle: 'Shift larger prefix elements right and insert key.',
+            steps,
+        };
+    }
+
+    function buildMergeSortModel(payload) {
+        const values = normalizeNumberArray(payload.data);
+        if (!values.length) {
+            return null;
+        }
+
+        const arr = values.slice();
+        const steps = [];
+        const n = arr.length;
+        let comparisons = 0;
+        let mergeCount = 0;
+
+        function renderMergeStatus(passWidth, left, mid, right, headLeft, headRight, mergedPreview, resultLabel = 'Pending') {
+            const totalMergesEstimate = Math.max(1, n - 1);
+            const progress = n > 1 ? Math.round((mergeCount / totalMergesEstimate) * 100) : 100;
+            const leftHeadLabel = Number.isInteger(headLeft) ? `${headLeft} (${formatNumber(arr[headLeft])})` : '-';
+            const rightHeadLabel = Number.isInteger(headRight) ? `${headRight} (${formatNumber(arr[headRight])})` : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Run Width:</strong> ${passWidth}</div>
+                    <div class="binary-search-status-line"><strong>Segment:</strong> [${left}..${right - 1}] | mid=${mid}</div>
+                    <div class="binary-search-status-line"><strong>Heads:</strong> left=${leftHeadLabel}, right=${rightHeadLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons} | <strong>Merges:</strong> ${mergeCount}</div>
+                    <div class="binary-search-status-line"><strong>Merged So Far:</strong> ${mergedPreview.length ? mergedPreview.map((v) => formatNumber(v)).join(' ') : '-'}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Merge operations progress: ${mergeCount}/${totalMergesEstimate}</div>
+                </div>
+            `;
+        }
+
+        steps.push(
+            makeStep(
+                'Load Array',
+                'Merge Sort splits array into runs and merges sorted runs.',
+                `
+                    ${renderMergeSortTrack3D(arr, { left: 0, mid: Math.floor(n / 2), right: n, stepDepth: 0 })}
+                    ${renderMergeStatus(1, 0, Math.floor(n / 2), n, 0, Math.floor(n / 2), [], 'Start')}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = index, Y = state lane, Z = merge depth cue.</em></div>
+                `,
+                '<code>width = 1; while width < n: merge adjacent runs of size width</code>'
+            )
+        );
+
+        for (let width = 1; width < n; width *= 2) {
+            for (let left = 0; left < n; left += 2 * width) {
+                const mid = Math.min(left + width, n);
+                const right = Math.min(left + (2 * width), n);
+                if (mid >= right) {
+                    continue;
+                }
+
+                const leftPart = arr.slice(left, mid);
+                const rightPart = arr.slice(mid, right);
+                const merged = [];
+                let i = 0;
+                let j = 0;
+
+                steps.push(
+                    makeStep(
+                        `Prepare merge [${left}..${mid - 1}] + [${mid}..${right - 1}]`,
+                        `Merge two sorted runs of width <= ${width}.`,
+                        `
+                            ${renderMergeSortTrack3D(arr, {
+                                left,
+                                mid,
+                                right,
+                                headLeft: left,
+                                headRight: mid,
+                                writtenUntil: left,
+                                mergedSet: new Set(),
+                                stepDepth: width,
+                            })}
+                            ${renderMergeStatus(width, left, mid, right, left, mid, merged, 'Runs loaded')}
+                        `,
+                        '<code>merge(leftRun, rightRun)</code>'
+                    )
+                );
+
+                while (i < leftPart.length && j < rightPart.length) {
+                    const leftHeadIndex = left + i;
+                    const rightHeadIndex = mid + j;
+                    comparisons += 1;
+                    if (leftPart[i] <= rightPart[j]) {
+                        merged.push(leftPart[i]);
+                        i += 1;
+                        steps.push(
+                            makeStep(
+                                `Take left head`,
+                                'Left head is smaller or equal, append to merged run.',
+                                `
+                                    ${renderMergeSortTrack3D(arr, {
+                                        left,
+                                        mid,
+                                        right,
+                                        headLeft: i < leftPart.length ? left + i : null,
+                                        headRight: j < rightPart.length ? mid + j : null,
+                                        writtenUntil: left + merged.length,
+                                        mergedSet: new Set(Array.from({ length: merged.length }, (_, idx) => left + idx)),
+                                        stepDepth: width,
+                                    })}
+                                    ${renderMergeStatus(
+                                        width,
+                                        left,
+                                        mid,
+                                        right,
+                                        i < leftPart.length ? left + i : null,
+                                        j < rightPart.length ? mid + j : null,
+                                        merged,
+                                        `Picked left idx ${leftHeadIndex}`
+                                    )}
+                                `,
+                                '<code>if leftHead <= rightHead: push leftHead</code>'
+                            )
+                        );
+                    } else {
+                        merged.push(rightPart[j]);
+                        j += 1;
+                        steps.push(
+                            makeStep(
+                                `Take right head`,
+                                'Right head is smaller, append to merged run.',
+                                `
+                                    ${renderMergeSortTrack3D(arr, {
+                                        left,
+                                        mid,
+                                        right,
+                                        headLeft: i < leftPart.length ? left + i : null,
+                                        headRight: j < rightPart.length ? mid + j : null,
+                                        writtenUntil: left + merged.length,
+                                        mergedSet: new Set(Array.from({ length: merged.length }, (_, idx) => left + idx)),
+                                        stepDepth: width,
+                                    })}
+                                    ${renderMergeStatus(
+                                        width,
+                                        left,
+                                        mid,
+                                        right,
+                                        i < leftPart.length ? left + i : null,
+                                        j < rightPart.length ? mid + j : null,
+                                        merged,
+                                        `Picked right idx ${rightHeadIndex}`
+                                    )}
+                                `,
+                                '<code>else: push rightHead</code>'
+                            )
+                        );
+                    }
+                }
+
+                while (i < leftPart.length) {
+                    merged.push(leftPart[i]);
+                    i += 1;
+                }
+                while (j < rightPart.length) {
+                    merged.push(rightPart[j]);
+                    j += 1;
+                }
+
+                for (let k = 0; k < merged.length; k += 1) {
+                    arr[left + k] = merged[k];
+                }
+                mergeCount += 1;
+                const mergedSet = new Set(Array.from({ length: merged.length }, (_, idx) => left + idx));
+
+                steps.push(
+                    makeStep(
+                        `Merged block [${left}..${right - 1}]`,
+                        `Block result: ${merged.map((v) => formatNumber(v)).join(' ')}.`,
+                        `
+                            ${renderMergeSortTrack3D(arr, {
+                                left,
+                                mid,
+                                right,
+                                headLeft: null,
+                                headRight: null,
+                                writtenUntil: right,
+                                mergedSet,
+                                stepDepth: width,
+                            })}
+                            ${renderMergeStatus(width, left, mid, right, null, null, merged, 'Block merged')}
+                        `,
+                        '<code>write merged block back into array segment</code>'
+                    )
+                );
+            }
+        }
+
+        steps.push(
+            makeStep(
+                'Final Answer',
+                `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
+                `
+                    ${renderMergeSortTrack3D(arr, {
+                        left: 0,
+                        mid: Math.floor(n / 2),
+                        right: n,
+                        headLeft: null,
+                        headRight: null,
+                        writtenUntil: n,
+                        mergedSet: new Set(Array.from({ length: n }, (_, idx) => idx)),
+                        stepDepth: Math.max(1, n - 1),
+                    })}
+                    ${renderMergeStatus(Math.max(1, n / 2), 0, Math.floor(n / 2), n, null, null, arr, 'Sorted')}
+                `,
+                '<code>array is sorted in non-decreasing order</code>'
+            )
+        );
+
+        return {
+            title: 'Execution Visualization - Merge Sort',
+            subtitle: 'Split into runs and merge back in sorted order.',
+            steps,
+        };
+    }
+
+    function buildQuickSortModel(payload) {
+        const values = normalizeNumberArray(payload.data);
+        if (!values.length) {
+            return null;
+        }
+
+        const arr = values.slice();
+        const n = arr.length;
+        const steps = [];
+        let comparisons = 0;
+        let partitionCount = 0;
+        const fixedSet = new Set();
+
+        function renderQuickStatus(low, high, pivotIndex, boundaryIndex, scanIndex, resultLabel = 'Pending') {
+            const fixedCount = fixedSet.size;
+            const progress = n ? Math.round((fixedCount / n) * 100) : 0;
+            const segmentLabel = Number.isInteger(low) && Number.isInteger(high) ? `[${low}..${high}]` : '-';
+            const pivotLabel = Number.isInteger(pivotIndex) ? `${pivotIndex} (${formatNumber(arr[pivotIndex])})` : '-';
+            const boundaryLabel = Number.isInteger(boundaryIndex) ? boundaryIndex : '-';
+            const scanLabel = Number.isInteger(scanIndex) ? scanIndex : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Partition:</strong> ${partitionCount + 1}</div>
+                    <div class="binary-search-status-line"><strong>Segment:</strong> ${segmentLabel}</div>
+                    <div class="binary-search-status-line"><strong>Pivot:</strong> ${pivotLabel}</div>
+                    <div class="binary-search-status-line"><strong>Boundary i:</strong> ${boundaryLabel} | <strong>Scan j:</strong> ${scanLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons} | <strong>Pivot Placements:</strong> ${partitionCount}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Fixed positions: ${fixedCount}/${n}</div>
+                </div>
+            `;
+        }
+
+        steps.push(
+            makeStep(
+                'Load Array',
+                'Quick Sort partitions by pivot: values <= pivot move left, then pivot is placed at final index.',
+                `
+                    ${renderQuickSortTrack3D(arr, { low: 0, high: n - 1, pivotIndex: n - 1, scanIndex: 0, boundaryIndex: -1, fixedSet, stepDepth: 0 })}
+                    ${renderQuickStatus(0, n - 1, n - 1, -1, 0, 'Start')}
+                    <div class="exec-summary"><em><strong>3D Axes:</strong> X = index, Y = partition state lane, Z = partition depth cue.</em></div>
+                `,
+                '<code>partition(arr, low, high): move <= pivot left, place pivot, recurse on both sides</code>'
+            )
+        );
+
+        const stack = [[0, n - 1]];
+        while (stack.length) {
+            const segment = stack.pop();
+            if (!segment) {
+                continue;
+            }
+            const [low, high] = segment;
+            if (low > high) {
+                continue;
+            }
+            if (low === high) {
+                fixedSet.add(low);
+                continue;
+            }
+
+            const pivot = arr[high];
+            let i = low - 1;
+            steps.push(
+                makeStep(
+                    `Partition segment [${low}..${high}]`,
+                    `Pivot = arr[${high}] = ${formatNumber(pivot)}.`,
+                    `
+                        ${renderQuickSortTrack3D(arr, {
+                            low,
+                            high,
+                            pivotIndex: high,
+                            scanIndex: low,
+                            boundaryIndex: i,
+                            fixedSet,
+                            stepDepth: partitionCount + 1,
+                        })}
+                        ${renderQuickStatus(low, high, high, i, low, 'Pivot selected')}
+                    `,
+                    '<code>i = low - 1; for j in [low..high-1], if arr[j] <= pivot then i++, swap(i, j)</code>'
+                )
+            );
+
+            for (let j = low; j < high; j += 1) {
+                comparisons += 1;
+                const moveLeft = arr[j] <= pivot;
+                steps.push(
+                    makeStep(
+                        `Compare idx ${j} with pivot`,
+                        moveLeft
+                            ? `${formatNumber(arr[j])} <= ${formatNumber(pivot)}; expand left partition.`
+                            : `${formatNumber(arr[j])} > ${formatNumber(pivot)}; keep in right partition.`,
+                        `
+                            ${renderQuickSortTrack3D(arr, {
+                                low,
+                                high,
+                                pivotIndex: high,
+                                scanIndex: j,
+                                boundaryIndex: i,
+                                fixedSet,
+                                stepDepth: partitionCount + 1,
+                            })}
+                            ${renderQuickStatus(low, high, high, i, j, moveLeft ? 'Move left' : 'Keep right')}
+                        `,
+                        '<code>if arr[j] <= pivot</code>'
+                    )
+                );
+
+                if (moveLeft) {
+                    i += 1;
+                    if (i !== j) {
+                        const temp = arr[i];
+                        arr[i] = arr[j];
+                        arr[j] = temp;
+                        steps.push(
+                            makeStep(
+                                `Swap ${i} <-> ${j}`,
+                                'Maintain <= pivot zone contiguously at left.',
+                                `
+                                    ${renderQuickSortTrack3D(arr, {
+                                        low,
+                                        high,
+                                        pivotIndex: high,
+                                        scanIndex: j,
+                                        boundaryIndex: i,
+                                        swappedPair: [i, j],
+                                        fixedSet,
+                                        stepDepth: partitionCount + 1,
+                                    })}
+                                    ${renderQuickStatus(low, high, high, i, j, 'Partition swap')}
+                                `,
+                                '<code>swap(arr[i], arr[j])</code>'
+                            )
+                        );
+                    }
+                }
+            }
+
+            const pivotIndex = i + 1;
+            if (pivotIndex !== high) {
+                const temp = arr[pivotIndex];
+                arr[pivotIndex] = arr[high];
+                arr[high] = temp;
+            }
+            const pivotSwapPair = pivotIndex !== high ? [pivotIndex, high] : [];
+            fixedSet.add(pivotIndex);
+            partitionCount += 1;
+
+            steps.push(
+                makeStep(
+                    `Place pivot at idx ${pivotIndex}`,
+                    `Pivot ${formatNumber(arr[pivotIndex])} is now fixed.`,
+                    `
+                        ${renderQuickSortTrack3D(arr, {
+                            low,
+                            high,
+                            pivotIndex,
+                            scanIndex: null,
+                            boundaryIndex: pivotIndex - 1,
+                            swappedPair: pivotSwapPair,
+                            fixedSet,
+                            stepDepth: partitionCount,
+                        })}
+                        ${renderQuickStatus(low, high, pivotIndex, pivotIndex - 1, null, 'Pivot fixed')}
+                    `,
+                    '<code>swap(arr[i+1], arr[high])</code>'
+                )
+            );
+
+            if (pivotIndex + 1 < high) {
+                stack.push([pivotIndex + 1, high]);
+            } else if (pivotIndex + 1 === high) {
+                fixedSet.add(high);
+            }
+            if (low < pivotIndex - 1) {
+                stack.push([low, pivotIndex - 1]);
+            } else if (low === pivotIndex - 1) {
+                fixedSet.add(low);
+            }
+        }
+
+        for (let idx = 0; idx < n; idx += 1) {
+            fixedSet.add(idx);
+        }
+        steps.push(
+            makeStep(
+                'Final Answer',
+                `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
+                `
+                    ${renderQuickSortTrack3D(arr, {
+                        low: 0,
+                        high: n - 1,
+                        pivotIndex: null,
+                        scanIndex: null,
+                        boundaryIndex: null,
+                        fixedSet,
+                        stepDepth: Math.max(1, partitionCount),
+                    })}
+                    ${renderQuickStatus(0, n - 1, null, null, null, 'Sorted')}
+                `,
+                '<code>array is sorted in non-decreasing order</code>'
+            )
+        );
+
+        return {
+            title: 'Execution Visualization - Quick Sort',
+            subtitle: 'Partition around pivot and lock each pivot to its final index.',
+            steps,
+        };
+    }
+
+    function buildHeapSortModel(payload) {
+        const values = normalizeNumberArray(payload.data);
+        if (!values.length) {
+            return null;
+        }
+
+        const arr = values.slice();
+        const n = arr.length;
+        const steps = [];
+        let comparisons = 0;
+        let swapCount = 0;
+        let extractionCount = 0;
+        let heapSize = n;
+        const fixedSet = new Set();
+
+        function renderHeapStatus(phaseLabel, rootIndex, leftIndex, rightIndex, candidateIndex, resultLabel = 'Pending') {
+            const fixedCount = fixedSet.size;
+            const progress = n ? Math.round((fixedCount / n) * 100) : 0;
+            const rootLabel = Number.isInteger(rootIndex) && rootIndex < heapSize ? `${rootIndex} (${formatNumber(arr[rootIndex])})` : '-';
+            const leftLabel = Number.isInteger(leftIndex) && leftIndex < heapSize ? `${leftIndex} (${formatNumber(arr[leftIndex])})` : '-';
+            const rightLabel = Number.isInteger(rightIndex) && rightIndex < heapSize ? `${rightIndex} (${formatNumber(arr[rightIndex])})` : '-';
+            const bestLabel = Number.isInteger(candidateIndex) && candidateIndex < heapSize ? `${candidateIndex} (${formatNumber(arr[candidateIndex])})` : '-';
+            const suffixLabel = heapSize < n ? `[${heapSize}..${n - 1}]` : '-';
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Phase:</strong> ${phaseLabel}</div>
+                    <div class="binary-search-status-line"><strong>Heap size:</strong> ${heapSize}</div>
+                    <div class="binary-search-status-line"><strong>Root:</strong> ${rootLabel}</div>
+                    <div class="binary-search-status-line"><strong>Children:</strong> left=${leftLabel}, right=${rightLabel}</div>
+                    <div class="binary-search-status-line"><strong>Best candidate:</strong> ${bestLabel}</div>
+                    <div class="binary-search-status-line"><strong>Comparisons:</strong> ${comparisons} | <strong>Swaps:</strong> ${swapCount} | <strong>Extractions:</strong> ${extractionCount}</div>
+                    <div class="binary-search-status-line"><strong>Sorted suffix:</strong> ${suffixLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${resultLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Fixed values: ${fixedCount}/${n}</div>
+                </div>
+            `;
+        }
+
+        function pushHeapStep(title, details, options, formula) {
+            const rootIndex = Number.isInteger(options.rootIndex) ? options.rootIndex : null;
+            const candidateIndex = Number.isInteger(options.candidateIndex) ? options.candidateIndex : null;
+            const highlightInHeap = Number.isInteger(candidateIndex)
+                ? candidateIndex
+                : (Number.isInteger(rootIndex) ? rootIndex : -1);
+            const heapOnly = heapSize > 0 ? arr.slice(0, heapSize) : [];
+            steps.push(
+                makeStep(
+                    title,
+                    details,
+                    `
+                        ${renderHeapSortTrack3D(arr, {
+                            heapSize,
+                            rootIndex,
+                            leftIndex: options.leftIndex,
+                            rightIndex: options.rightIndex,
+                            candidateIndex,
+                            swappedPair: options.swappedPair || [],
+                            fixedSet,
+                            stepDepth: options.stepDepth || 0,
+                        })}
+                        ${heapOnly.length ? renderHeapVisualization(heapOnly, highlightInHeap) : ''}
+                        ${renderHeapStatus(
+                            options.phaseLabel || 'Heap',
+                            rootIndex,
+                            options.leftIndex,
+                            options.rightIndex,
+                            candidateIndex,
+                            options.resultLabel || 'Pending'
+                        )}
+                    `,
+                    formula
+                )
+            );
+        }
+
+        function siftDown(start, endExclusive, phaseLabel, depthSeed = 0) {
+            let root = start;
+            let localDepth = depthSeed;
+            while (true) {
+                const left = (2 * root) + 1;
+                const right = left + 1;
+
+                if (left >= endExclusive) {
+                    pushHeapStep(
+                        `Heapify stop at idx ${root}`,
+                        'No children left inside heap; this subtree is valid.',
+                        {
+                            phaseLabel,
+                            rootIndex: root,
+                            leftIndex: null,
+                            rightIndex: null,
+                            candidateIndex: root,
+                            resultLabel: 'Heap property holds',
+                            stepDepth: localDepth,
+                        },
+                        '<code>if left child index >= heapSize: stop</code>'
+                    );
+                    return;
+                }
+
+                let largest = root;
+                comparisons += 1;
+                if (arr[left] > arr[largest]) {
+                    largest = left;
+                }
+                pushHeapStep(
+                    `Compare root ${root} with left child ${left}`,
+                    arr[left] > arr[root]
+                        ? `Left child ${formatNumber(arr[left])} is larger than root ${formatNumber(arr[root])}.`
+                        : `Root ${formatNumber(arr[root])} stays >= left child ${formatNumber(arr[left])}.`,
+                    {
+                        phaseLabel,
+                        rootIndex: root,
+                        leftIndex: left,
+                        rightIndex: right < endExclusive ? right : null,
+                        candidateIndex: largest,
+                        resultLabel: 'Left comparison',
+                        stepDepth: localDepth,
+                    },
+                    '<code>largest = max(root, leftChild)</code>'
+                );
+
+                if (right < endExclusive) {
+                    comparisons += 1;
+                    if (arr[right] > arr[largest]) {
+                        largest = right;
+                    }
+                    pushHeapStep(
+                        `Compare current best with right child ${right}`,
+                        largest === right
+                            ? `Right child ${formatNumber(arr[right])} becomes largest candidate.`
+                            : `Right child ${formatNumber(arr[right])} does not exceed current best.`,
+                        {
+                            phaseLabel,
+                            rootIndex: root,
+                            leftIndex: left,
+                            rightIndex: right,
+                            candidateIndex: largest,
+                            resultLabel: 'Right comparison',
+                            stepDepth: localDepth,
+                        },
+                        '<code>largest = max(largest, rightChild)</code>'
+                    );
+                }
+
+                if (largest === root) {
+                    pushHeapStep(
+                        `Heap property satisfied at idx ${root}`,
+                        'Root is already >= both children.',
+                        {
+                            phaseLabel,
+                            rootIndex: root,
+                            leftIndex: left,
+                            rightIndex: right < endExclusive ? right : null,
+                            candidateIndex: root,
+                            resultLabel: 'No swap needed',
+                            stepDepth: localDepth,
+                        },
+                        '<code>if largest == root: stop sift-down</code>'
+                    );
+                    return;
+                }
+
+                const temp = arr[root];
+                arr[root] = arr[largest];
+                arr[largest] = temp;
+                swapCount += 1;
+                pushHeapStep(
+                    `Heapify swap ${root} <-> ${largest}`,
+                    'Move larger child up to restore max-heap order.',
+                    {
+                        phaseLabel,
+                        rootIndex: largest,
+                        leftIndex: (2 * largest) + 1,
+                        rightIndex: ((2 * largest) + 2) < endExclusive ? (2 * largest) + 2 : null,
+                        candidateIndex: largest,
+                        swappedPair: [root, largest],
+                        resultLabel: 'Swapped and continue',
+                        stepDepth: localDepth,
+                    },
+                    '<code>swap(root, largest); root = largest</code>'
+                );
+                root = largest;
+                localDepth += 1;
+            }
+        }
+
+        pushHeapStep(
+            'Load Array',
+            'Heap Sort builds a max-heap, then repeatedly extracts the root to the sorted suffix.',
+            {
+                phaseLabel: 'Build Max Heap',
+                rootIndex: 0,
+                leftIndex: 1 < n ? 1 : null,
+                rightIndex: 2 < n ? 2 : null,
+                candidateIndex: 0,
+                resultLabel: 'Start',
+                stepDepth: 0,
+            },
+            '<code>build max-heap, then for end=n-1..1: swap root with end and heapify</code>'
+        );
+
+        for (let i = Math.floor(n / 2) - 1; i >= 0; i -= 1) {
+            pushHeapStep(
+                `Heapify subtree rooted at ${i}`,
+                'Apply sift-down so this subtree satisfies max-heap property.',
+                {
+                    phaseLabel: 'Build Max Heap',
+                    rootIndex: i,
+                    leftIndex: (2 * i) + 1 < heapSize ? (2 * i) + 1 : null,
+                    rightIndex: (2 * i) + 2 < heapSize ? (2 * i) + 2 : null,
+                    candidateIndex: i,
+                    resultLabel: 'Heapify start',
+                    stepDepth: Math.max(1, (Math.floor(n / 2) - i)),
+                },
+                '<code>for i from floor(n/2)-1 down to 0: siftDown(i)</code>'
+            );
+            siftDown(i, heapSize, 'Build Max Heap', Math.max(1, (Math.floor(n / 2) - i)));
+        }
+
+        pushHeapStep(
+            'Max Heap Built',
+            'Root now holds the maximum value in current heap.',
+            {
+                phaseLabel: 'Build Complete',
+                rootIndex: 0,
+                leftIndex: 1 < heapSize ? 1 : null,
+                rightIndex: 2 < heapSize ? 2 : null,
+                candidateIndex: 0,
+                resultLabel: 'Build done',
+                stepDepth: 1,
+            },
+            '<code>max-heap invariant: parent >= children</code>'
+        );
+
+        for (let end = n - 1; end > 0; end -= 1) {
+            const currentMax = arr[0];
+            const temp = arr[0];
+            arr[0] = arr[end];
+            arr[end] = temp;
+            swapCount += 1;
+            extractionCount += 1;
+            fixedSet.add(end);
+            heapSize = end;
+            pushHeapStep(
+                `Extract max to idx ${end}`,
+                `Move max value ${formatNumber(currentMax)} to sorted suffix.`,
+                {
+                    phaseLabel: 'Extract Max',
+                    rootIndex: 0,
+                    leftIndex: 1 < heapSize ? 1 : null,
+                    rightIndex: 2 < heapSize ? 2 : null,
+                    candidateIndex: 0,
+                    swappedPair: [0, end],
+                    resultLabel: 'Root extracted',
+                    stepDepth: extractionCount,
+                },
+                '<code>swap(arr[0], arr[end]); heapSize--</code>'
+            );
+            siftDown(0, heapSize, 'Restore Heap', extractionCount);
+        }
+
+        for (let idx = 0; idx < n; idx += 1) {
+            fixedSet.add(idx);
+        }
+        heapSize = 0;
+        steps.push(
+            makeStep(
+                'Final Answer',
+                `Sorted array: ${arr.map((value) => formatNumber(value)).join(' ')}.`,
+                `
+                    ${renderHeapSortTrack3D(arr, {
+                        heapSize,
+                        rootIndex: null,
+                        leftIndex: null,
+                        rightIndex: null,
+                        candidateIndex: null,
+                        fixedSet,
+                        stepDepth: Math.max(1, extractionCount),
+                    })}
+                    ${renderHeapStatus('Sorted', null, null, null, null, 'Complete')}
+                `,
+                '<code>array is sorted in non-decreasing order</code>'
+            )
+        );
+
+        return {
+            title: 'Execution Visualization - Heap Sort',
+            subtitle: 'Build max-heap, extract root to suffix, and restore heap.',
+            steps,
+        };
+    }
+
     function buildSortingModel(payload, algorithmType) {
+        if (algorithmType === 'bubble_sort') {
+            return buildBubbleSortModel(payload);
+        }
+        if (algorithmType === 'selection_sort') {
+            return buildSelectionSortModel(payload);
+        }
+        if (algorithmType === 'insertion_sort') {
+            return buildInsertionSortModel(payload);
+        }
+        if (algorithmType === 'merge_sort') {
+            return buildMergeSortModel(payload);
+        }
+        if (algorithmType === 'quick_sort') {
+            return buildQuickSortModel(payload);
+        }
+        if (algorithmType === 'heap_sort') {
+            return buildHeapSortModel(payload);
+        }
         const values = normalizeNumberArray(payload.data);
         if (!values.length) {
             return null;

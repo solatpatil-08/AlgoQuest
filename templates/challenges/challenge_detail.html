@@ -3482,6 +3482,919 @@
             return false;
         }
 
+        if (listKind === 'linked') {
+            const shell = renderActionHostShell(
+                'Linked List Traversal Board',
+                'Start from head and follow next pointers. Decide correctly at each node: Match, Move Next, or Not Found.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-mid">Current Node</span>
+                        <span class="binary-search-chip is-window">Visited</span>
+                        <span class="binary-search-chip is-found">Answer</span>
+                        <span class="binary-search-chip is-discarded">Unvisited</span>
+                    </div>
+                    <div class="binary-search-board" id="linkedNodeBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="linkedMatchBtn">Match Node</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="linkedNextBtn">Move Next</button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="linkedNotFoundBtn">Not Found</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="linkedUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="linkedResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="linkedStatus">
+                        <div class="binary-search-status-line" id="linkedMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="linkedMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="linkedMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="linkedProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="linkedProgressText"></div>
+                        <div class="binary-search-hint" id="linkedHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#linkedNodeBoard');
+            const metaPrimary = shell.body.querySelector('#linkedMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#linkedMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#linkedMetaTertiary');
+            const progressFill = shell.body.querySelector('#linkedProgressFill');
+            const progressText = shell.body.querySelector('#linkedProgressText');
+            const hint = shell.body.querySelector('#linkedHint');
+            const matchBtn = shell.body.querySelector('#linkedMatchBtn');
+            const nextBtn = shell.body.querySelector('#linkedNextBtn');
+            const notFoundBtn = shell.body.querySelector('#linkedNotFoundBtn');
+            const undoBtn = shell.body.querySelector('#linkedUndoBtn');
+            const resetBtn = shell.body.querySelector('#linkedResetBtn');
+
+            let currentIndex = 0;
+            let visitedSet = new Set([0]);
+            let comparisons = 0;
+            let answerIndex = null;
+            let finished = false;
+            let feedback = '';
+            const undoStack = [];
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function snapshotState() {
+                return {
+                    currentIndex,
+                    visited: Array.from(visitedSet),
+                    comparisons,
+                    answerIndex,
+                    finished,
+                    feedback,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                currentIndex = state.currentIndex;
+                visitedSet = new Set(state.visited);
+                comparisons = state.comparisons;
+                answerIndex = state.answerIndex;
+                finished = state.finished;
+                feedback = state.feedback;
+            }
+
+            function expectedAction() {
+                if (finished || currentIndex < 0 || currentIndex >= values.length) {
+                    return null;
+                }
+                if (values[currentIndex] === target) {
+                    return 'match';
+                }
+                if (currentIndex < values.length - 1) {
+                    return 'next';
+                }
+                return 'not_found';
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                board.innerHTML = values
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        if (finished && answerIndex === idx) {
+                            stateClass = 'is-found';
+                        } else if (!finished && idx === currentIndex) {
+                            stateClass = 'is-mid';
+                        } else if (visitedSet.has(idx)) {
+                            stateClass = 'is-window';
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+                const visitedOrder = Array.from(visitedSet).sort((a, b) => a - b);
+                const progress = values.length ? Math.round((visitedSet.size / values.length) * 100) : 100;
+                const expected = expectedAction();
+                const currentValue = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < values.length
+                    ? values[currentIndex]
+                    : null;
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Traversal complete in ${comparisons} comparison(s).`
+                        : `Current node: idx ${currentIndex} (value ${formatToken(currentValue)})`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Visited order: ${visitedOrder.length ? visitedOrder.join(' -> ') : '-'}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = finished
+                        ? `Answer index: ${answerIndex}`
+                        : `Target ${formatToken(target)} | Next pointer goes to idx ${Math.min(currentIndex + 1, values.length - 1)}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Visited ${visitedSet.size}/${values.length} nodes`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Linked list traversal complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'match') {
+                        hint.textContent = 'Current value matches target. Click Match Node.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'next') {
+                        hint.textContent = 'Current value does not match target. Click Move Next.';
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = 'Last node checked and no match. Click Not Found.';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                if (matchBtn) {
+                    matchBtn.disabled = finished;
+                }
+                if (nextBtn) {
+                    nextBtn.disabled = finished;
+                }
+                if (notFoundBtn) {
+                    notFoundBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = answerIndex >= 0 ? `Found @ ${answerIndex}` : 'Not Found';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `idx ${currentIndex}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished && answerIndex !== null ? String(answerIndex) : '');
+                setActionPayload({
+                    mode: `${listKind}_linked_lookup`,
+                    current_index: currentIndex,
+                    visited_indices: visitedOrder,
+                    comparisons,
+                    selected_index: finished ? answerIndex : null,
+                    is_complete: finished,
+                });
+            }
+
+            function applyDecision(action) {
+                if (finished) {
+                    return;
+                }
+                const expected = expectedAction();
+                if (!expected) {
+                    return;
+                }
+                if (action !== expected) {
+                    const currentValue = formatToken(values[currentIndex]);
+                    if (expected === 'match') {
+                        feedback = `Incorrect. ${currentValue} equals target, so Match Node is required.`;
+                    } else if (expected === 'next') {
+                        feedback = `Incorrect. ${currentValue} does not match target, so Move Next is required.`;
+                    } else {
+                        feedback = 'Incorrect. End of list reached without match, choose Not Found.';
+                    }
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                comparisons += 1;
+
+                if (action === 'match') {
+                    answerIndex = currentIndex;
+                    finished = true;
+                } else if (action === 'next') {
+                    currentIndex += 1;
+                    if (currentIndex >= values.length) {
+                        currentIndex = values.length - 1;
+                    }
+                    visitedSet.add(currentIndex);
+                } else {
+                    answerIndex = -1;
+                    finished = true;
+                }
+                render();
+            }
+
+            if (matchBtn) {
+                matchBtn.addEventListener('click', () => applyDecision('match'));
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => applyDecision('next'));
+            }
+            if (notFoundBtn) {
+                notFoundBtn.addEventListener('click', () => applyDecision('not_found'));
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    currentIndex = 0;
+                    visitedSet = new Set([0]);
+                    comparisons = 0;
+                    answerIndex = null;
+                    finished = false;
+                    feedback = '';
+                    undoStack.length = 0;
+                    render();
+                });
+            }
+
+            render();
+            return true;
+        }
+
+        if (listKind === 'doubly') {
+            const traverseFromTail = challengeVisualizationPayload.from_end === true;
+            const direction = traverseFromTail ? -1 : 1;
+            const startIndex = traverseFromTail ? values.length - 1 : 0;
+            const moveAction = traverseFromTail ? 'prev' : 'next';
+
+            const shell = renderActionHostShell(
+                'Doubly Linked Traversal Board',
+                traverseFromTail
+                    ? 'Start from tail and follow prev pointers. Decide: Match, Move Prev, or Not Found.'
+                    : 'Start from head and follow next pointers. Decide: Match, Move Next, or Not Found.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
+                        <div><strong>Direction:</strong> ${traverseFromTail ? 'tail -> head (prev)' : 'head -> tail (next)'}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-mid">Current Node</span>
+                        <span class="binary-search-chip is-window">Visited</span>
+                        <span class="binary-search-chip is-found">Answer</span>
+                        <span class="binary-search-chip is-discarded">Unvisited</span>
+                    </div>
+                    <div class="binary-search-board" id="linkedNodeBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="doublyMatchBtn">Match Node</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="doublyPrevBtn">Move Prev</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="doublyNextBtn">Move Next</button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="doublyNotFoundBtn">Not Found</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="doublyUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="doublyResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="doublyStatus">
+                        <div class="binary-search-status-line" id="doublyMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="doublyMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="doublyMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="doublyProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="doublyProgressText"></div>
+                        <div class="binary-search-hint" id="doublyHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#linkedNodeBoard');
+            const metaPrimary = shell.body.querySelector('#doublyMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#doublyMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#doublyMetaTertiary');
+            const progressFill = shell.body.querySelector('#doublyProgressFill');
+            const progressText = shell.body.querySelector('#doublyProgressText');
+            const hint = shell.body.querySelector('#doublyHint');
+            const matchBtn = shell.body.querySelector('#doublyMatchBtn');
+            const prevBtn = shell.body.querySelector('#doublyPrevBtn');
+            const nextBtn = shell.body.querySelector('#doublyNextBtn');
+            const notFoundBtn = shell.body.querySelector('#doublyNotFoundBtn');
+            const undoBtn = shell.body.querySelector('#doublyUndoBtn');
+            const resetBtn = shell.body.querySelector('#doublyResetBtn');
+
+            let currentIndex = startIndex;
+            let visitedSet = new Set([startIndex]);
+            const visitedOrder = [startIndex];
+            let comparisons = 0;
+            let answerIndex = null;
+            let finished = false;
+            let feedback = '';
+            const undoStack = [];
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function snapshotState() {
+                return {
+                    currentIndex,
+                    visited: Array.from(visitedSet),
+                    visitedOrder: visitedOrder.slice(),
+                    comparisons,
+                    answerIndex,
+                    finished,
+                    feedback,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                currentIndex = state.currentIndex;
+                visitedSet = new Set(state.visited);
+                visitedOrder.length = 0;
+                state.visitedOrder.forEach((idx) => visitedOrder.push(idx));
+                comparisons = state.comparisons;
+                answerIndex = state.answerIndex;
+                finished = state.finished;
+                feedback = state.feedback;
+            }
+
+            function expectedAction() {
+                if (finished || currentIndex < 0 || currentIndex >= values.length) {
+                    return null;
+                }
+                if (values[currentIndex] === target) {
+                    return 'match';
+                }
+                const nextIndex = currentIndex + direction;
+                if (nextIndex >= 0 && nextIndex < values.length) {
+                    return moveAction;
+                }
+                return 'not_found';
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                board.innerHTML = values
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        if (finished && answerIndex === idx) {
+                            stateClass = 'is-found';
+                        } else if (!finished && idx === currentIndex) {
+                            stateClass = 'is-mid';
+                        } else if (visitedSet.has(idx)) {
+                            stateClass = 'is-window';
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+                const progress = values.length ? Math.round((visitedSet.size / values.length) * 100) : 100;
+                const expected = expectedAction();
+                const currentValue = Number.isInteger(currentIndex) ? values[currentIndex] : null;
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Traversal complete in ${comparisons} comparison(s).`
+                        : `Current node: idx ${currentIndex} (value ${formatToken(currentValue)})`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Visited order: ${visitedOrder.join(' -> ')}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = finished
+                        ? `Answer index: ${answerIndex}`
+                        : `Pointer direction: ${traverseFromTail ? 'prev' : 'next'} | Target ${formatToken(target)}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Visited ${visitedSet.size}/${values.length} nodes`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Doubly linked traversal complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'match') {
+                        hint.textContent = 'Current value matches target. Click Match Node.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'prev') {
+                        hint.textContent = 'Follow prev pointer. Click Move Prev.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'next') {
+                        hint.textContent = 'Follow next pointer. Click Move Next.';
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = 'Traversal end reached with no match. Click Not Found.';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                if (matchBtn) {
+                    matchBtn.disabled = finished;
+                }
+                if (prevBtn) {
+                    prevBtn.disabled = finished;
+                }
+                if (nextBtn) {
+                    nextBtn.disabled = finished;
+                }
+                if (notFoundBtn) {
+                    notFoundBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = answerIndex >= 0 ? `Found @ ${answerIndex}` : 'Not Found';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `idx ${currentIndex}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished && answerIndex !== null ? String(answerIndex) : '');
+                setActionPayload({
+                    mode: `${listKind}_linked_lookup`,
+                    current_index: currentIndex,
+                    visited_indices: visitedOrder.slice(),
+                    comparisons,
+                    selected_index: finished ? answerIndex : null,
+                    from_end: traverseFromTail,
+                    is_complete: finished,
+                });
+            }
+
+            function applyDecision(action) {
+                if (finished) {
+                    return;
+                }
+                const expected = expectedAction();
+                if (!expected) {
+                    return;
+                }
+                if (action !== expected) {
+                    const currentValue = formatToken(values[currentIndex]);
+                    if (expected === 'match') {
+                        feedback = `Incorrect. ${currentValue} equals target, so Match Node is required.`;
+                    } else if (expected === 'prev') {
+                        feedback = `Incorrect. ${currentValue} does not match target, follow prev pointer.`;
+                    } else if (expected === 'next') {
+                        feedback = `Incorrect. ${currentValue} does not match target, follow next pointer.`;
+                    } else {
+                        feedback = 'Incorrect. End of traversal reached, choose Not Found.';
+                    }
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                comparisons += 1;
+
+                if (action === 'match') {
+                    answerIndex = currentIndex;
+                    finished = true;
+                } else if (action === 'prev' || action === 'next') {
+                    const nextIndex = currentIndex + direction;
+                    currentIndex = nextIndex;
+                    if (!visitedSet.has(currentIndex)) {
+                        visitedSet.add(currentIndex);
+                        visitedOrder.push(currentIndex);
+                    }
+                } else {
+                    answerIndex = -1;
+                    finished = true;
+                }
+                render();
+            }
+
+            if (matchBtn) {
+                matchBtn.addEventListener('click', () => applyDecision('match'));
+            }
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => applyDecision('prev'));
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => applyDecision('next'));
+            }
+            if (notFoundBtn) {
+                notFoundBtn.addEventListener('click', () => applyDecision('not_found'));
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    currentIndex = startIndex;
+                    visitedSet = new Set([startIndex]);
+                    visitedOrder.length = 0;
+                    visitedOrder.push(startIndex);
+                    comparisons = 0;
+                    answerIndex = null;
+                    finished = false;
+                    feedback = '';
+                    undoStack.length = 0;
+                    render();
+                });
+            }
+
+            render();
+            return true;
+        }
+
+        if (listKind === 'circular') {
+            let startIndex = Math.floor(Number(challengeVisualizationPayload.start_index));
+            if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= values.length) {
+                startIndex = 0;
+            }
+
+            const shell = renderActionHostShell(
+                'Circular Linked Traversal Board',
+                'Start from configured index and follow next pointers. Complete one full cycle: Match, Move Next, or Not Found.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
+                        <div><strong>Start index:</strong> ${startIndex}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-mid">Current Node</span>
+                        <span class="binary-search-chip is-window">Visited</span>
+                        <span class="binary-search-chip is-found">Answer</span>
+                        <span class="binary-search-chip is-discarded">Unvisited</span>
+                    </div>
+                    <div class="binary-search-board" id="circularNodeBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="circularMatchBtn">Match Node</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="circularNextBtn">Move Next</button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="circularNotFoundBtn">Not Found</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="circularUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="circularResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="circularStatus">
+                        <div class="binary-search-status-line" id="circularMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="circularMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="circularMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="circularProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="circularProgressText"></div>
+                        <div class="binary-search-hint" id="circularHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#circularNodeBoard');
+            const metaPrimary = shell.body.querySelector('#circularMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#circularMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#circularMetaTertiary');
+            const progressFill = shell.body.querySelector('#circularProgressFill');
+            const progressText = shell.body.querySelector('#circularProgressText');
+            const hint = shell.body.querySelector('#circularHint');
+            const matchBtn = shell.body.querySelector('#circularMatchBtn');
+            const nextBtn = shell.body.querySelector('#circularNextBtn');
+            const notFoundBtn = shell.body.querySelector('#circularNotFoundBtn');
+            const undoBtn = shell.body.querySelector('#circularUndoBtn');
+            const resetBtn = shell.body.querySelector('#circularResetBtn');
+
+            let currentIndex = startIndex;
+            let visitedSet = new Set([startIndex]);
+            const visitedOrder = [startIndex];
+            let comparisons = 0;
+            let stepsTaken = 0;
+            let answerIndex = null;
+            let finished = false;
+            let feedback = '';
+            const undoStack = [];
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function snapshotState() {
+                return {
+                    currentIndex,
+                    visited: Array.from(visitedSet),
+                    visitedOrder: visitedOrder.slice(),
+                    comparisons,
+                    stepsTaken,
+                    answerIndex,
+                    finished,
+                    feedback,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                currentIndex = state.currentIndex;
+                visitedSet = new Set(state.visited);
+                visitedOrder.length = 0;
+                state.visitedOrder.forEach((idx) => visitedOrder.push(idx));
+                comparisons = state.comparisons;
+                stepsTaken = state.stepsTaken;
+                answerIndex = state.answerIndex;
+                finished = state.finished;
+                feedback = state.feedback;
+            }
+
+            function expectedAction() {
+                if (finished || currentIndex < 0 || currentIndex >= values.length) {
+                    return null;
+                }
+                if (values[currentIndex] === target) {
+                    return 'match';
+                }
+                if (stepsTaken < values.length - 1) {
+                    return 'next';
+                }
+                return 'not_found';
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                board.innerHTML = values
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        if (finished && answerIndex === idx) {
+                            stateClass = 'is-found';
+                        } else if (!finished && idx === currentIndex) {
+                            stateClass = 'is-mid';
+                        } else if (visitedSet.has(idx)) {
+                            stateClass = 'is-window';
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+                const progress = values.length ? Math.round((visitedSet.size / values.length) * 100) : 100;
+                const expected = expectedAction();
+                const currentValue = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < values.length
+                    ? values[currentIndex]
+                    : null;
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Cycle complete in ${comparisons} comparison(s).`
+                        : `Current node: idx ${currentIndex} (value ${formatToken(currentValue)})`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Visited order: ${visitedOrder.length ? visitedOrder.join(' -> ') : '-'}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = finished
+                        ? `Answer index: ${answerIndex}`
+                        : `Cycle step: ${stepsTaken + 1}/${values.length} | Start idx ${startIndex}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Visited ${visitedSet.size}/${values.length} nodes`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Circular traversal complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'match') {
+                        hint.textContent = 'Current value matches target. Click Match Node.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'next') {
+                        hint.textContent = 'Current value does not match target. Click Move Next.';
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = 'One full cycle checked with no match. Click Not Found.';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                if (matchBtn) {
+                    matchBtn.disabled = finished;
+                }
+                if (nextBtn) {
+                    nextBtn.disabled = finished;
+                }
+                if (notFoundBtn) {
+                    notFoundBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = answerIndex >= 0 ? `Found @ ${answerIndex}` : 'Not Found';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `step ${stepsTaken + 1}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished && answerIndex !== null ? String(answerIndex) : '');
+                setActionPayload({
+                    mode: `${listKind}_linked_lookup`,
+                    start_index: startIndex,
+                    current_index: currentIndex,
+                    visited_indices: visitedOrder.slice(),
+                    comparisons,
+                    cycle_step: stepsTaken,
+                    selected_index: finished ? answerIndex : null,
+                    is_complete: finished,
+                });
+            }
+
+            function applyDecision(action) {
+                if (finished) {
+                    return;
+                }
+                const expected = expectedAction();
+                if (!expected) {
+                    return;
+                }
+                if (action !== expected) {
+                    const currentValue = formatToken(values[currentIndex]);
+                    if (expected === 'match') {
+                        feedback = `Incorrect. ${currentValue} equals target, so Match Node is required.`;
+                    } else if (expected === 'next') {
+                        feedback = `Incorrect. ${currentValue} does not match target, so Move Next is required.`;
+                    } else {
+                        feedback = 'Incorrect. Full cycle completed without match, choose Not Found.';
+                    }
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                comparisons += 1;
+
+                if (action === 'match') {
+                    answerIndex = currentIndex;
+                    finished = true;
+                } else if (action === 'next') {
+                    stepsTaken += 1;
+                    currentIndex = (currentIndex + 1) % values.length;
+                    if (!visitedSet.has(currentIndex)) {
+                        visitedSet.add(currentIndex);
+                    }
+                    visitedOrder.push(currentIndex);
+                } else {
+                    answerIndex = -1;
+                    finished = true;
+                }
+                render();
+            }
+
+            if (matchBtn) {
+                matchBtn.addEventListener('click', () => applyDecision('match'));
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => applyDecision('next'));
+            }
+            if (notFoundBtn) {
+                notFoundBtn.addEventListener('click', () => applyDecision('not_found'));
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    currentIndex = startIndex;
+                    visitedSet = new Set([startIndex]);
+                    visitedOrder.length = 0;
+                    visitedOrder.push(startIndex);
+                    comparisons = 0;
+                    stepsTaken = 0;
+                    answerIndex = null;
+                    finished = false;
+                    feedback = '';
+                    undoStack.length = 0;
+                    render();
+                });
+            }
+
+            render();
+            return true;
+        }
+
         const labels = {
             linked: 'Linked List',
             doubly: 'Doubly Linked List',
@@ -3832,6 +4745,2161 @@
             quick_sort: 'Quick Sort',
             heap_sort: 'Heap Sort',
         };
+        const isBubbleMode = algo === 'bubble_sort';
+
+        if (isBubbleMode) {
+            const shell = renderActionHostShell(
+                'Bubble Sort Move Board',
+                'Follow the highlighted pair. Choose Swap only when left value is greater, otherwise Next.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target Order:</strong> Non-decreasing</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-window">Unsorted</span>
+                        <span class="binary-search-chip is-mid">Current Pair</span>
+                        <span class="binary-search-chip is-found">Fixed Tail</span>
+                        <span class="binary-search-chip is-discarded">Done</span>
+                    </div>
+                    <div class="binary-search-board" id="sortingBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="sortingSwapBtn">Swap Pair</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="sortingNextBtn">No Swap, Next</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="sortingStatus">
+                        <div class="binary-search-status-line" id="sortingMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="sortingProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="sortingProgressText"></div>
+                        <div class="binary-search-hint" id="sortingHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#sortingBoard');
+            const metaPrimary = shell.body.querySelector('#sortingMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#sortingMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#sortingMetaTertiary');
+            const progressFill = shell.body.querySelector('#sortingProgressFill');
+            const progressText = shell.body.querySelector('#sortingProgressText');
+            const hint = shell.body.querySelector('#sortingHint');
+            const swapBtn = shell.body.querySelector('#sortingSwapBtn');
+            const nextBtn = shell.body.querySelector('#sortingNextBtn');
+            const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+            const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+            const current = values.slice();
+            const swaps = [];
+            const undoStack = [];
+            let pass = 0;
+            let cursor = 0;
+            let passSwaps = 0;
+            let totalSwaps = 0;
+            let comparisons = 0;
+            let finished = false;
+            let feedback = '';
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function fixedStart() {
+                if (finished) {
+                    return 0;
+                }
+                return Math.max(current.length - pass, 0);
+            }
+
+            function snapshotState() {
+                return {
+                    current: current.slice(),
+                    swaps: swaps.slice(),
+                    pass,
+                    cursor,
+                    passSwaps,
+                    totalSwaps,
+                    comparisons,
+                    finished,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                for (let i = 0; i < current.length; i += 1) {
+                    current[i] = state.current[i];
+                }
+                swaps.length = 0;
+                state.swaps.forEach((entry) => swaps.push(entry));
+                pass = state.pass;
+                cursor = state.cursor;
+                passSwaps = state.passSwaps;
+                totalSwaps = state.totalSwaps;
+                comparisons = state.comparisons;
+                finished = state.finished;
+            }
+
+            function stepCompletePass() {
+                if (passSwaps === 0 || pass >= current.length - 2) {
+                    finished = true;
+                    return;
+                }
+                pass += 1;
+                cursor = 0;
+                passSwaps = 0;
+            }
+
+            function advancePair(swappedApplied) {
+                comparisons += 1;
+                if (swappedApplied) {
+                    passSwaps += 1;
+                    totalSwaps += 1;
+                }
+                cursor += 1;
+                if (cursor >= current.length - pass - 1) {
+                    stepCompletePass();
+                }
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                const tailStart = fixedStart();
+                board.innerHTML = current
+                    .map((value, idx) => {
+                        const isPair = !finished && (idx === cursor || idx === cursor + 1);
+                        const isTailFixed = idx >= tailStart;
+                        let stateClass = 'is-window';
+                        if (finished) {
+                            stateClass = 'is-discarded';
+                        } else if (isPair) {
+                            stateClass = 'is-mid';
+                        } else if (isTailFixed) {
+                            stateClass = 'is-found';
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+
+                const tailStart = fixedStart();
+                const fixedCount = Math.max(0, current.length - tailStart);
+                const progress = current.length > 0 ? Math.round((fixedCount / current.length) * 100) : 0;
+                const hasPair = !finished && cursor >= 0 && cursor + 1 < current.length;
+                const leftValue = hasPair ? current[cursor] : null;
+                const rightValue = hasPair ? current[cursor + 1] : null;
+                const shouldSwap = hasPair && leftValue > rightValue;
+                const answer = current.map((value) => formatToken(value)).join(' ');
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Bubble sort complete in ${comparisons} comparison(s).`
+                        : `Pass ${pass + 1} | Compare idx ${cursor} and ${cursor + 1}`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Comparisons: ${comparisons} | Swaps: ${totalSwaps} (pass swaps: ${passSwaps})`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = `Current pair values: ${hasPair ? `${formatToken(leftValue)} and ${formatToken(rightValue)}` : '-'}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Fixed tail: ${fixedCount}/${current.length} values`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Bubble Sort state complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = shouldSwap
+                            ? 'Left value is larger. Click Swap Pair.'
+                            : 'Pair already in order. Click No Swap, Next.';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                if (swapBtn) {
+                    swapBtn.disabled = finished;
+                }
+                if (nextBtn) {
+                    nextBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = 'Sorted (Bubble)';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `Pass ${pass + 1}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished ? answer : '');
+                setActionPayload({
+                    mode: 'sorting_swap',
+                    algorithm: algo,
+                    array: current.slice(),
+                    swaps: swaps.slice(),
+                    pass,
+                    cursor,
+                    is_complete: finished,
+                });
+            }
+
+            function applyDecision(shouldDoSwap) {
+                if (finished) {
+                    return;
+                }
+                const hasPair = cursor >= 0 && cursor + 1 < current.length;
+                if (!hasPair) {
+                    finished = true;
+                    render();
+                    return;
+                }
+
+                const leftValue = current[cursor];
+                const rightValue = current[cursor + 1];
+                const expectedSwap = leftValue > rightValue;
+                if (shouldDoSwap !== expectedSwap) {
+                    feedback = expectedSwap
+                        ? `Incorrect. ${formatToken(leftValue)} > ${formatToken(rightValue)}, so swap is required.`
+                        : `Incorrect. ${formatToken(leftValue)} <= ${formatToken(rightValue)}, so do not swap.`;
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                if (shouldDoSwap) {
+                    const left = cursor;
+                    const right = cursor + 1;
+                    const temp = current[left];
+                    current[left] = current[right];
+                    current[right] = temp;
+                    swaps.push([left, right]);
+                    advancePair(true);
+                } else {
+                    advancePair(false);
+                }
+                render();
+            }
+
+            if (swapBtn) {
+                swapBtn.addEventListener('click', () => applyDecision(true));
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => applyDecision(false));
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    for (let idx = 0; idx < current.length; idx += 1) {
+                        current[idx] = values[idx];
+                    }
+                    swaps.length = 0;
+                    undoStack.length = 0;
+                    pass = 0;
+                    cursor = 0;
+                    passSwaps = 0;
+                    totalSwaps = 0;
+                    comparisons = 0;
+                    finished = false;
+                    feedback = '';
+                    render();
+                });
+            }
+
+            render();
+            return true;
+        }
+
+        if (algo === 'selection_sort') {
+            const shell = renderActionHostShell(
+                'Selection Sort Move Board',
+                'Choose the minimum index in unsorted suffix, then place it at highlighted slot.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target Order:</strong> Non-decreasing</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-found">Fixed Prefix</span>
+                        <span class="binary-search-chip is-mid">Current Min</span>
+                        <span class="binary-search-chip is-window">Unsorted</span>
+                        <span class="binary-search-chip is-discarded">Current Slot</span>
+                    </div>
+                    <div class="binary-search-board" id="sortingBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="selectionPlaceBtn">Place Min At Slot</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="sortingStatus">
+                        <div class="binary-search-status-line" id="sortingMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="sortingProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="sortingProgressText"></div>
+                        <div class="binary-search-hint" id="sortingHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#sortingBoard');
+            const metaPrimary = shell.body.querySelector('#sortingMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#sortingMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#sortingMetaTertiary');
+            const progressFill = shell.body.querySelector('#sortingProgressFill');
+            const progressText = shell.body.querySelector('#sortingProgressText');
+            const hint = shell.body.querySelector('#sortingHint');
+            const placeBtn = shell.body.querySelector('#selectionPlaceBtn');
+            const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+            const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+            const current = values.slice();
+            const swaps = [];
+            const undoStack = [];
+            let pass = 0;
+            let candidateMin = 0;
+            let comparisons = 0;
+            let feedback = '';
+            let finished = false;
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function snapshotState() {
+                return {
+                    current: current.slice(),
+                    swaps: swaps.slice(),
+                    pass,
+                    candidateMin,
+                    comparisons,
+                    finished,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                for (let i = 0; i < current.length; i += 1) {
+                    current[i] = state.current[i];
+                }
+                swaps.length = 0;
+                state.swaps.forEach((entry) => swaps.push(entry));
+                pass = state.pass;
+                candidateMin = state.candidateMin;
+                comparisons = state.comparisons;
+                finished = state.finished;
+            }
+
+            function expectedMinIndexForPass() {
+                let minIdx = pass;
+                for (let idx = pass + 1; idx < current.length; idx += 1) {
+                    comparisons += 1;
+                    if (current[idx] < current[minIdx]) {
+                        minIdx = idx;
+                    }
+                }
+                return minIdx;
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                board.innerHTML = current
+                    .map((value, idx) => {
+                        let stateClass = 'is-window';
+                        let disabled = finished || idx < pass;
+                        if (idx < pass) {
+                            stateClass = 'is-found';
+                        } else if (!finished && idx === candidateMin) {
+                            stateClass = 'is-mid';
+                        } else if (!finished && idx === pass) {
+                            stateClass = 'is-discarded';
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" data-index="${idx}" ${disabled ? 'disabled' : ''}>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}${idx === pass && !finished ? ' | SLOT' : ''}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+
+                board.querySelectorAll('.action-value-btn').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        if (finished) {
+                            return;
+                        }
+                        const idx = Number(button.dataset.index);
+                        if (!Number.isInteger(idx) || idx < pass || idx >= current.length) {
+                            return;
+                        }
+                        candidateMin = idx;
+                        feedback = '';
+                        render();
+                    });
+                });
+            }
+
+            function render() {
+                renderBoard();
+                const fixedCount = pass;
+                const progress = current.length > 0 ? Math.round((fixedCount / current.length) * 100) : 0;
+                const answer = current.map((value) => formatToken(value)).join(' ');
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Selection sort complete in ${comparisons} comparison(s).`
+                        : `Pass ${pass + 1} | Slot index ${pass}`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Candidate Min: idx ${candidateMin} (${formatToken(current[candidateMin])}) | Swaps: ${swaps.length}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = `Current array: ${answer}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Fixed prefix: ${fixedCount}/${current.length}`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Selection Sort state complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = 'Select minimum from unsorted suffix, then click "Place Min At Slot".';
+                        hint.classList.remove('error');
+                    }
+                }
+                if (placeBtn) {
+                    placeBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Min';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = 'Sorted (Selection)';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `Pass ${pass + 1}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished ? answer : '');
+                setActionPayload({
+                    mode: 'sorting_swap',
+                    algorithm: algo,
+                    array: current.slice(),
+                    swaps: swaps.slice(),
+                    pass,
+                    selected_min_index: candidateMin,
+                    is_complete: finished,
+                });
+            }
+
+            function placeMin() {
+                if (finished) {
+                    return;
+                }
+                undoStack.push(snapshotState());
+                feedback = '';
+
+                const compareBefore = comparisons;
+                const expectedMin = expectedMinIndexForPass();
+                if (candidateMin !== expectedMin) {
+                    comparisons = compareBefore;
+                    undoStack.pop();
+                    feedback = `Incorrect minimum. For pass ${pass + 1}, expected idx ${expectedMin} (${formatToken(current[expectedMin])}).`;
+                    render();
+                    return;
+                }
+
+                if (candidateMin !== pass) {
+                    const temp = current[pass];
+                    current[pass] = current[candidateMin];
+                    current[candidateMin] = temp;
+                    swaps.push([pass, candidateMin]);
+                }
+
+                pass += 1;
+                if (pass >= current.length - 1) {
+                    finished = true;
+                } else {
+                    candidateMin = pass;
+                }
+                render();
+            }
+
+            if (placeBtn) {
+                placeBtn.addEventListener('click', placeMin);
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    for (let idx = 0; idx < current.length; idx += 1) {
+                        current[idx] = values[idx];
+                    }
+                    swaps.length = 0;
+                    undoStack.length = 0;
+                    pass = 0;
+                    candidateMin = 0;
+                    comparisons = 0;
+                    feedback = '';
+                    finished = false;
+                    render();
+                });
+            }
+
+            render();
+            return true;
+        }
+
+        if (algo === 'insertion_sort') {
+            const shell = renderActionHostShell(
+                'Insertion Sort Move Board',
+                'For each key, shift larger prefix values right, then insert key.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target Order:</strong> Non-decreasing</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-found">Sorted Prefix</span>
+                        <span class="binary-search-chip is-mid">Key</span>
+                        <span class="binary-search-chip is-window">Scan</span>
+                        <span class="binary-search-chip is-discarded">Pending</span>
+                    </div>
+                    <div class="binary-search-board" id="sortingBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="insertionShiftBtn">Shift Right</button>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="insertionInsertBtn">Insert Key</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="sortingStatus">
+                        <div class="binary-search-status-line" id="sortingMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="sortingProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="sortingProgressText"></div>
+                        <div class="binary-search-hint" id="sortingHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#sortingBoard');
+            const metaPrimary = shell.body.querySelector('#sortingMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#sortingMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#sortingMetaTertiary');
+            const progressFill = shell.body.querySelector('#sortingProgressFill');
+            const progressText = shell.body.querySelector('#sortingProgressText');
+            const hint = shell.body.querySelector('#sortingHint');
+            const shiftBtn = shell.body.querySelector('#insertionShiftBtn');
+            const insertBtn = shell.body.querySelector('#insertionInsertBtn');
+            const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+            const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+            const current = values.slice();
+            const swaps = [];
+            const undoStack = [];
+            let pass = 1;
+            let scan = 0;
+            let keyValue = values.length > 1 ? current[1] : current[0];
+            let comparisons = 0;
+            let shifts = 0;
+            let feedback = '';
+            let finished = values.length <= 1;
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function sortedUntil() {
+                return Math.min(pass, current.length);
+            }
+
+            function beginPass() {
+                if (pass >= current.length) {
+                    finished = true;
+                    return;
+                }
+                keyValue = current[pass];
+                scan = pass - 1;
+            }
+
+            function snapshotState() {
+                return {
+                    current: current.slice(),
+                    swaps: swaps.slice(),
+                    pass,
+                    scan,
+                    keyValue,
+                    comparisons,
+                    shifts,
+                    feedback,
+                    finished,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                for (let i = 0; i < current.length; i += 1) {
+                    current[i] = state.current[i];
+                }
+                swaps.length = 0;
+                state.swaps.forEach((entry) => swaps.push(entry));
+                pass = state.pass;
+                scan = state.scan;
+                keyValue = state.keyValue;
+                comparisons = state.comparisons;
+                shifts = state.shifts;
+                feedback = state.feedback;
+                finished = state.finished;
+            }
+
+            function canShift() {
+                return !finished && scan >= 0 && current[scan] > keyValue;
+            }
+
+            function canInsert() {
+                return !finished && (scan < 0 || current[scan] <= keyValue);
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                const prefixEnd = sortedUntil();
+                board.innerHTML = current
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        if (idx < prefixEnd) {
+                            stateClass = 'is-found';
+                        }
+                        if (!finished && idx === scan) {
+                            stateClass = 'is-window';
+                        }
+                        if (!finished && idx === pass) {
+                            stateClass = 'is-mid';
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}${!finished && idx === pass ? ' | KEY' : ''}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+                const prefixCount = sortedUntil();
+                const progress = current.length > 0 ? Math.round((prefixCount / current.length) * 100) : 0;
+                const answer = current.map((value) => formatToken(value)).join(' ');
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Insertion sort complete in ${comparisons} comparison(s).`
+                        : `Pass ${pass} | key=${formatToken(keyValue)} | scan=${scan}`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Comparisons: ${comparisons} | Shifts: ${shifts} | Swaps(log): ${swaps.length}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = `Current array: ${answer}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Sorted prefix: ${prefixCount}/${current.length}`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Insertion Sort state complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else if (canShift()) {
+                        hint.textContent = `${formatToken(current[scan])} > ${formatToken(keyValue)}. Click Shift Right.`;
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = `Insert key ${formatToken(keyValue)} at idx ${scan + 1}.`;
+                        hint.classList.remove('error');
+                    }
+                }
+
+                if (shiftBtn) {
+                    shiftBtn.disabled = finished;
+                }
+                if (insertBtn) {
+                    insertBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = 'Sorted (Insertion)';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `Pass ${pass}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished ? answer : '');
+                setActionPayload({
+                    mode: 'sorting_swap',
+                    algorithm: algo,
+                    array: current.slice(),
+                    swaps: swaps.slice(),
+                    pass,
+                    scan_index: scan,
+                    key_value: keyValue,
+                    is_complete: finished,
+                });
+            }
+
+            function shiftRight() {
+                if (finished) {
+                    return;
+                }
+                if (!canShift()) {
+                    feedback = 'Shift is not valid now. Insert key at current position.';
+                    render();
+                    return;
+                }
+                undoStack.push(snapshotState());
+                feedback = '';
+                const from = scan;
+                const to = scan + 1;
+                current[to] = current[from];
+                swaps.push([from, to]);
+                shifts += 1;
+                comparisons += 1;
+                scan -= 1;
+                render();
+            }
+
+            function insertKey() {
+                if (finished) {
+                    return;
+                }
+                if (!canInsert()) {
+                    feedback = `Cannot insert yet. ${formatToken(current[scan])} is still greater than key ${formatToken(keyValue)}.`;
+                    render();
+                    return;
+                }
+                undoStack.push(snapshotState());
+                feedback = '';
+                if (scan >= 0) {
+                    comparisons += 1;
+                }
+                current[scan + 1] = keyValue;
+                pass += 1;
+                if (pass >= current.length) {
+                    finished = true;
+                } else {
+                    beginPass();
+                }
+                render();
+            }
+
+            if (shiftBtn) {
+                shiftBtn.addEventListener('click', shiftRight);
+            }
+            if (insertBtn) {
+                insertBtn.addEventListener('click', insertKey);
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    for (let idx = 0; idx < current.length; idx += 1) {
+                        current[idx] = values[idx];
+                    }
+                    swaps.length = 0;
+                    undoStack.length = 0;
+                    pass = 1;
+                    scan = 0;
+                    keyValue = values.length > 1 ? current[1] : current[0];
+                    comparisons = 0;
+                    shifts = 0;
+                    feedback = '';
+                    finished = values.length <= 1;
+                    render();
+                });
+            }
+
+            if (!finished) {
+                beginPass();
+            }
+            render();
+            return true;
+        }
+
+        if (algo === 'merge_sort') {
+            const shell = renderActionHostShell(
+                'Merge Sort Move Board',
+                'Merge highlighted left/right runs by selecting the next head value in sorted order.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target Order:</strong> Non-decreasing</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-window">Left Run</span>
+                        <span class="binary-search-chip is-discarded">Right Run</span>
+                        <span class="binary-search-chip is-mid">Heads</span>
+                        <span class="binary-search-chip is-found">Merged</span>
+                    </div>
+                    <div class="binary-search-board" id="sortingBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="mergePickLeftBtn">Take Left Head</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="mergePickRightBtn">Take Right Head</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="sortingStatus">
+                        <div class="binary-search-status-line" id="sortingMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="sortingProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="sortingProgressText"></div>
+                        <div class="binary-search-hint" id="sortingHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#sortingBoard');
+            const metaPrimary = shell.body.querySelector('#sortingMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#sortingMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#sortingMetaTertiary');
+            const progressFill = shell.body.querySelector('#sortingProgressFill');
+            const progressText = shell.body.querySelector('#sortingProgressText');
+            const hint = shell.body.querySelector('#sortingHint');
+            const pickLeftBtn = shell.body.querySelector('#mergePickLeftBtn');
+            const pickRightBtn = shell.body.querySelector('#mergePickRightBtn');
+            const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+            const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+            const current = values.slice();
+            const swaps = [];
+            const undoStack = [];
+            const tasks = [];
+            for (let width = 1; width < values.length; width *= 2) {
+                for (let left = 0; left < values.length; left += (2 * width)) {
+                    const mid = Math.min(left + width, values.length);
+                    const right = Math.min(left + (2 * width), values.length);
+                    if (mid < right) {
+                        tasks.push({ width, left, mid, right });
+                    }
+                }
+            }
+
+            let taskIndex = 0;
+            let leftBuf = [];
+            let rightBuf = [];
+            let li = 0;
+            let ri = 0;
+            let merged = [];
+            let comparisons = 0;
+            let feedback = '';
+            let finished = tasks.length === 0;
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function activeTask() {
+                return tasks[taskIndex] || null;
+            }
+
+            function initTaskBuffers() {
+                const task = activeTask();
+                if (!task) {
+                    finished = true;
+                    return;
+                }
+                leftBuf = current.slice(task.left, task.mid);
+                rightBuf = current.slice(task.mid, task.right);
+                li = 0;
+                ri = 0;
+                merged = [];
+            }
+
+            function snapshotState() {
+                return {
+                    current: current.slice(),
+                    swaps: swaps.slice(),
+                    taskIndex,
+                    leftBuf: leftBuf.slice(),
+                    rightBuf: rightBuf.slice(),
+                    li,
+                    ri,
+                    merged: merged.slice(),
+                    comparisons,
+                    feedback,
+                    finished,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                for (let i = 0; i < current.length; i += 1) {
+                    current[i] = state.current[i];
+                }
+                swaps.length = 0;
+                state.swaps.forEach((entry) => swaps.push(entry));
+                taskIndex = state.taskIndex;
+                leftBuf = state.leftBuf.slice();
+                rightBuf = state.rightBuf.slice();
+                li = state.li;
+                ri = state.ri;
+                merged = state.merged.slice();
+                comparisons = state.comparisons;
+                feedback = state.feedback;
+                finished = state.finished;
+            }
+
+            function expectedSide() {
+                if (li >= leftBuf.length && ri >= rightBuf.length) {
+                    return null;
+                }
+                if (li >= leftBuf.length) {
+                    return 'right';
+                }
+                if (ri >= rightBuf.length) {
+                    return 'left';
+                }
+                return leftBuf[li] <= rightBuf[ri] ? 'left' : 'right';
+            }
+
+            function commitIfBlockDone() {
+                const task = activeTask();
+                if (!task) {
+                    return;
+                }
+                const segmentLen = task.right - task.left;
+                if (merged.length < segmentLen) {
+                    return;
+                }
+                for (let k = 0; k < segmentLen; k += 1) {
+                    current[task.left + k] = merged[k];
+                }
+                taskIndex += 1;
+                if (taskIndex >= tasks.length) {
+                    finished = true;
+                } else {
+                    initTaskBuffers();
+                }
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                const task = activeTask();
+                board.innerHTML = current
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        if (!task) {
+                            stateClass = 'is-found';
+                        } else {
+                            const inLeft = idx >= task.left && idx < task.mid;
+                            const inRight = idx >= task.mid && idx < task.right;
+                            const mergedLimit = task.left + merged.length;
+                            const isMerged = idx < mergedLimit && idx >= task.left;
+                            const leftHeadIdx = li < leftBuf.length ? (task.left + li) : null;
+                            const rightHeadIdx = ri < rightBuf.length ? (task.mid + ri) : null;
+                            const isHead = idx === leftHeadIdx || idx === rightHeadIdx;
+
+                            if (isMerged) {
+                                stateClass = 'is-found';
+                            } else if (isHead) {
+                                stateClass = 'is-mid';
+                            } else if (inLeft) {
+                                stateClass = 'is-window';
+                            } else if (inRight) {
+                                stateClass = 'is-discarded';
+                            }
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+                const task = activeTask();
+                const progress = tasks.length ? Math.round((taskIndex / tasks.length) * 100) : 100;
+                const answer = current.map((value) => formatToken(value)).join(' ');
+                const leftHead = li < leftBuf.length ? leftBuf[li] : null;
+                const rightHead = ri < rightBuf.length ? rightBuf[ri] : null;
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Merge sort complete in ${comparisons} comparison(s).`
+                        : `Task ${taskIndex + 1}/${tasks.length} | width=${task.width} | segment=[${task.left}..${task.right - 1}]`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = `Left head: ${leftHead === null ? '-' : formatToken(leftHead)} | Right head: ${rightHead === null ? '-' : formatToken(rightHead)} | Comparisons: ${comparisons}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = `Merged output: ${merged.length ? merged.map((v) => formatToken(v)).join(' ') : '-'}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Merge tasks completed: ${taskIndex}/${tasks.length}`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Merge Sort state complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else {
+                        const expected = expectedSide();
+                        hint.textContent = expected === 'left'
+                            ? 'Next value should come from LEFT head.'
+                            : 'Next value should come from RIGHT head.';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                if (pickLeftBtn) {
+                    pickLeftBtn.disabled = finished;
+                }
+                if (pickRightBtn) {
+                    pickRightBtn.disabled = finished;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Pick';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = 'Sorted (Merge)';
+                        shell.badge.classList.add('badge-accent');
+                    } else {
+                        shell.badge.textContent = `Task ${taskIndex + 1}`;
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished ? answer : '');
+                setActionPayload({
+                    mode: 'sorting_swap',
+                    algorithm: algo,
+                    array: current.slice(),
+                    swaps: swaps.slice(),
+                    task_index: taskIndex,
+                    merged_output: merged.slice(),
+                    is_complete: finished,
+                });
+            }
+
+            function pick(side) {
+                if (finished) {
+                    return;
+                }
+                const expected = expectedSide();
+                if (!expected) {
+                    return;
+                }
+                if (side !== expected) {
+                    feedback = expected === 'left'
+                        ? 'Incorrect pick. Left head is smaller (or equal).'
+                        : 'Incorrect pick. Right head is smaller.';
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                if (li < leftBuf.length && ri < rightBuf.length) {
+                    comparisons += 1;
+                }
+                if (side === 'left') {
+                    merged.push(leftBuf[li]);
+                    li += 1;
+                } else {
+                    merged.push(rightBuf[ri]);
+                    ri += 1;
+                }
+
+                const task = activeTask();
+                if (task) {
+                    swaps.push([task.left + Math.max(0, merged.length - 1), task.left + Math.max(0, merged.length - 1)]);
+                }
+
+                commitIfBlockDone();
+                render();
+            }
+
+            if (pickLeftBtn) {
+                pickLeftBtn.addEventListener('click', () => pick('left'));
+            }
+            if (pickRightBtn) {
+                pickRightBtn.addEventListener('click', () => pick('right'));
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    for (let idx = 0; idx < current.length; idx += 1) {
+                        current[idx] = values[idx];
+                    }
+                    swaps.length = 0;
+                    undoStack.length = 0;
+                    taskIndex = 0;
+                    leftBuf = [];
+                    rightBuf = [];
+                    li = 0;
+                    ri = 0;
+                    merged = [];
+                    comparisons = 0;
+                    feedback = '';
+                    finished = tasks.length === 0;
+                    if (!finished) {
+                        initTaskBuffers();
+                    }
+                    render();
+                });
+            }
+
+            if (!finished) {
+                initTaskBuffers();
+            }
+            render();
+            return true;
+        }
+
+        if (algo === 'quick_sort') {
+            const shell = renderActionHostShell(
+                'Quick Sort Partition Board',
+                'Scan current segment against pivot. Move only values <= pivot to left zone, then place pivot.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target Order:</strong> Non-decreasing</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-found">Fixed Pivot</span>
+                        <span class="binary-search-chip is-window">Left Zone (<= pivot)</span>
+                        <span class="binary-search-chip is-mid">Scan / Pivot</span>
+                        <span class="binary-search-chip is-discarded">Right Zone</span>
+                    </div>
+                    <div class="binary-search-board" id="sortingBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="quickTakeLeftBtn">Move To Left (<= Pivot)</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="quickKeepRightBtn">Keep On Right (&gt; Pivot)</button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="quickPlacePivotBtn">Place Pivot</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="sortingStatus">
+                        <div class="binary-search-status-line" id="sortingMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="sortingProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="sortingProgressText"></div>
+                        <div class="binary-search-hint" id="sortingHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#sortingBoard');
+            const metaPrimary = shell.body.querySelector('#sortingMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#sortingMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#sortingMetaTertiary');
+            const progressFill = shell.body.querySelector('#sortingProgressFill');
+            const progressText = shell.body.querySelector('#sortingProgressText');
+            const hint = shell.body.querySelector('#sortingHint');
+            const takeLeftBtn = shell.body.querySelector('#quickTakeLeftBtn');
+            const keepRightBtn = shell.body.querySelector('#quickKeepRightBtn');
+            const placePivotBtn = shell.body.querySelector('#quickPlacePivotBtn');
+            const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+            const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+            const current = values.slice();
+            const swaps = [];
+            const undoStack = [];
+            const stack = [[0, current.length - 1]];
+            let partition = null;
+            let comparisons = 0;
+            let partitionCount = 0;
+            let fixedIndices = new Set();
+            let feedback = '';
+            let finished = current.length <= 1;
+
+            if (finished) {
+                fixedIndices = new Set(current.map((_, idx) => idx));
+            }
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function clonePartitionState(state) {
+                if (!state) {
+                    return null;
+                }
+                return {
+                    low: state.low,
+                    high: state.high,
+                    pivotIndex: state.pivotIndex,
+                    pivotValue: state.pivotValue,
+                    boundary: state.boundary,
+                    scan: state.scan,
+                };
+            }
+
+            function snapshotState() {
+                return {
+                    current: current.slice(),
+                    swaps: swaps.slice(),
+                    stack: stack.map((segment) => segment.slice()),
+                    partition: clonePartitionState(partition),
+                    comparisons,
+                    partitionCount,
+                    fixed: Array.from(fixedIndices),
+                    feedback,
+                    finished,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                for (let i = 0; i < current.length; i += 1) {
+                    current[i] = state.current[i];
+                }
+                swaps.length = 0;
+                state.swaps.forEach((entry) => swaps.push(entry));
+                stack.length = 0;
+                state.stack.forEach((segment) => stack.push(segment.slice()));
+                partition = clonePartitionState(state.partition);
+                comparisons = state.comparisons;
+                partitionCount = state.partitionCount;
+                fixedIndices = new Set(state.fixed);
+                feedback = state.feedback;
+                finished = state.finished;
+            }
+
+            function startNextPartition() {
+                partition = null;
+                while (stack.length) {
+                    const segment = stack.pop();
+                    if (!Array.isArray(segment) || segment.length !== 2) {
+                        continue;
+                    }
+                    const low = Number(segment[0]);
+                    const high = Number(segment[1]);
+                    if (!Number.isInteger(low) || !Number.isInteger(high) || low > high) {
+                        continue;
+                    }
+                    if (low === high) {
+                        fixedIndices.add(low);
+                        continue;
+                    }
+                    partition = {
+                        low,
+                        high,
+                        pivotIndex: high,
+                        pivotValue: current[high],
+                        boundary: low - 1,
+                        scan: low,
+                    };
+                    return;
+                }
+                finished = true;
+                fixedIndices = new Set(current.map((_, idx) => idx));
+            }
+
+            function expectedMoveLeft() {
+                if (!partition || partition.scan >= partition.high) {
+                    return null;
+                }
+                return current[partition.scan] <= partition.pivotValue;
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                board.innerHTML = current
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        if (finished || fixedIndices.has(idx)) {
+                            stateClass = 'is-found';
+                        } else if (partition) {
+                            const inSegment = idx >= partition.low && idx <= partition.high;
+                            const inLeftZone = idx >= partition.low && idx <= partition.boundary;
+                            const isPivot = idx === partition.pivotIndex;
+                            const isScan = partition.scan < partition.high && idx === partition.scan;
+
+                            if (isPivot || isScan) {
+                                stateClass = 'is-mid';
+                            } else if (inLeftZone) {
+                                stateClass = 'is-window';
+                            } else if (inSegment) {
+                                stateClass = 'is-discarded';
+                            }
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+                const answer = current.map((value) => formatToken(value)).join(' ');
+                const progress = current.length ? Math.round((fixedIndices.size / current.length) * 100) : 100;
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Quick sort complete in ${comparisons} comparison(s).`
+                        : `Partition ${partitionCount + 1} | Segment [${partition.low}..${partition.high}]`;
+                }
+                if (metaSecondary) {
+                    metaSecondary.textContent = finished
+                        ? 'All pivot positions fixed.'
+                        : `Pivot: idx ${partition.pivotIndex} (${formatToken(partition.pivotValue)}) | Boundary i=${partition.boundary} | Scan j=${partition.scan < partition.high ? partition.scan : 'done'}`;
+                }
+                if (metaTertiary) {
+                    if (finished) {
+                        metaTertiary.textContent = `Sorted output: ${answer}`;
+                    } else {
+                        const leftLabel = partition.boundary >= partition.low
+                            ? `[${partition.low}..${partition.boundary}]`
+                            : '-';
+                        metaTertiary.textContent = `Left zone: ${leftLabel} | Pending segments: ${stack.length}`;
+                    }
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Fixed pivots: ${fixedIndices.size}/${current.length}`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Quick Sort state complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else if (partition.scan < partition.high) {
+                        const expected = expectedMoveLeft();
+                        const token = formatToken(current[partition.scan]);
+                        hint.textContent = expected
+                            ? `${token} <= pivot. Click Move To Left (<= Pivot).`
+                            : `${token} > pivot. Click Keep On Right (> Pivot).`;
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = 'Segment scan complete. Click Place Pivot.';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                const canScan = !finished && partition && partition.scan < partition.high;
+                if (takeLeftBtn) {
+                    takeLeftBtn.disabled = !canScan;
+                }
+                if (keepRightBtn) {
+                    keepRightBtn.disabled = !canScan;
+                }
+                if (placePivotBtn) {
+                    placePivotBtn.disabled = finished || !partition || partition.scan < partition.high;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = 'Sorted (Quick)';
+                        shell.badge.classList.add('badge-accent');
+                    } else if (partition.scan < partition.high) {
+                        shell.badge.textContent = `Partition ${partitionCount + 1}`;
+                        shell.badge.classList.add('badge-primary');
+                    } else {
+                        shell.badge.textContent = 'Place Pivot';
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished ? answer : '');
+                setActionPayload({
+                    mode: 'sorting_swap',
+                    algorithm: algo,
+                    array: current.slice(),
+                    swaps: swaps.slice(),
+                    quick_stack: stack.map((segment) => segment.slice()),
+                    partition: partition ? clonePartitionState(partition) : null,
+                    fixed_indices: Array.from(fixedIndices).sort((a, b) => a - b),
+                    is_complete: finished,
+                });
+            }
+
+            function applyScanDecision(moveLeft) {
+                if (finished || !partition) {
+                    return;
+                }
+                if (partition.scan >= partition.high) {
+                    feedback = 'Scan is complete for this partition. Place pivot now.';
+                    render();
+                    return;
+                }
+
+                const expected = expectedMoveLeft();
+                if (expected !== moveLeft) {
+                    const value = formatToken(current[partition.scan]);
+                    const pivot = formatToken(partition.pivotValue);
+                    feedback = expected
+                        ? `Incorrect. ${value} <= ${pivot}, so it must go to left zone.`
+                        : `Incorrect. ${value} > ${pivot}, so it must stay in right zone.`;
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                comparisons += 1;
+                const scanIdx = partition.scan;
+                if (moveLeft) {
+                    partition.boundary += 1;
+                    const leftIdx = partition.boundary;
+                    if (leftIdx !== scanIdx) {
+                        const temp = current[leftIdx];
+                        current[leftIdx] = current[scanIdx];
+                        current[scanIdx] = temp;
+                        swaps.push([leftIdx, scanIdx]);
+                    }
+                }
+                partition.scan += 1;
+                render();
+            }
+
+            function placePivot() {
+                if (finished || !partition) {
+                    return;
+                }
+                if (partition.scan < partition.high) {
+                    feedback = 'Finish scan decisions before placing pivot.';
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+
+                const finalPivotIndex = partition.boundary + 1;
+                if (finalPivotIndex !== partition.pivotIndex) {
+                    const temp = current[finalPivotIndex];
+                    current[finalPivotIndex] = current[partition.pivotIndex];
+                    current[partition.pivotIndex] = temp;
+                    swaps.push([finalPivotIndex, partition.pivotIndex]);
+                }
+
+                fixedIndices.add(finalPivotIndex);
+                partitionCount += 1;
+
+                const leftLow = partition.low;
+                const leftHigh = finalPivotIndex - 1;
+                const rightLow = finalPivotIndex + 1;
+                const rightHigh = partition.high;
+
+                if (rightLow < rightHigh) {
+                    stack.push([rightLow, rightHigh]);
+                } else if (rightLow === rightHigh) {
+                    fixedIndices.add(rightLow);
+                }
+                if (leftLow < leftHigh) {
+                    stack.push([leftLow, leftHigh]);
+                } else if (leftLow === leftHigh) {
+                    fixedIndices.add(leftLow);
+                }
+
+                startNextPartition();
+                render();
+            }
+
+            if (takeLeftBtn) {
+                takeLeftBtn.addEventListener('click', () => applyScanDecision(true));
+            }
+            if (keepRightBtn) {
+                keepRightBtn.addEventListener('click', () => applyScanDecision(false));
+            }
+            if (placePivotBtn) {
+                placePivotBtn.addEventListener('click', placePivot);
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    for (let idx = 0; idx < current.length; idx += 1) {
+                        current[idx] = values[idx];
+                    }
+                    swaps.length = 0;
+                    undoStack.length = 0;
+                    stack.length = 0;
+                    stack.push([0, current.length - 1]);
+                    partition = null;
+                    comparisons = 0;
+                    partitionCount = 0;
+                    fixedIndices = new Set();
+                    feedback = '';
+                    finished = current.length <= 1;
+                    if (finished) {
+                        fixedIndices = new Set(current.map((_, idx) => idx));
+                    } else {
+                        startNextPartition();
+                    }
+                    render();
+                });
+            }
+
+            if (!finished) {
+                startNextPartition();
+            }
+            render();
+            return true;
+        }
+
+        if (algo === 'heap_sort') {
+            const shell = renderActionHostShell(
+                'Heap Sort Control Board',
+                'Build max-heap first, then extract max to suffix. During heapify, choose swap only when child is larger.'
+            );
+            if (!shell || !shell.body) {
+                return false;
+            }
+
+            shell.body.innerHTML = `
+                <div class="binary-search-shell">
+                    <div class="binary-search-head">
+                        <div><strong>Target Order:</strong> Non-decreasing</div>
+                        <div><strong>Length:</strong> ${values.length}</div>
+                    </div>
+                    <div class="binary-search-legend" aria-hidden="true">
+                        <span class="binary-search-chip is-found">Sorted Suffix</span>
+                        <span class="binary-search-chip is-mid">Heap Root</span>
+                        <span class="binary-search-chip is-window">Best Child</span>
+                        <span class="binary-search-chip is-discarded">Heap Nodes</span>
+                    </div>
+                    <div class="binary-search-board" id="sortingBoard"></div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="heapExtractBtn">Extract Max (root -> end)</button>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="heapSwapBtn">Swap Root With Best Child</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="heapKeepBtn">No Swap (Heap OK)</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="sortingResetBtn">Reset</button>
+                    </div>
+                    <div class="binary-search-status" id="sortingStatus">
+                        <div class="binary-search-status-line" id="sortingMetaPrimary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaSecondary"></div>
+                        <div class="binary-search-status-line" id="sortingMetaTertiary"></div>
+                        <div class="binary-search-progress-track">
+                            <span class="binary-search-progress-fill" id="sortingProgressFill"></span>
+                        </div>
+                        <div class="binary-search-progress-text" id="sortingProgressText"></div>
+                        <div class="binary-search-hint" id="sortingHint"></div>
+                    </div>
+                </div>
+            `;
+
+            const board = shell.body.querySelector('#sortingBoard');
+            const metaPrimary = shell.body.querySelector('#sortingMetaPrimary');
+            const metaSecondary = shell.body.querySelector('#sortingMetaSecondary');
+            const metaTertiary = shell.body.querySelector('#sortingMetaTertiary');
+            const progressFill = shell.body.querySelector('#sortingProgressFill');
+            const progressText = shell.body.querySelector('#sortingProgressText');
+            const hint = shell.body.querySelector('#sortingHint');
+            const extractBtn = shell.body.querySelector('#heapExtractBtn');
+            const swapBtn = shell.body.querySelector('#heapSwapBtn');
+            const keepBtn = shell.body.querySelector('#heapKeepBtn');
+            const undoBtn = shell.body.querySelector('#sortingUndoBtn');
+            const resetBtn = shell.body.querySelector('#sortingResetBtn');
+
+            const current = values.slice();
+            const swaps = [];
+            const undoStack = [];
+            const initialBuildIndex = Math.floor(current.length / 2) - 1;
+
+            let heapSize = current.length;
+            let buildIndex = initialBuildIndex;
+            let mode = 'build_sift';
+            let sift = null;
+            let comparisons = 0;
+            let extractionCount = 0;
+            let feedback = '';
+            let finished = current.length <= 1;
+
+            function formatToken(value) {
+                return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
+            }
+
+            function cloneSiftState(state) {
+                if (!state) {
+                    return null;
+                }
+                return {
+                    root: state.root,
+                    left: state.left,
+                    right: state.right,
+                    candidate: state.candidate,
+                    phase: state.phase,
+                };
+            }
+
+            function snapshotState() {
+                return {
+                    current: current.slice(),
+                    swaps: swaps.slice(),
+                    heapSize,
+                    buildIndex,
+                    mode,
+                    sift: cloneSiftState(sift),
+                    comparisons,
+                    extractionCount,
+                    feedback,
+                    finished,
+                };
+            }
+
+            function restoreState(state) {
+                if (!state) {
+                    return;
+                }
+                for (let i = 0; i < current.length; i += 1) {
+                    current[i] = state.current[i];
+                }
+                swaps.length = 0;
+                state.swaps.forEach((entry) => swaps.push(entry));
+                heapSize = state.heapSize;
+                buildIndex = state.buildIndex;
+                mode = state.mode;
+                sift = cloneSiftState(state.sift);
+                comparisons = state.comparisons;
+                extractionCount = state.extractionCount;
+                feedback = state.feedback;
+                finished = state.finished;
+            }
+
+            function computeChildInfo(root) {
+                const left = (2 * root) + 1;
+                const right = left + 1;
+                if (left >= heapSize) {
+                    return { left: null, right: null, candidate: null };
+                }
+                let candidate = left;
+                if (right < heapSize && current[right] > current[left]) {
+                    candidate = right;
+                }
+                return { left, right: right < heapSize ? right : null, candidate };
+            }
+
+            function prepareSift(root, phase) {
+                const childInfo = computeChildInfo(root);
+                sift = {
+                    root,
+                    left: childInfo.left,
+                    right: childInfo.right,
+                    candidate: childInfo.candidate,
+                    phase,
+                };
+                mode = phase === 'build' ? 'build_sift' : 'extract_sift';
+            }
+
+            function expectedDecision() {
+                if (!sift || !Number.isInteger(sift.root)) {
+                    return null;
+                }
+                if (!Number.isInteger(sift.left) || sift.left >= heapSize) {
+                    return 'noswap';
+                }
+                const best = Number.isInteger(sift.candidate) ? sift.candidate : sift.left;
+                return current[best] > current[sift.root] ? 'swap' : 'noswap';
+            }
+
+            function moveToNextRootAfterSatisfied() {
+                if (!sift) {
+                    return;
+                }
+                if (sift.phase === 'build') {
+                    buildIndex -= 1;
+                    if (buildIndex >= 0) {
+                        prepareSift(buildIndex, 'build');
+                        return;
+                    }
+                    mode = 'extract_ready';
+                    sift = null;
+                    if (heapSize <= 1) {
+                        heapSize = 0;
+                        finished = true;
+                        mode = 'done';
+                    }
+                    return;
+                }
+
+                if (heapSize <= 1) {
+                    heapSize = 0;
+                    finished = true;
+                    mode = 'done';
+                    sift = null;
+                    return;
+                }
+                mode = 'extract_ready';
+                sift = null;
+            }
+
+            function initializeState() {
+                if (current.length <= 1) {
+                    heapSize = 0;
+                    buildIndex = -1;
+                    mode = 'done';
+                    sift = null;
+                    finished = true;
+                    return;
+                }
+                if (buildIndex >= 0) {
+                    prepareSift(buildIndex, 'build');
+                    return;
+                }
+                mode = 'extract_ready';
+                sift = null;
+            }
+
+            function renderBoard() {
+                if (!board) {
+                    return;
+                }
+                board.innerHTML = current
+                    .map((value, idx) => {
+                        let stateClass = 'is-discarded';
+                        const inSortedSuffix = finished || idx >= heapSize;
+                        if (inSortedSuffix) {
+                            stateClass = 'is-found';
+                        } else if (sift) {
+                            if (idx === sift.root) {
+                                stateClass = 'is-mid';
+                            } else if (idx === sift.candidate) {
+                                stateClass = 'is-window';
+                            } else {
+                                stateClass = 'is-discarded';
+                            }
+                        }
+                        return `
+                            <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
+                                <span class="binary-search-main">${formatToken(value)}</span>
+                                <span class="binary-search-sub">idx ${idx}</span>
+                            </button>
+                        `;
+                    })
+                    .join('');
+            }
+
+            function render() {
+                renderBoard();
+
+                const answer = current.map((value) => formatToken(value)).join(' ');
+                const fixedCount = finished ? current.length : Math.max(0, current.length - heapSize);
+                const progress = current.length ? Math.round((fixedCount / current.length) * 100) : 100;
+                const phaseLabel = mode === 'build_sift'
+                    ? 'Build Max Heap'
+                    : mode === 'extract_ready'
+                        ? 'Extract Max'
+                        : mode === 'extract_sift'
+                            ? 'Restore Heap'
+                            : 'Sorted';
+                const expected = expectedDecision();
+
+                if (metaPrimary) {
+                    metaPrimary.textContent = finished
+                        ? `Heap sort complete in ${comparisons} comparison(s).`
+                        : `Phase: ${phaseLabel}`;
+                }
+                if (metaSecondary) {
+                    const rootText = sift && Number.isInteger(sift.root) && sift.root < heapSize
+                        ? `idx ${sift.root} (${formatToken(current[sift.root])})`
+                        : '-';
+                    const childText = sift && Number.isInteger(sift.candidate) && sift.candidate < heapSize
+                        ? `idx ${sift.candidate} (${formatToken(current[sift.candidate])})`
+                        : '-';
+                    metaSecondary.textContent = `Heap size: ${heapSize} | Root: ${rootText} | Best child: ${childText}`;
+                }
+                if (metaTertiary) {
+                    metaTertiary.textContent = `Build index: ${Math.max(buildIndex, -1)} | Extractions: ${extractionCount} | Swaps: ${swaps.length}`;
+                }
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `Sorted suffix: ${fixedCount}/${current.length}`;
+                }
+                if (hint) {
+                    if (feedback) {
+                        hint.textContent = feedback;
+                        hint.classList.add('error');
+                    } else if (finished) {
+                        hint.textContent = 'Heap Sort state complete. Submit your answer.';
+                        hint.classList.remove('error');
+                    } else if (mode === 'extract_ready') {
+                        hint.textContent = 'Click Extract Max to move heap root to sorted suffix.';
+                        hint.classList.remove('error');
+                    } else if (expected === 'swap') {
+                        hint.textContent = 'A child is larger than root. Click Swap Root With Best Child.';
+                        hint.classList.remove('error');
+                    } else {
+                        hint.textContent = 'Heap property holds at this root. Click No Swap (Heap OK).';
+                        hint.classList.remove('error');
+                    }
+                }
+
+                const siftMode = mode === 'build_sift' || mode === 'extract_sift';
+                if (extractBtn) {
+                    extractBtn.disabled = finished || mode !== 'extract_ready';
+                }
+                if (swapBtn) {
+                    swapBtn.disabled = finished || !siftMode;
+                }
+                if (keepBtn) {
+                    keepBtn.disabled = finished || !siftMode;
+                }
+                if (undoBtn) {
+                    undoBtn.disabled = undoStack.length === 0;
+                }
+
+                if (shell.badge) {
+                    shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                    if (feedback) {
+                        shell.badge.textContent = 'Wrong Step';
+                        shell.badge.classList.add('badge-danger');
+                    } else if (finished) {
+                        shell.badge.textContent = 'Sorted (Heap)';
+                        shell.badge.classList.add('badge-accent');
+                    } else if (mode === 'extract_ready') {
+                        shell.badge.textContent = 'Extract Max';
+                        shell.badge.classList.add('badge-primary');
+                    } else if (mode === 'build_sift') {
+                        shell.badge.textContent = 'Build Heap';
+                        shell.badge.classList.add('badge-primary');
+                    } else {
+                        shell.badge.textContent = 'Heapify';
+                        shell.badge.classList.add('badge-primary');
+                    }
+                }
+
+                setDerivedAnswer(finished ? answer : '');
+                setActionPayload({
+                    mode: 'sorting_swap',
+                    algorithm: algo,
+                    array: current.slice(),
+                    swaps: swaps.slice(),
+                    heap_size: heapSize,
+                    phase: mode,
+                    sift: cloneSiftState(sift),
+                    extraction_count: extractionCount,
+                    is_complete: finished,
+                });
+            }
+
+            function applySiftDecision(doSwap) {
+                if (finished) {
+                    return;
+                }
+                if (mode !== 'build_sift' && mode !== 'extract_sift') {
+                    feedback = 'This step expects extraction, not heapify decision.';
+                    render();
+                    return;
+                }
+                if (!sift) {
+                    feedback = 'No active heapify root.';
+                    render();
+                    return;
+                }
+
+                const expected = expectedDecision();
+                const compareCount = Number.isInteger(sift.left)
+                    ? (Number.isInteger(sift.right) ? 2 : 1)
+                    : 0;
+                if ((doSwap && expected !== 'swap') || (!doSwap && expected !== 'noswap')) {
+                    if (expected === 'swap' && Number.isInteger(sift.candidate)) {
+                        feedback = `Incorrect. Child at idx ${sift.candidate} is larger than root. Swap required.`;
+                    } else {
+                        feedback = 'Incorrect. Root already satisfies heap property here.';
+                    }
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                comparisons += compareCount;
+
+                if (doSwap && Number.isInteger(sift.candidate)) {
+                    const root = sift.root;
+                    const child = sift.candidate;
+                    const temp = current[root];
+                    current[root] = current[child];
+                    current[child] = temp;
+                    swaps.push([root, child]);
+                    prepareSift(child, sift.phase);
+                } else {
+                    moveToNextRootAfterSatisfied();
+                }
+                render();
+            }
+
+            function applyExtract() {
+                if (finished) {
+                    return;
+                }
+                if (mode !== 'extract_ready') {
+                    feedback = 'Finish heapify decisions before extraction.';
+                    render();
+                    return;
+                }
+                if (heapSize <= 1) {
+                    heapSize = 0;
+                    finished = true;
+                    mode = 'done';
+                    render();
+                    return;
+                }
+
+                undoStack.push(snapshotState());
+                feedback = '';
+                const end = heapSize - 1;
+                const temp = current[0];
+                current[0] = current[end];
+                current[end] = temp;
+                swaps.push([0, end]);
+                extractionCount += 1;
+                heapSize -= 1;
+
+                if (heapSize <= 1) {
+                    heapSize = 0;
+                    finished = true;
+                    mode = 'done';
+                    sift = null;
+                } else {
+                    prepareSift(0, 'extract');
+                }
+                render();
+            }
+
+            if (extractBtn) {
+                extractBtn.addEventListener('click', applyExtract);
+            }
+            if (swapBtn) {
+                swapBtn.addEventListener('click', () => applySiftDecision(true));
+            }
+            if (keepBtn) {
+                keepBtn.addEventListener('click', () => applySiftDecision(false));
+            }
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const previous = undoStack.pop();
+                    if (!previous) {
+                        return;
+                    }
+                    restoreState(previous);
+                    feedback = '';
+                    render();
+                });
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    for (let idx = 0; idx < current.length; idx += 1) {
+                        current[idx] = values[idx];
+                    }
+                    swaps.length = 0;
+                    undoStack.length = 0;
+                    heapSize = current.length;
+                    buildIndex = initialBuildIndex;
+                    mode = 'build_sift';
+                    sift = null;
+                    comparisons = 0;
+                    extractionCount = 0;
+                    feedback = '';
+                    finished = current.length <= 1;
+                    initializeState();
+                    render();
+                });
+            }
+
+            initializeState();
+            render();
+            return true;
+        }
 
         const shell = renderActionHostShell(
             `${algorithmLabel[algo] || 'Sorting'} Move Board`,
@@ -3843,6 +6911,7 @@
 
         shell.body.innerHTML = `
             <div class="text-muted small mb-2">Goal: sort ascending using swaps.</div>
+            <div class="text-muted small mb-2" id="sortingHint"></div>
             <div class="d-flex flex-wrap gap-2 mb-3" id="sortingBoard"></div>
             <div class="d-flex align-items-center flex-wrap gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="sortingUndoBtn">Undo</button>
@@ -3853,6 +6922,7 @@
 
         const board = shell.body.querySelector('#sortingBoard');
         const meta = shell.body.querySelector('#sortingMeta');
+        const hint = shell.body.querySelector('#sortingHint');
         const undoBtn = shell.body.querySelector('#sortingUndoBtn');
         const resetBtn = shell.body.querySelector('#sortingResetBtn');
 
@@ -3860,6 +6930,7 @@
         const current = values.slice();
         const swaps = [];
         let selectedIndex = null;
+        let feedback = '';
 
         function formatToken(value) {
             return Number.isInteger(value) ? String(value) : formatActionNumber(value, 3, false);
@@ -3887,14 +6958,22 @@
 
                     if (selectedIndex === null) {
                         selectedIndex = idx;
+                        feedback = '';
                     } else if (selectedIndex === idx) {
                         selectedIndex = null;
+                        feedback = '';
                     } else {
+                        if (isBubbleMode && Math.abs(selectedIndex - idx) !== 1) {
+                            feedback = 'Bubble Sort allows only adjacent swaps. Choose neighboring index.';
+                            render();
+                            return;
+                        }
                         swaps.push([selectedIndex, idx]);
                         const temp = current[selectedIndex];
                         current[selectedIndex] = current[idx];
                         current[idx] = temp;
                         selectedIndex = null;
+                        feedback = '';
                     }
                     render();
                 });
@@ -3924,11 +7003,32 @@
                 const picked = selectedIndex === null ? 'none' : selectedIndex + 1;
                 meta.textContent = `Swaps: ${swaps.length} | Selected: ${picked} | Current: ${answer}`;
             }
+            if (hint) {
+                if (feedback) {
+                    hint.textContent = feedback;
+                    hint.classList.add('text-danger');
+                } else if (isBubbleMode) {
+                    hint.textContent = sorted
+                        ? 'Bubble Sort state complete. Submit your answer.'
+                        : 'Bubble Sort rule: only adjacent swaps (i and i+1).';
+                    hint.classList.remove('text-danger');
+                } else {
+                    hint.textContent = 'You can swap any two values for this sorting mode.';
+                    hint.classList.remove('text-danger');
+                }
+            }
             if (shell.badge) {
-                shell.badge.textContent = sorted ? 'Sorted' : `Swaps: ${swaps.length}`;
-                shell.badge.classList.toggle('badge-accent', sorted);
-                shell.badge.classList.toggle('badge-primary', !sorted);
-                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                if (feedback) {
+                    shell.badge.textContent = 'Invalid Swap';
+                    shell.badge.classList.add('badge-danger');
+                } else if (sorted) {
+                    shell.badge.textContent = isBubbleMode ? 'Sorted (Bubble)' : 'Sorted';
+                    shell.badge.classList.add('badge-accent');
+                } else {
+                    shell.badge.textContent = `Swaps: ${swaps.length}`;
+                    shell.badge.classList.add('badge-primary');
+                }
             }
             setDerivedAnswer(answer);
             setActionPayload({
@@ -3959,6 +7059,7 @@
                     }
                 }
                 selectedIndex = null;
+                feedback = '';
                 render();
             });
         }
@@ -3970,6 +7071,7 @@
                 }
                 swaps.length = 0;
                 selectedIndex = null;
+                feedback = '';
                 render();
             });
         }

@@ -932,12 +932,15 @@
 
 .exec-diagram-wrap {
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     margin: 0.68rem 0;
     padding: 0.78rem;
     border: 1px solid var(--aq-border);
     border-radius: var(--aq-radius-md);
     background: color-mix(in srgb, var(--aq-surface) 84%, var(--aq-card) 16%);
     overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .exec-svg {
