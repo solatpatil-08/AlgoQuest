@@ -228,7 +228,7 @@
                 if (data.current_level !== undefined) {
                     messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
                 }
-                if (data.is_score_eligible === false) {
+                if (data.is_score_eligible === false && !/first-attempt|first attempt/i.test(String(data.message || ''))) {
                     messageContent += ' &middot; <strong>First-attempt scoring already consumed</strong>';
                 }
 

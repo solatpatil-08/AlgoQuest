@@ -1224,7 +1224,8 @@ def _evaluate_lcs_action_payload(challenge, action_payload):
     payload = challenge.visualization_payload or {}
     s1 = str(payload.get('s1', ''))
     s2 = str(payload.get('s2', ''))
-    candidate = str(action_payload.get('candidate_subsequence', '')).strip()
+    raw_candidate = action_payload.get('candidate_subsequence', '')
+    candidate = '' if raw_candidate is None else str(raw_candidate)
 
     if not s1 or not s2:
         return None
@@ -2032,7 +2033,10 @@ def _evaluate_stack_action_payload(challenge, action_payload):
         }
 
     submitted_stack_raw = action_payload.get('final_stack')
-    submitted_stack, _ = _normalize_numeric_list(submitted_stack_raw if isinstance(submitted_stack_raw, list) else canonical_stack)
+    submitted_stack, _ = _normalize_numeric_list(
+        submitted_stack_raw if isinstance(submitted_stack_raw, list) else canonical_stack,
+        allow_empty=True,
+    )
     if submitted_stack is None:
         return {
             'answer': '__invalid_stack_state__',
@@ -2089,7 +2093,10 @@ def _evaluate_queue_action_payload(challenge, action_payload):
         }
 
     submitted_queue_raw = action_payload.get('final_queue')
-    submitted_queue, _ = _normalize_numeric_list(submitted_queue_raw if isinstance(submitted_queue_raw, list) else canonical_queue)
+    submitted_queue, _ = _normalize_numeric_list(
+        submitted_queue_raw if isinstance(submitted_queue_raw, list) else canonical_queue,
+        allow_empty=True,
+    )
     if submitted_queue is None:
         return {
             'answer': '__invalid_queue_state__',
@@ -2453,8 +2460,12 @@ def _format_number_token(value):
     return f"{normalized:.3f}".rstrip('0').rstrip('.')
 
 
-def _normalize_numeric_list(raw_values):
-    if not isinstance(raw_values, list) or not raw_values:
+def _normalize_numeric_list(raw_values, allow_empty=False):
+    if not isinstance(raw_values, list):
+        return None, None
+    if not raw_values:
+        if allow_empty:
+            return [], []
         return None, None
     numeric_values = []
     tokens = []
@@ -3276,7 +3287,10 @@ def submit_attempt_view(request, slug):
         update_leaderboard_for_user(request.user, gained_xp)
 
     if not is_score_eligible:
-        message = 'Points are awarded only on the first attempt.'
+        if is_correct:
+            message = 'Correct, but points are awarded only on the first attempt.'
+        else:
+            message = 'Try again. Points are awarded only on the first attempt.'
     elif is_correct and hint_used:
         message = 'Correct! Hint penalty applied (75% reduction).'
     elif is_correct:
@@ -3288,6 +3302,8 @@ def submit_attempt_view(request, slug):
 
     if action_eval and action_eval.get('feedback') and not is_correct:
         message = action_eval['feedback']
+        if not is_score_eligible:
+            message = f'{message} Points are awarded only on the first attempt.'
 
     response_data = {
         'is_correct': is_correct,

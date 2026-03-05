@@ -1011,6 +1011,28 @@ class LinkedStackQueueActionSubmissionTests(TestCase):
         self.assertTrue(correct_payload['is_correct'])
         self.assertEqual(correct_payload['stack_top'], '3')
 
+    def test_stack_action_payload_accepts_empty_final_stack(self):
+        challenge = Challenge.objects.create(
+            title='Stack Action Empty',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.STACK,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='empty',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'initial': [5], 'operations': [{'op': 'pop'}]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'empty', 'action_payload': json.dumps({'applied_count': 1, 'final_stack': []})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['stack_top'], 'empty')
+
     def test_queue_action_payload_derives_final_front(self):
         challenge = Challenge.objects.create(
             title='Queue Action',
@@ -1035,6 +1057,28 @@ class LinkedStackQueueActionSubmissionTests(TestCase):
         payload = response.json()
         self.assertTrue(payload['is_correct'])
         self.assertEqual(payload['queue_front'], '20')
+
+    def test_queue_action_payload_accepts_empty_final_queue(self):
+        challenge = Challenge.objects.create(
+            title='Queue Action Empty',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.QUEUE,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='empty',
+            xp_reward=25,
+            max_score=100,
+            visualization_payload={'initial': [9], 'operations': [{'op': 'dequeue'}]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[challenge.slug]),
+            {'answer': 'empty', 'action_payload': json.dumps({'applied_count': 1, 'final_queue': []})},
+        )
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertEqual(payload['queue_front'], 'empty')
 
 
 class AiMlActionSubmissionTests(TestCase):

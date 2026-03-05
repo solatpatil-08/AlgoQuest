@@ -103,11 +103,18 @@
     function render3DScene(svgBody, width, height, ariaLabel, sceneClass = '', svgInlineStyle = '') {
         const extraClass = sceneClass ? ` ${sceneClass}` : '';
         const svgStyleAttr = svgInlineStyle ? ` style="${escapeHtml(svgInlineStyle)}"` : '';
+        const safeLabel = escapeHtml(ariaLabel || '3D execution visualization');
         return `
             <div class="exec-diagram-wrap exec-3d-scene${extraClass}">
-                <svg class="exec-svg exec-svg-3d" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(ariaLabel || '3D execution visualization')}"${svgStyleAttr}>
-                    ${svgBody}
-                </svg>
+                <div class="exec-3d-chrome">
+                    <div class="exec-3d-chrome-head" aria-hidden="true">
+                        <span class="exec-3d-kicker">MISSION CONTROL</span>
+                        <span class="exec-3d-caption">${safeLabel}</span>
+                    </div>
+                    <svg class="exec-svg exec-svg-3d" viewBox="0 0 ${width} ${height}" role="img" aria-label="${safeLabel}"${svgStyleAttr}>
+                        ${svgBody}
+                    </svg>
+                </div>
             </div>
         `;
     }
@@ -170,7 +177,7 @@
                     <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isCurrent ? '2.9' : (isHighlight ? '2.1' : '1.7')}"></rect>
                     ${tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${isCurrent ? '#f59e0b' : '#22c55e'}"></rect>` : ''}
                     ${tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${escapeHtml(tag.toUpperCase())}</text>` : ''}
-                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text class="exec-3d-value-text" x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '13' : '14.2'}" font-weight="800" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
                     <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">${escapeHtml(indexLabel)} ${idx}</text>
                 </g>
             `;
@@ -229,147 +236,267 @@
         if (!Array.isArray(words) || !words.length) {
             return '<p class="concept-muted mb-0">Words unavailable.</p>';
         }
-        const cardWidth = 150;
-        const rowHeight = 52;
+
+        const normalizedWords = words.map((word) => String(word || ''));
+        const probe = String(prefix || '');
+        const maxWordLength = Math.max(1, probe.length, ...normalizedWords.map((word) => word.length));
+        const charStep = 12;
+        const cardWidth = Math.max(220, Math.min(560, 92 + (maxWordLength * charStep)));
+        const rowHeight = 58;
         const left = 24;
-        const top = 26;
+        const top = 44;
         const depth = 8;
-        const width = Math.max(480, left * 2 + cardWidth);
-        const height = Math.max(180, top * 2 + (words.length * (rowHeight + 10)) + 30);
-        const rows = words.map((word, idx) => {
+        const sidePanelWidth = 250;
+        const width = Math.max(640, left * 2 + cardWidth + sidePanelWidth);
+        const height = Math.max(218, top + 28 + (normalizedWords.length * (rowHeight + 10)) + 34);
+
+        function sharedPrefixLength(word, candidate) {
+            let idx = 0;
+            const limit = Math.min(word.length, candidate.length);
+            while (idx < limit && word.charAt(idx) === candidate.charAt(idx)) {
+                idx += 1;
+            }
+            return idx;
+        }
+
+        const rulerCount = Math.min(maxWordLength, 30);
+        const ruler = `
+            <g>
+                <text x="${left + 6}" y="${top - 14}" font-size="10.2" fill="#475569">char idx</text>
+                ${Array.from({ length: rulerCount }, (_, idx) => `
+                    <text x="${left + 56 + (idx * charStep)}" y="${top - 14}" font-size="9.8" fill="#64748b">${idx}</text>
+                `).join('')}
+            </g>
+        `;
+
+        const rows = normalizedWords.map((word, idx) => {
             const y = top + (idx * (rowHeight + 10));
             const isActive = idx === activeIndex;
-            const base = isActive ? '#fef3c7' : '#e2e8f0';
-            const side = isActive ? '#d97706' : '#64748b';
-            const topColor = isActive ? '#fde68a' : '#f8fafc';
-            const stroke = isActive ? '#92400e' : '#334155';
-            const safeWord = escapeHtml(word);
+            const matchedLength = sharedPrefixLength(word, probe);
+            const fullyMatches = probe.length === 0 ? false : matchedLength === probe.length;
+
+            const base = isActive ? '#fef3c7' : (fullyMatches ? '#dcfce7' : '#e2e8f0');
+            const side = isActive ? '#d97706' : (fullyMatches ? '#16a34a' : '#64748b');
+            const topColor = isActive ? '#fde68a' : (fullyMatches ? '#bbf7d0' : '#f8fafc');
+            const stroke = isActive ? '#92400e' : (fullyMatches ? '#166534' : '#334155');
+            const statusLabel = probe.length === 0
+                ? 'await candidate'
+                : (fullyMatches ? `match ${matchedLength}/${probe.length}` : `break @ ${matchedLength}`);
+
             return `
                 <g>
                     <polygon points="${left},${y} ${left + depth},${y - depth} ${left + cardWidth + depth},${y - depth} ${left + cardWidth},${y}" fill="${topColor}"></polygon>
                     <polygon points="${left + cardWidth},${y} ${left + cardWidth + depth},${y - depth} ${left + cardWidth + depth},${y + rowHeight - depth} ${left + cardWidth},${y + rowHeight}" fill="${side}" opacity="0.95"></polygon>
-                    <rect x="${left}" y="${y}" width="${cardWidth}" height="${rowHeight}" rx="10" fill="${base}" stroke="${stroke}" stroke-width="${isActive ? '2.4' : '1.6'}"></rect>
-                    <text x="${left + 10}" y="${y + 20}" font-size="11" fill="#475569">W${idx + 1}</text>
-                    <text x="${left + 10}" y="${y + 38}" font-size="13" font-weight="700" fill="#0f172a">${safeWord}</text>
+                    <rect x="${left}" y="${y}" width="${cardWidth}" height="${rowHeight}" rx="10" fill="${base}" stroke="${stroke}" stroke-width="${isActive ? '2.5' : '1.7'}"></rect>
+                    <text x="${left + 10}" y="${y + 20}" font-size="10.8" fill="#475569">W${idx + 1}</text>
+                    ${probe.length
+                        ? `
+                            <text x="${left + 56}" y="${y + 24}" font-size="12.7" font-weight="700">
+                                <tspan fill="#0f172a">${escapeHtml(word.slice(0, matchedLength))}</tspan>
+                                <tspan fill="${fullyMatches ? '#64748b' : '#b91c1c'}">${escapeHtml(word.slice(matchedLength))}</tspan>
+                            </text>
+                        `
+                        : `<text x="${left + 56}" y="${y + 24}" font-size="12.7" font-weight="700" fill="#0f172a">${escapeHtml(word)}</text>`
+                    }
+                    <text x="${left + 56}" y="${y + 44}" font-size="10.6" fill="${fullyMatches ? '#166534' : '#64748b'}">${escapeHtml(statusLabel)}</text>
                 </g>
             `;
         }).join('');
+
         const prefixBadge = `
             <g>
-                <rect x="${left + cardWidth + 44}" y="${top + 8}" width="210" height="48" rx="12" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"></rect>
-                <text x="${left + cardWidth + 56}" y="${top + 28}" font-size="11" fill="#1e3a8a">Candidate Prefix</text>
-                <text x="${left + cardWidth + 56}" y="${top + 44}" font-size="14" font-weight="700" fill="#0f172a">${escapeHtml(prefix || '(empty)')}</text>
+                <rect x="${left + cardWidth + 32}" y="${top + 2}" width="220" height="64" rx="12" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"></rect>
+                <text x="${left + cardWidth + 46}" y="${top + 24}" font-size="11" fill="#1e3a8a">Candidate Prefix</text>
+                <text x="${left + cardWidth + 46}" y="${top + 42}" font-size="14" font-weight="700" fill="#0f172a">${escapeHtml(probe || '(empty)')}</text>
+                <text x="${left + cardWidth + 46}" y="${top + 56}" font-size="10.2" fill="#1e3a8a">len = ${probe.length}</text>
             </g>
         `;
-        return render3DScene(`${rows}${prefixBadge}`, width, height, 'Word comparison rail');
+
+        const axes = `
+            <g>
+                <text x="${left + cardWidth + 32}" y="${top + 92}" font-size="10.6" fill="#475569">X: character index</text>
+                <text x="${left + cardWidth + 32}" y="${top + 108}" font-size="10.6" fill="#475569">Y: word row (W1..Wn)</text>
+                <text x="${left + cardWidth + 32}" y="${top + 124}" font-size="10.6" fill="#475569">Z: depth cue (3D tilt)</text>
+            </g>
+        `;
+
+        return render3DScene(`${ruler}${rows}${prefixBadge}${axes}`, width, height, 'Word comparison rail');
     }
 
     function renderStackState3D(state, activeIndex = null) {
-        if (!Array.isArray(state) || !state.length) {
-            return '<div class="exec-summary">Stack: [empty]</div>';
-        }
-        const cardWidth = 136;
+        const values = Array.isArray(state) ? state : [];
+        const cardWidth = 146;
         const cardHeight = 34;
         const depth = 8;
         const gap = 8;
-        const left = 72;
-        const baseY = 176;
-        const width = 300;
-        const height = 220;
-        const cards = state.map((value, idx) => {
-            const visualOrder = state.length - 1 - idx;
+        const left = 120;
+        const width = 420;
+        const levelCount = Math.max(1, values.length);
+        const height = Math.max(236, 50 + (levelCount * (cardHeight + gap)) + 62);
+        const baseY = height - 42;
+        const frameTop = baseY - Math.max(cardHeight + 14, (values.length * (cardHeight + gap)) + 14);
+        const frameHeight = baseY - frameTop + 8;
+        const frame = `
+            <g>
+                <rect x="${left - 10}" y="${frameTop}" width="${cardWidth + 20}" height="${frameHeight}" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"></rect>
+                <rect x="${left - 14}" y="${baseY + 5}" width="${cardWidth + 28}" height="10" rx="5" fill="#cbd5e1"></rect>
+                <text x="${left + (cardWidth / 2)}" y="${frameTop - 10}" text-anchor="middle" font-size="10.5" fill="#475569">STACK FRAME</text>
+            </g>
+        `;
+
+        const cards = values.map((value, idx) => {
+            const visualOrder = values.length - 1 - idx;
             const y = baseY - ((visualOrder + 1) * (cardHeight + gap));
+            const isTop = idx === values.length - 1;
             const isActive = activeIndex === idx;
-            const front = isActive ? '#fde68a' : '#dbeafe';
-            const top = isActive ? '#fef3c7' : '#eff6ff';
-            const side = isActive ? '#ca8a04' : '#2563eb';
-            const stroke = isActive ? '#92400e' : '#1e3a8a';
+            const front = isActive ? '#fde68a' : (isTop ? '#bbf7d0' : '#dbeafe');
+            const top = isActive ? '#fef3c7' : (isTop ? '#dcfce7' : '#eff6ff');
+            const side = isActive ? '#ca8a04' : (isTop ? '#16a34a' : '#2563eb');
+            const stroke = isActive ? '#92400e' : (isTop ? '#166534' : '#1e3a8a');
             return `
                 <g>
                     <polygon points="${left},${y} ${left + depth},${y - depth} ${left + cardWidth + depth},${y - depth} ${left + cardWidth},${y}" fill="${top}"></polygon>
-                    <polygon points="${left + cardWidth},${y} ${left + cardWidth + depth},${y - depth} ${left + cardWidth + depth},${y + cardHeight - depth} ${left + cardWidth},${y + cardHeight}" fill="${side}"></polygon>
-                    <rect x="${left}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.3' : '1.6'}"></rect>
-                    <text x="${left + 12}" y="${y + 20}" font-size="10.5" fill="#475569">${idx === state.length - 1 ? 'TOP' : `idx ${idx}`}</text>
-                    <text x="${left + (cardWidth / 2)}" y="${y + 21}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <polygon points="${left + cardWidth},${y} ${left + cardWidth + depth},${y - depth} ${left + cardWidth + depth},${y + cardHeight - depth} ${left + cardWidth},${y + cardHeight}" fill="${side}" opacity="0.95"></polygon>
+                    <rect x="${left}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.5' : '1.7'}"></rect>
+                    <text x="${left + 10}" y="${y + 20}" font-size="10.5" fill="#475569">${isTop ? 'TOP' : `idx ${idx}`}</text>
+                    <text x="${left + (cardWidth / 2)}" y="${y + 22}" text-anchor="middle" font-size="12.8" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
                 </g>
             `;
         }).join('');
-        return render3DScene(cards, width, height, '3D stack state');
+
+        const labels = `
+            <text x="${left + cardWidth + 24}" y="${frameTop + 16}" font-size="10.5" fill="#64748b">Top grows upward</text>
+            <text x="${left + cardWidth + 24}" y="${baseY - 2}" font-size="10.5" fill="#64748b">Bottom (idx 0)</text>
+            ${!values.length
+                ? `<text x="${left + (cardWidth / 2)}" y="${baseY - 18}" text-anchor="middle" font-size="12" fill="#64748b">EMPTY STACK</text>`
+                : ''}
+        `;
+        return render3DScene(`${frame}${cards}${labels}`, width, height, '3D stack state', 'exec-3d-strip');
     }
 
     function renderQueueState3D(state, activeIndex = null) {
-        if (!Array.isArray(state) || !state.length) {
-            return '<div class="exec-summary">Queue: [empty]</div>';
-        }
-        const cellWidth = 84;
+        const values = Array.isArray(state) ? state : [];
+        const cellWidth = 86;
         const cellHeight = 40;
         const gap = 12;
         const depth = 8;
-        const left = 24;
-        const top = 64;
-        const width = Math.max(420, left * 2 + (state.length * (cellWidth + gap)));
-        const height = 170;
-        const cells = state.map((value, idx) => {
+        const left = 28;
+        const top = 68;
+        const cellSpan = Math.max(1, values.length);
+        const trackWidth = (cellSpan * (cellWidth + gap)) - gap;
+        const width = Math.max(460, left * 2 + trackWidth + 8);
+        const height = 182;
+        const rail = `
+            <g>
+                <rect x="${left - 10}" y="${top + cellHeight + 10}" width="${trackWidth + 20}" height="12" rx="6" fill="#cbd5e1"></rect>
+                <text x="${left - 2}" y="${top - 22}" font-size="10.8" fill="#64748b">FRONT</text>
+                <text x="${left + trackWidth - 34}" y="${top - 22}" font-size="10.8" fill="#64748b">REAR</text>
+            </g>
+        `;
+        const cells = values.map((value, idx) => {
             const x = left + (idx * (cellWidth + gap));
             const isActive = activeIndex === idx;
-            const front = isActive ? '#fde68a' : '#dbeafe';
-            const topColor = isActive ? '#fef3c7' : '#eff6ff';
-            const side = isActive ? '#ca8a04' : '#2563eb';
-            const stroke = isActive ? '#92400e' : '#1e3a8a';
+            const isFront = idx === 0;
+            const isRear = idx === values.length - 1;
+            const front = isActive
+                ? '#fde68a'
+                : (isFront ? '#bbf7d0' : (isRear ? '#ede9fe' : '#dbeafe'));
+            const topColor = isActive
+                ? '#fef3c7'
+                : (isFront ? '#dcfce7' : (isRear ? '#f5f3ff' : '#eff6ff'));
+            const side = isActive
+                ? '#ca8a04'
+                : (isFront ? '#16a34a' : (isRear ? '#7c3aed' : '#2563eb'));
+            const stroke = isActive
+                ? '#92400e'
+                : (isFront ? '#166534' : (isRear ? '#5b21b6' : '#1e3a8a'));
+            const tag = isFront ? 'FRONT' : (isRear ? 'REAR' : `idx ${idx}`);
             return `
                 <g>
                     <polygon points="${x},${top} ${x + depth},${top - depth} ${x + cellWidth + depth},${top - depth} ${x + cellWidth},${top}" fill="${topColor}"></polygon>
                     <polygon points="${x + cellWidth},${top} ${x + cellWidth + depth},${top - depth} ${x + cellWidth + depth},${top + cellHeight - depth} ${x + cellWidth},${top + cellHeight}" fill="${side}" opacity="0.95"></polygon>
-                    <rect x="${x}" y="${top}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.3' : '1.6'}"></rect>
-                    <text x="${x + (cellWidth / 2)}" y="${top + 23}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
-                    <text x="${x + (cellWidth / 2)}" y="${top + 56}" text-anchor="middle" font-size="10.5" fill="#64748b">idx ${idx}</text>
+                    <rect x="${x}" y="${top}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isActive ? '2.4' : '1.7'}"></rect>
+                    <text x="${x + (cellWidth / 2)}" y="${top + 23}" text-anchor="middle" font-size="12.8" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${top + 56}" text-anchor="middle" font-size="10.4" fill="#64748b">${tag}</text>
                 </g>
             `;
         }).join('');
-        const tags = `
-            <text x="${left}" y="${top - 18}" font-size="11" fill="#64748b">FRONT</text>
-            <text x="${left + ((state.length - 1) * (cellWidth + gap)) + (cellWidth - 32)}" y="${top - 18}" font-size="11" fill="#64748b">REAR</text>
-        `;
-        return render3DScene(`${tags}${cells}`, width, height, '3D queue state');
+        const emptyState = !values.length
+            ? `<text x="${Math.round(width / 2)}" y="${top + 22}" text-anchor="middle" font-size="12" fill="#64748b">EMPTY QUEUE</text>`
+            : '';
+        return render3DScene(`${rail}${cells}${emptyState}`, width, height, '3D queue state', 'exec-3d-strip');
     }
 
-    function renderHashBuckets3D(seenMap, highlightValue = null) {
+    function renderHashBuckets3D(seenMap, highlightArg = null) {
+        const options = highlightArg && typeof highlightArg === 'object'
+            ? highlightArg
+            : { highlightValue: highlightArg };
+        const highlightValue = Object.prototype.hasOwnProperty.call(options, 'highlightValue')
+            ? options.highlightValue
+            : null;
+        const probeValue = Number.isFinite(Number(options.probeValue)) ? Number(options.probeValue) : null;
+        const complementValue = Number.isFinite(Number(options.complementValue)) ? Number(options.complementValue) : null;
+        const bucketFor = (value, bucketCount) => Math.abs(Math.floor(Number(value))) % bucketCount;
+
         const buckets = Array.from({ length: 6 }, () => []);
         if (seenMap instanceof Map) {
             seenMap.forEach((idx, value) => {
-                const bucketIndex = Math.abs(Math.floor(Number(value))) % buckets.length;
+                const bucketIndex = bucketFor(value, buckets.length);
                 buckets[bucketIndex].push({ value, idx });
             });
         }
-        const bucketWidth = 146;
+        const bucketWidth = 214;
         const bucketHeight = 34;
         const left = 24;
         const top = 28;
         const gapY = 14;
         const depth = 8;
-        const width = 420;
+        const rightPanelWidth = 246;
+        const width = 560;
         const height = 330;
         const rows = buckets.map((bucket, bucketIndex) => {
             const y = top + (bucketIndex * (bucketHeight + gapY));
             const line = bucket.length
-                ? bucket.map((entry) => `${formatNumber(entry.value)}@${entry.idx}`).join(', ')
+                ? bucket.map((entry, chainIdx) => `[#${chainIdx}]${formatNumber(entry.value)}@${entry.idx}`).join('  ')
                 : '-';
-            const hasHighlight = highlightValue !== null && bucket.some((entry) => entry.value === highlightValue);
+            const hasHighlightValue = highlightValue !== null && bucket.some((entry) => entry.value === highlightValue);
+            const probeBucket = probeValue === null ? null : bucketFor(probeValue, buckets.length);
+            const complementBucket = complementValue === null ? null : bucketFor(complementValue, buckets.length);
+            const hasProbeBucket = probeBucket !== null && probeBucket === bucketIndex;
+            const hasComplementBucket = complementBucket !== null && complementBucket === bucketIndex;
+            const hasHighlight = hasHighlightValue || hasProbeBucket || hasComplementBucket;
             const front = hasHighlight ? '#fde68a' : '#e2e8f0';
             const topColor = hasHighlight ? '#fef3c7' : '#f8fafc';
             const side = hasHighlight ? '#ca8a04' : '#64748b';
             const stroke = hasHighlight ? '#92400e' : '#334155';
+            const countLabel = `${bucket.length} item${bucket.length === 1 ? '' : 's'}`;
             return `
                 <g>
                     <polygon points="${left},${y} ${left + depth},${y - depth} ${left + bucketWidth + depth},${y - depth} ${left + bucketWidth},${y}" fill="${topColor}"></polygon>
                     <polygon points="${left + bucketWidth},${y} ${left + bucketWidth + depth},${y - depth} ${left + bucketWidth + depth},${y + bucketHeight - depth} ${left + bucketWidth},${y + bucketHeight}" fill="${side}"></polygon>
                     <rect x="${left}" y="${y}" width="${bucketWidth}" height="${bucketHeight}" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${hasHighlight ? '2.2' : '1.5'}"></rect>
                     <text x="${left + 10}" y="${y + 21}" font-size="11" fill="#334155">b${bucketIndex}</text>
-                    <text x="${left + 42}" y="${y + 21}" font-size="11.5" fill="#0f172a">${escapeHtml(line)}</text>
+                    <text x="${left + 34}" y="${y + 21}" font-size="10.4" fill="#475569">${escapeHtml(countLabel)}</text>
+                    <text class="exec-3d-value-text" x="${left + 102}" y="${y + 21}" font-size="11.8" fill="#0f172a">${escapeHtml(line)}</text>
                 </g>
             `;
         }).join('');
-        return render3DScene(rows, width, height, 'Hash bucket state');
+
+        const infoX = left + bucketWidth + 36;
+        const probeBucketLabel = probeValue === null ? '-' : `b${bucketFor(probeValue, buckets.length)}`;
+        const complementBucketLabel = complementValue === null ? '-' : `b${bucketFor(complementValue, buckets.length)}`;
+        const infoPanel = `
+            <g>
+                <rect x="${infoX}" y="${top + 2}" width="${rightPanelWidth}" height="118" rx="11" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.6"></rect>
+                <text x="${infoX + 12}" y="${top + 24}" font-size="10.6" fill="#1e3a8a">Hash Rule</text>
+                <text x="${infoX + 12}" y="${top + 42}" font-size="11.4" font-weight="700" fill="#0f172a">bucket = |floor(value)| mod 6</text>
+                <text x="${infoX + 12}" y="${top + 62}" font-size="10.8" fill="#1e3a8a">probe value: ${probeValue === null ? '-' : formatNumber(probeValue)} -> ${probeBucketLabel}</text>
+                <text x="${infoX + 12}" y="${top + 80}" font-size="10.8" fill="#1e3a8a">complement: ${complementValue === null ? '-' : formatNumber(complementValue)} -> ${complementBucketLabel}</text>
+                <text x="${infoX + 12}" y="${top + 98}" font-size="10.2" fill="#334155">X: bucket id | Y: chain slots | Z: depth cue</text>
+            </g>
+        `;
+
+        return render3DScene(`${rows}${infoPanel}`, width, height, 'Hash bucket state');
     }
 
     function renderIndexedStrip(values, highlightSet = new Set()) {
@@ -400,7 +527,8 @@
         const linkCurveX = Math.max(36, Math.floor(spacing * 0.38));
         const linkCurveUp = mode === 'doubly' ? 24 : 22;
         const linkCurveDown = 24;
-        const markerScope = `${mode}-${values.length}-${currentIndex ?? 'n'}-${matchedIndex ?? 'n'}-${startIndex ?? 'n'}`
+        const markerNonce = `${Date.now().toString(36)}${Math.floor(Math.random() * 1000000).toString(36)}`;
+        const markerScope = `${mode}-${values.length}-${currentIndex ?? 'n'}-${matchedIndex ?? 'n'}-${startIndex ?? 'n'}-${markerNonce}`
             .replace(/[^a-z0-9_-]/gi, '');
         const nextMarkerId = `exec3d-next-${markerScope}`;
         const prevMarkerId = `exec3d-prev-${markerScope}`;
@@ -594,28 +722,41 @@
         const cell = 42;
         const gap = 8;
         const depth = 7;
-        const left = 86;
-        const top = 34;
+        const left = 128;
+        const top = 62;
         const width = Math.max(520, left + (cols * (cell + gap)) + 34);
-        const height = Math.max(220, top + (rows * (cell + gap)) + 30);
+        const height = Math.max(264, top + (rows * (cell + gap)) + 52);
 
         const colLabels = [''].concat(s2.split(''));
         const rowLabels = [''].concat(s1.split(''));
 
-        const headers = colLabels
+        const colIndexLabels = colLabels
             .map((label, col) => {
-                if (col === 0) {
-                    return '';
-                }
-                const x = left + ((col - 1) * (cell + gap)) + (cell / 2);
-                return `<text x="${x}" y="20" text-anchor="middle" font-size="11" fill="#475569">${escapeHtml(label)}</text>`;
+                const x = left + (col * (cell + gap)) + (cell / 2);
+                return `<text x="${x}" y="18" text-anchor="middle" font-size="10.4" fill="#475569">j=${col}</text>`;
             })
             .join('');
 
-        const rowHeader = rowLabels
+        const colCharLabels = colLabels
+            .map((label, col) => {
+                const x = left + (col * (cell + gap)) + (cell / 2);
+                const printable = col === 0 ? 'empty' : label;
+                return `<text x="${x}" y="33" text-anchor="middle" font-size="11.4" font-weight="700" fill="#334155">${escapeHtml(printable)}</text>`;
+            })
+            .join('');
+
+        const rowIndexLabels = rowLabels
             .map((label, row) => {
                 const y = top + (row * (cell + gap)) + (cell / 2) + 4;
-                return `<text x="${left - 26}" y="${y}" text-anchor="middle" font-size="11" fill="#475569">${escapeHtml(label)}</text>`;
+                return `<text x="${left - 58}" y="${y}" text-anchor="middle" font-size="10.4" fill="#475569">i=${row}</text>`;
+            })
+            .join('');
+
+        const rowCharLabels = rowLabels
+            .map((label, row) => {
+                const y = top + (row * (cell + gap)) + (cell / 2) + 4;
+                const printable = row === 0 ? 'empty' : label;
+                return `<text x="${left - 26}" y="${y}" text-anchor="middle" font-size="11.4" font-weight="700" fill="#334155">${escapeHtml(printable)}</text>`;
             })
             .join('');
 
@@ -626,10 +767,11 @@
                         const x = left + (j * (cell + gap));
                         const y = top + (i * (cell + gap));
                         const isActive = i === activeI && j === activeJ;
-                        const front = isActive ? '#fde68a' : '#dbeafe';
-                        const topColor = isActive ? '#fef3c7' : '#eff6ff';
-                        const side = isActive ? '#ca8a04' : '#2563eb';
-                        const stroke = isActive ? '#92400e' : '#1e3a8a';
+                        const isBoundary = i === 0 || j === 0;
+                        const front = isActive ? '#fde68a' : (isBoundary ? '#e2e8f0' : '#dbeafe');
+                        const topColor = isActive ? '#fef3c7' : (isBoundary ? '#f8fafc' : '#eff6ff');
+                        const side = isActive ? '#ca8a04' : (isBoundary ? '#64748b' : '#2563eb');
+                        const stroke = isActive ? '#92400e' : (isBoundary ? '#475569' : '#1e3a8a');
                         return `
                             <g>
                                 <polygon points="${x},${y} ${x + depth},${y - depth} ${x + cell + depth},${y - depth} ${x + cell},${y}" fill="${topColor}"></polygon>
@@ -644,9 +786,14 @@
             .join('');
 
         return render3DScene(`
-            ${headers}
-            ${rowHeader}
+            <text x="${left}" y="48" font-size="11" fill="#475569">Columns: s2 prefixes (j)</text>
+            <text x="20" y="${top - 14}" font-size="11" fill="#475569">Rows: s1 prefixes (i)</text>
+            ${colIndexLabels}
+            ${colCharLabels}
+            ${rowIndexLabels}
+            ${rowCharLabels}
             ${cells}
+            <text x="${left}" y="${height - 18}" font-size="10.6" fill="#475569">dp[i][j] = LCS length of s1[0..i-1] and s2[0..j-1]</text>
         `, width, height, '3D dynamic programming matrix');
     }
 
@@ -747,15 +894,15 @@
                     <polygon points="${x},${y} ${x + depth},${y - depth} ${x + barWidth + depth},${y - depth} ${x + barWidth},${y}" fill="${top}"></polygon>
                     <polygon points="${x + barWidth},${y} ${x + barWidth + depth},${y - depth} ${x + barWidth + depth},${y + barHeight - depth} ${x + barWidth},${y + barHeight}" fill="${side}" opacity="0.95"></polygon>
                     <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="6" fill="${front}" stroke="${stroke}" stroke-width="${isComparing ? '2.6' : '1.7'}"></rect>
-                    <text x="${x + (barWidth / 2)}" y="${axisY + 17}" text-anchor="middle" font-size="10.5" fill="#64748b">${idx}</text>
-                    <text x="${x + (barWidth / 2)}" y="${Math.max(18, y - 6)}" text-anchor="middle" font-size="10.5" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text x="${x + (barWidth / 2)}" y="${axisY + 17}" text-anchor="middle" font-size="10.8" font-weight="700" fill="#334155" style="paint-order:stroke;stroke:rgba(248,250,252,0.95);stroke-width:1.6px;stroke-linejoin:round;">${idx}</text>
+                    <text class="exec-3d-value-text" x="${x + (barWidth / 2)}" y="${Math.max(18, y - 6)}" text-anchor="middle" font-size="12.4" font-weight="800" fill="#f8fafc" style="paint-order:stroke;stroke:rgba(2,6,23,0.92);stroke-width:2.2px;stroke-linejoin:round;">${escapeHtml(formatNumber(value))}</text>
                 </g>
             `;
         }).join('');
 
         const axis = `
             <line x1="${left - 8}" y1="${zeroY}" x2="${width - 20}" y2="${zeroY}" stroke="#94a3b8" stroke-width="1.4"></line>
-            <text x="${left - 12}" y="${zeroY - 6}" font-size="10" fill="#64748b">0</text>
+            <text x="${left - 12}" y="${zeroY - 6}" font-size="10.4" font-weight="700" fill="#334155" style="paint-order:stroke;stroke:rgba(248,250,252,0.94);stroke-width:1.4px;stroke-linejoin:round;">0</text>
         `;
 
         return render3DScene(`${axis}${bars}`, width, height, '3D array bar visualization');
@@ -2480,40 +2627,94 @@
     }
 
     function renderNeuronDiagram(x1, x2, w1, w2, b, z, output, stage = 'input') {
-        const w1Stroke = stage === 'term1' || stage === 'linear' || stage === 'output' ? '#2563eb' : '#94a3b8';
-        const w2Stroke = stage === 'term2' || stage === 'linear' || stage === 'output' ? '#10b981' : '#94a3b8';
-        const zStroke = stage === 'linear' || stage === 'output' ? '#f97316' : '#94a3b8';
-        const outStroke = stage === 'output' ? '#9333ea' : '#94a3b8';
-        const width = 520;
-        const height = 224;
-        const depth = 8;
+        const isW1Active = stage === 'term1' || stage === 'linear' || stage === 'output';
+        const isW2Active = stage === 'term2' || stage === 'linear' || stage === 'output';
+        const isLinearActive = stage === 'linear' || stage === 'output';
+        const isOutputActive = stage === 'output';
+        const width = 640;
+        const height = 286;
+        const depth = 9;
 
-        function nodeBubble(cx, cy, r, front, side, stroke, label, fontSize) {
+        function linkWithArrow(x1Pos, y1Pos, x2Pos, y2Pos, color, isActive) {
+            const strokeColor = isActive ? color : '#94a3b8';
+            const glowOpacity = isActive ? '0.55' : '0.18';
             return `
                 <g>
-                    <circle cx="${cx + (depth * 0.45)}" cy="${cy - (depth * 0.45)}" r="${r}" fill="${side}" opacity="0.95"></circle>
-                    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${front}" stroke="${stroke}" stroke-width="1.8"></circle>
-                    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" class="exec-ml-text">${label}</text>
+                    <line x1="${x1Pos}" y1="${y1Pos}" x2="${x2Pos}" y2="${y2Pos}" stroke="${strokeColor}" stroke-width="6.8" opacity="${glowOpacity}"></line>
+                    <line x1="${x1Pos}" y1="${y1Pos}" x2="${x2Pos}" y2="${y2Pos}" stroke="${strokeColor}" stroke-width="${isActive ? '3.2' : '2'}" stroke-linecap="round"></line>
+                    <path d="M ${x2Pos - 10} ${y2Pos - 6} L ${x2Pos + 2} ${y2Pos} L ${x2Pos - 10} ${y2Pos + 6} Z" fill="${strokeColor}" opacity="${isActive ? '0.98' : '0.66'}"></path>
+                </g>
+            `;
+        }
+
+        function nodeCard(cx, cy, r, palette, title, value, isActive) {
+            const strokeWidth = isActive ? '2.8' : '1.8';
+            return `
+                <g>
+                    <circle cx="${cx + (depth * 0.45)}" cy="${cy - (depth * 0.45)}" r="${r}" fill="${palette.side}" opacity="${isActive ? '0.98' : '0.84'}"></circle>
+                    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${strokeWidth}"></circle>
+                    <circle cx="${cx}" cy="${cy}" r="${r - 4.2}" fill="none" stroke="${palette.ring}" stroke-width="${isActive ? '1.8' : '1.1'}" opacity="${isActive ? '0.9' : '0.55'}"></circle>
+                    <text x="${cx}" y="${cy - 7}" text-anchor="middle" font-size="10.2" class="exec-ml-text exec-ml-text-muted">${title}</text>
+                    <text x="${cx}" y="${cy + 11}" text-anchor="middle" font-size="13.3" class="exec-ml-text">${value}</text>
+                </g>
+            `;
+        }
+
+        function metricPill(x, y, text, activeColor, isActive) {
+            const fill = isActive ? activeColor : 'var(--exec-ml-floor)';
+            const textClass = isActive ? 'exec-ml-text-query' : 'exec-ml-text-muted';
+            return `
+                <g>
+                    <rect x="${x}" y="${y}" width="132" height="20" rx="8" fill="${fill}" opacity="${isActive ? '0.34' : '0.9'}"></rect>
+                    <text x="${x + 10}" y="${y + 14}" font-size="11.2" class="exec-ml-text ${textClass}">${text}</text>
                 </g>
             `;
         }
 
         return render3DScene(`
-            <line x1="126" y1="68" x2="262" y2="106" stroke="${w1Stroke}" stroke-width="2.6"></line>
-            <line x1="126" y1="152" x2="262" y2="106" stroke="${w2Stroke}" stroke-width="2.6"></line>
-            <line x1="302" y1="106" x2="410" y2="106" stroke="${outStroke}" stroke-width="2.6"></line>
-            ${nodeBubble(94, 68, 25, '#dbeafe', '#2563eb', '#1d4ed8', `x1=${formatNumber(x1)}`, 12)}
-            ${nodeBubble(94, 152, 25, '#dcfce7', '#10b981', '#15803d', `x2=${formatNumber(x2)}`, 12)}
-            ${nodeBubble(278, 106, 31, '#ffedd5', '#f97316', zStroke, `z=${formatNumber(z, 3, true)}`, 11)}
-            ${nodeBubble(430, 106, 29, '#f3e8ff', '#a855f7', outStroke, `${formatNumber(output, 3, true)}`, 11)}
-            <rect x="160" y="66" width="96" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
-            <rect x="160" y="136" width="96" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
-            <rect x="232" y="42" width="92" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
-            <rect x="400" y="54" width="86" height="17" rx="6" fill="var(--exec-ml-floor)" opacity="0.9"></rect>
-            <text x="172" y="78" font-size="11.5" class="exec-ml-text exec-ml-text-muted">w1=${formatNumber(w1, 3, true)}</text>
-            <text x="172" y="148" font-size="11.5" class="exec-ml-text exec-ml-text-muted">w2=${formatNumber(w2, 3, true)}</text>
-            <text x="242" y="54" font-size="11.5" class="exec-ml-text exec-ml-text-muted">b=${formatNumber(b, 3, true)}</text>
-            <text x="412" y="66" font-size="11.5" class="exec-ml-text exec-ml-text-query">sigma(z)</text>
+            <polygon points="42,235 58,222 616,222 600,235" fill="var(--exec-ml-floor)" opacity="0.7"></polygon>
+            <rect x="48" y="52" width="568" height="170" rx="18" fill="rgba(15,23,42,0.1)" stroke="var(--exec-ml-floor-stroke)" stroke-width="1.1"></rect>
+
+            <text x="72" y="42" font-size="10.5" class="exec-ml-text exec-ml-text-axis">Input Layer</text>
+            <text x="290" y="42" font-size="10.5" class="exec-ml-text exec-ml-text-axis">Linear Unit</text>
+            <text x="502" y="42" font-size="10.5" class="exec-ml-text exec-ml-text-axis">Activation</text>
+
+            ${linkWithArrow(140, 88, 286, 128, '#2563eb', isW1Active)}
+            ${linkWithArrow(140, 182, 286, 132, '#10b981', isW2Active)}
+            ${linkWithArrow(366, 130, 488, 130, '#9333ea', isOutputActive)}
+
+            ${nodeCard(
+                106, 84, 30,
+                { front: '#dbeafe', side: '#2563eb', stroke: '#1d4ed8', ring: '#60a5fa' },
+                'x1',
+                formatNumber(x1),
+                isW1Active
+            )}
+            ${nodeCard(
+                106, 186, 30,
+                { front: '#dcfce7', side: '#10b981', stroke: '#15803d', ring: '#34d399' },
+                'x2',
+                formatNumber(x2),
+                isW2Active
+            )}
+            ${nodeCard(
+                328, 130, 38,
+                { front: '#ffedd5', side: '#f97316', stroke: '#c2410c', ring: '#fb923c' },
+                'z',
+                formatNumber(z, 3, true),
+                isLinearActive
+            )}
+            ${nodeCard(
+                524, 130, 34,
+                { front: '#f3e8ff', side: '#a855f7', stroke: '#7c3aed', ring: '#c084fc' },
+                'sigma(z)',
+                formatNumber(output, 3, true),
+                isOutputActive
+            )}
+
+            ${metricPill(166, 70, `w1=${formatNumber(w1, 3, true)}`, '#60a5fa', isW1Active)}
+            ${metricPill(166, 168, `w2=${formatNumber(w2, 3, true)}`, '#34d399', isW2Active)}
+            ${metricPill(258, 58, `b=${formatNumber(b, 3, true)}`, '#fb923c', isLinearActive)}
         `, width, height, '3D single neuron network', 'exec-3d-ml');
     }
 
@@ -2581,63 +2782,188 @@
     }
 
     function buildKnapsackModel(payload) {
-        const weights = normalizeNumberArray(payload.weights);
-        const values = normalizeNumberArray(payload.values);
+        const rawWeights = normalizeNumberArray(payload.weights);
+        const rawValues = normalizeNumberArray(payload.values);
         const capacity = asFiniteNumber(payload.capacity, 0);
-        if (!weights.length || !values.length || weights.length !== values.length || capacity <= 0) {
+        const pairCount = Math.min(rawWeights.length, rawValues.length);
+        const items = [];
+        for (let idx = 0; idx < pairCount; idx += 1) {
+            const weight = Math.floor(rawWeights[idx]);
+            const value = Math.floor(rawValues[idx]);
+            if (!Number.isFinite(weight) || !Number.isFinite(value) || weight <= 0) {
+                continue;
+            }
+            items.push({ index: idx, weight, value });
+        }
+        if (!items.length || capacity <= 0) {
             return null;
         }
 
         const cap = Math.floor(capacity);
+        if (cap <= 0) {
+            return null;
+        }
+
         const dp = new Array(cap + 1).fill(0);
+        const totalTransitions = items.reduce(
+            (sum, item) => sum + Math.max(0, cap - item.weight + 1),
+            0
+        );
+        let transitionsDone = 0;
+        let improvementCount = 0;
+
+        function renderKnapsackStatus(options = {}) {
+            const focusCap = Number.isInteger(options.focusCap) ? options.focusCap : null;
+            const currentItem = Number.isInteger(options.itemIndex) ? items[options.itemIndex] : null;
+            const improvedCaps = options.improvedCaps instanceof Set ? options.improvedCaps : new Set();
+            const keepLabel = Number.isFinite(options.keep) ? formatNumber(options.keep) : '-';
+            const takeLabel = Number.isFinite(options.take) ? formatNumber(options.take) : '-';
+            const bestLabel = Number.isFinite(options.best) ? formatNumber(options.best) : '-';
+            const progress = totalTransitions > 0
+                ? Math.round((transitionsDone / totalTransitions) * 100)
+                : 100;
+            const processedItems = Number.isInteger(options.processedItems) ? options.processedItems : 0;
+            const currentSet = Number.isInteger(focusCap) ? new Set([focusCap]) : new Set();
+            const decisionLabel = options.decisionLabel || 'Pending';
+
+            return `
+                ${renderIndexedStrip3D(dp, improvedCaps, currentSet, 'cap')}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Current item:</strong> ${currentItem ? `I${options.itemIndex + 1} (w=${formatNumber(currentItem.weight)}, v=${formatNumber(currentItem.value)})` : '-'}</div>
+                    <div class="binary-search-status-line"><strong>Capacity slot:</strong> ${Number.isInteger(focusCap) ? focusCap : '-'} | <strong>keep:</strong> ${keepLabel} | <strong>take:</strong> ${takeLabel} | <strong>best:</strong> ${bestLabel}</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Processed items:</strong> ${processedItems}/${items.length} | <strong>Improved slots:</strong> ${improvedCaps.size} | <strong>Total improvements:</strong> ${improvementCount}</div>
+                    <div class="binary-search-status-line"><strong>Best @ capacity ${cap}:</strong> ${formatNumber(dp[cap])}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Transitions ${transitionsDone}/${totalTransitions}</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = capacity index, Y = DP value lane, Z = item-step depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize DP',
-                `Capacity ${cap}, ${weights.length} items. Start with zero value at all capacities.`,
-                renderIndexedStrip(dp),
+                `Capacity ${cap}, ${items.length} valid items. Start with zero value at all capacities.`,
+                renderKnapsackStatus({
+                    itemIndex: null,
+                    focusCap: null,
+                    keep: null,
+                    take: null,
+                    best: null,
+                    improvedCaps: new Set(),
+                    processedItems: 0,
+                    decisionLabel: 'Ready',
+                }),
                 '<code>dp[c] = 0</code> for all <code>c in [0..capacity]</code>'
             ),
         ];
 
-        for (let i = 0; i < weights.length; i += 1) {
-            const w = Math.floor(weights[i]);
-            const v = Math.floor(values[i]);
-            for (let c = cap; c >= w; c -= 1) {
+        for (let i = 0; i < items.length; i += 1) {
+            const item = items[i];
+            const improvedCaps = new Set();
+
+            steps.push(
+                makeStep(
+                    `Activate item I${i + 1}`,
+                    `Item weight=${formatNumber(item.weight)}, value=${formatNumber(item.value)}. Traverse capacities from ${cap} down to ${item.weight}.`,
+                    renderKnapsackStatus({
+                        itemIndex: i,
+                        focusCap: cap,
+                        keep: dp[cap],
+                        take: cap >= item.weight ? dp[cap - item.weight] + item.value : null,
+                        best: dp[cap],
+                        improvedCaps: new Set(improvedCaps),
+                        processedItems: i,
+                        decisionLabel: 'Item activated',
+                    }),
+                    `<code>for c from ${cap} downto ${item.weight}: dp[c] = max(dp[c], dp[c-${item.weight}] + ${item.value})</code>`
+                )
+            );
+
+            for (let c = cap; c >= item.weight; c -= 1) {
                 const keep = dp[c];
-                const take = dp[c - w] + v;
+                const take = dp[c - item.weight] + item.value;
                 const best = Math.max(keep, take);
-                dp[c] = best;
                 const changed = best !== keep;
-                if (changed || i < 2) {
+                dp[c] = best;
+                transitionsDone += 1;
+                if (changed) {
+                    improvedCaps.add(c);
+                    improvementCount += 1;
+                }
+
+                if (changed || i < 2 || c === cap || c === item.weight) {
                     steps.push(
                         makeStep(
-                            `Item ${i + 1}, capacity ${c}`,
+                            `Item I${i + 1}, capacity ${c}`,
                             changed
-                                ? `Taking item improves value: ${keep} -> ${best}.`
-                                : `Skipping item keeps best value at ${keep}.`,
-                            renderIndexedStrip(dp, new Set([c])),
+                                ? `Take item: value improves ${formatNumber(keep)} -> ${formatNumber(best)}.`
+                                : `Skip item: keep current best ${formatNumber(keep)}.`,
+                            renderKnapsackStatus({
+                                itemIndex: i,
+                                focusCap: c,
+                                keep,
+                                take,
+                                best,
+                                improvedCaps: new Set(improvedCaps),
+                                processedItems: i + 1,
+                                decisionLabel: changed ? 'take item' : 'skip item',
+                            }),
                             `
-                                <code>dp[${c}] = max(dp[${c}], dp[${c - w}] + ${v})</code><br>
-                                <code>max(${keep}, ${take}) = ${best}</code>
+                                <code>dp[${c}] = max(dp[${c}], dp[${c - item.weight}] + ${item.value})</code><br>
+                                <code>max(${formatNumber(keep)}, ${formatNumber(take)}) = ${formatNumber(best)}</code>
                             `
                         )
                     );
                 }
             }
+
+            steps.push(
+                makeStep(
+                    `Item I${i + 1} complete`,
+                    `After item I${i + 1}, improved capacities: ${improvedCaps.size ? `[${Array.from(improvedCaps).sort((a, b) => a - b).join(', ')}]` : 'none'}.`,
+                    renderKnapsackStatus({
+                        itemIndex: i,
+                        focusCap: cap,
+                        keep: dp[cap],
+                        take: null,
+                        best: dp[cap],
+                        improvedCaps: new Set(improvedCaps),
+                        processedItems: i + 1,
+                        decisionLabel: 'Item pass complete',
+                    }),
+                    `<code>item ${i + 1} pass finalized</code>`
+                )
+            );
         }
 
         steps.push(
             makeStep(
                 'Final Answer',
-                `Maximum value at capacity ${cap} is ${dp[cap]}.`,
-                renderIndexedStrip(dp, new Set([cap])),
-                '<code>Answer = dp[capacity]</code>'
+                `Maximum value at capacity ${cap} is ${formatNumber(dp[cap])}.`,
+                `
+                    ${renderKnapsackStatus({
+                        itemIndex: items.length - 1,
+                        focusCap: cap,
+                        keep: dp[cap],
+                        take: null,
+                        best: dp[cap],
+                        improvedCaps: new Set([cap]),
+                        processedItems: items.length,
+                        decisionLabel: 'Optimal value ready',
+                    })}
+                    <div class="exec-summary success">Answer: ${formatNumber(dp[cap])}</div>
+                `,
+                '<code>answer = dp[capacity]</code>'
             )
         );
 
         return {
             title: 'Execution Visualization - Knapsack',
-            subtitle: 'Replay how DP states evolve under 0/1 transition rules.',
+            subtitle: 'Replay 0/1 DP transitions with capacity-index telemetry and 3D state board.',
             steps,
         };
     }
@@ -2652,11 +2978,43 @@
         const m = s1.length;
         const n = s2.length;
         const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+        const totalCells = m * n;
+        let processedCells = 0;
+        let matchCount = 0;
+
+        function renderLcsStatus(activeI = 0, activeJ = 0, decisionLabel = 'Ready', done = false) {
+            const i = Number.isInteger(activeI) ? activeI : 0;
+            const j = Number.isInteger(activeJ) ? activeJ : 0;
+            const charOne = i > 0 ? s1[i - 1] : '-';
+            const charTwo = j > 0 ? s2[j - 1] : '-';
+            const prefixOne = s1.slice(0, Math.max(0, i));
+            const prefixTwo = s2.slice(0, Math.max(0, j));
+            const progress = totalCells > 0
+                ? Math.round((processedCells / totalCells) * 100)
+                : 100;
+            return `
+                ${renderMatrix(dp, s1, s2, i, j)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Comparing:</strong> s1[${Math.max(0, i - 1)}]='${escapeHtml(charOne)}' vs s2[${Math.max(0, j - 1)}]='${escapeHtml(charTwo)}'</div>
+                    <div class="binary-search-status-line"><strong>Cell:</strong> (${i}, ${j}) | <strong>Decision:</strong> ${escapeHtml(decisionLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Prefixes:</strong> "${escapeHtml(prefixOne || 'empty')}" vs "${escapeHtml(prefixTwo || 'empty')}"</div>
+                    <div class="binary-search-status-line"><strong>Value meaning:</strong> Numbers like 0/1/2 are LCS lengths for the two prefixes.</div>
+                    <div class="binary-search-status-line"><strong>Processed:</strong> ${processedCells}/${totalCells} | <strong>Matches:</strong> ${matchCount}</div>
+                    <div class="binary-search-status-line"><strong>LCS length so far:</strong> ${formatNumber(dp[m][n])}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">DP matrix fill progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = s2 index, Y = s1 index, Z = DP value depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Matrix',
                 `Build (${m + 1} x ${n + 1}) matrix with zeros.`,
-                renderMatrix(dp, s1, s2, 0, 0),
+                renderLcsStatus(0, 0, 'Matrix initialized', false),
                 '<code>dp[0][*] = dp[*][0] = 0</code>'
             ),
         ];
@@ -2665,11 +3023,13 @@
             for (let j = 1; j <= n; j += 1) {
                 if (s1[i - 1] === s2[j - 1]) {
                     dp[i][j] = dp[i - 1][j - 1] + 1;
+                    processedCells += 1;
+                    matchCount += 1;
                     steps.push(
                         makeStep(
                             `Match at (${i}, ${j})`,
                             `'${s1[i - 1]}' matches '${s2[j - 1]}', take diagonal + 1.`,
-                            renderMatrix(dp, s1, s2, i, j),
+                            renderLcsStatus(i, j, 'Diagonal + 1', false),
                             `<code>dp[${i}][${j}] = dp[${i - 1}][${j - 1}] + 1 = ${dp[i][j]}</code>`
                         )
                     );
@@ -2677,11 +3037,12 @@
                     const up = dp[i - 1][j];
                     const left = dp[i][j - 1];
                     dp[i][j] = Math.max(up, left);
+                    processedCells += 1;
                     steps.push(
                         makeStep(
                             `Mismatch at (${i}, ${j})`,
                             `'${s1[i - 1]}' != '${s2[j - 1]}', take max(up, left).`,
-                            renderMatrix(dp, s1, s2, i, j),
+                            renderLcsStatus(i, j, up >= left ? 'Take up cell' : 'Take left cell', false),
                             `<code>dp[${i}][${j}] = max(dp[${i - 1}][${j}], dp[${i}][${j - 1}]) = max(${up}, ${left}) = ${dp[i][j]}</code>`
                         )
                     );
@@ -2693,14 +3054,17 @@
             makeStep(
                 'Final Answer',
                 `LCS length is ${dp[m][n]}.`,
-                renderMatrix(dp, s1, s2, m, n),
+                `
+                    ${renderLcsStatus(m, n, 'LCS length finalized', true)}
+                    <div class="exec-summary success">Answer: ${formatNumber(dp[m][n])}</div>
+                `,
                 `<code>Answer = dp[${m}][${n}]</code>`
             )
         );
 
         return {
             title: 'Execution Visualization - LCS',
-            subtitle: 'Cell-by-cell DP fill using match/mismatch recurrence.',
+            subtitle: 'Cell-by-cell DP fill with live matrix telemetry and decision tracking.',
             steps,
         };
     }
@@ -2719,36 +3083,64 @@
         }));
         const sorted = intervals.slice().sort((a, b) => (a.end - b.end) || (a.start - b.start));
         const selectedRows = new Set();
+        const selected = [];
+        let lastEnd = -Infinity;
+        let processedCount = 0;
+
+        function renderActivityStatus(currentRow = -1, decisionLabel = 'Ready', detailLabel = 'Pending', done = false) {
+            const current = Number.isInteger(currentRow) && currentRow >= 0 && currentRow < sorted.length
+                ? sorted[currentRow]
+                : null;
+            const selectedLabel = selected.length
+                ? selected.map((item) => `A${item.index + 1}[${formatNumber(item.start)},${formatNumber(item.end)})`).join(', ')
+                : '-';
+            const progress = sorted.length ? Math.round((processedCount / sorted.length) * 100) : 100;
+            return `
+                ${renderActivityTimeline3D(sorted, selectedRows, currentRow)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Current:</strong> ${current ? `A${current.index + 1} [${formatNumber(current.start)}, ${formatNumber(current.end)})` : '-'}</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Selected activities:</strong> ${selectedLabel}</div>
+                    <div class="binary-search-status-line"><strong>Selected count:</strong> ${selected.length}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Checked ${processedCount}/${sorted.length} activities</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = timeline span, Y = sorted activity rows, Z = decision depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Sort by Finish Time',
                 'Greedy starts by earliest finishing activity.',
-                `
-                    ${renderActivityTimeline3D(sorted, selectedRows, -1)}
-                `,
+                renderActivityStatus(-1, 'Sort by end time', 'Ready to scan from earliest finish', false),
                 '<code>Sort activities by end ascending</code>'
             ),
         ];
 
-        const selected = [];
-        let lastEnd = -Infinity;
         sorted.forEach((item, rowIdx) => {
-            const compatible = item.start >= lastEnd;
+            const previousLastEnd = lastEnd;
+            const compatible = item.start >= previousLastEnd;
             if (compatible) {
                 selected.push(item);
                 selectedRows.add(rowIdx);
                 lastEnd = item.end;
             }
+            processedCount += 1;
             steps.push(
                 makeStep(
                     `Check A${item.index + 1}`,
                     compatible
-                        ? `Compatible (${item.start} >= ${selected.length > 1 ? selected[selected.length - 2].end : '-inf'}), select it.`
-                        : `Overlaps with last selected finish (${lastEnd}), skip.`,
-                    `
-                        ${renderActivityTimeline3D(sorted, selectedRows, rowIdx)}
-                        <div class="exec-summary">Selected: [${selected.map((it) => `A${it.index + 1}`).join(', ') || '-'}]</div>
-                    `,
+                        ? `Compatible (${formatNumber(item.start)} >= ${Number.isFinite(previousLastEnd) ? formatNumber(previousLastEnd) : '-inf'}), select it.`
+                        : `Overlaps (${formatNumber(item.start)} < ${formatNumber(previousLastEnd)}), skip.`,
+                    renderActivityStatus(
+                        rowIdx,
+                        compatible ? 'Select activity' : 'Skip activity',
+                        compatible ? `Update last_end to ${formatNumber(item.end)}` : `Keep last_end as ${formatNumber(previousLastEnd)}`,
+                        false
+                    ),
                     `<code>Select if start >= last_end</code>`
                 )
             );
@@ -2759,8 +3151,9 @@
                 'Final Answer',
                 `Maximum non-overlapping activities selected: ${selected.length}.`,
                 `
-                    ${renderActivityTimeline3D(sorted, selectedRows, -1)}
+                    ${renderActivityStatus(-1, 'Greedy complete', 'Earliest-finish rule finalized', true)}
                     <div class="exec-summary">Chosen activities: [${selected.map((it) => `A${it.index + 1}`).join(', ') || '-'}]</div>
+                    <div class="exec-summary success">Answer: ${selected.length}</div>
                 `,
                 '<code>Greedy by earliest finish gives optimal count</code>'
             )
@@ -2782,7 +3175,13 @@
 
         const steps = [];
         const validKeys = new Set();
-        const stepLimit = 140;
+        const stepLimit = 180;
+        const allNonNegative = values.every((value) => value >= 0);
+        const indexLegend = values.map((value, idx) => `i${idx}=${formatNumber(value)}`).join(' | ');
+        let expandedNodes = 0;
+        let prunedNodes = 0;
+        let maxDepth = 0;
+        let lastSnapshot = { index: 0, sum: 0, chosenIndices: [] };
 
         function pushStep(step) {
             if (steps.length < stepLimit) {
@@ -2790,20 +3189,71 @@
             }
         }
 
+        function formatChosen(indices) {
+            if (!indices.length) {
+                return '(empty)';
+            }
+            return indices.map((idx) => `i${idx}(${formatNumber(values[idx])})`).join(', ');
+        }
+
+        function formatFoundSubsets() {
+            if (!validKeys.size) {
+                return '-';
+            }
+            return Array.from(validKeys)
+                .map((key) => `[${key}]`)
+                .join(', ');
+        }
+
+        function hasZeroFrom(startIndex) {
+            for (let i = Math.max(0, startIndex); i < values.length; i += 1) {
+                if (values[i] === 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function renderBacktrackingStatus(index, sum, chosenIndices, decisionLabel = 'Explore', detailLabel = 'Branching', done = false) {
+            const highlightSet = new Set(chosenIndices);
+            const activeSet = index < values.length ? new Set([index]) : new Set();
+            const depth = chosenIndices.length;
+            const theoreticalNodes = Math.max(1, (2 ** Math.min(values.length, 12)) - 1);
+            const progress = Math.min(100, Math.round((expandedNodes / theoreticalNodes) * 100));
+            const nextValueLabel = index < values.length ? formatNumber(values[index]) : '-';
+            const remaining = formatNumber(target - sum);
+            return `
+                ${renderIndexedStrip3D(values, highlightSet, activeSet)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Index map:</strong> ${escapeHtml(indexLegend)}</div>
+                    <div class="binary-search-status-line"><strong>Node:</strong> i=${index} | <strong>Next value:</strong> ${nextValueLabel} | <strong>Depth:</strong> ${depth}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-status-line"><strong>Subset path:</strong> ${escapeHtml(formatChosen(chosenIndices))}</div>
+                    <div class="binary-search-status-line"><strong>Sum:</strong> ${formatNumber(sum)} | <strong>Target:</strong> ${formatNumber(target)} | <strong>Remaining:</strong> ${remaining}</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Expanded:</strong> ${expandedNodes} | <strong>Pruned:</strong> ${prunedNodes} | <strong>Max depth:</strong> ${maxDepth}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Search exploration ${progress}% (capped view)</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = item index, Y = single state row, Z = recursion depth cue.</em></div>
+            `;
+        }
+
         function dfs(index, sum, chosenIndices) {
             if (steps.length >= stepLimit) {
                 return;
             }
+            expandedNodes += 1;
+            maxDepth = Math.max(maxDepth, chosenIndices.length);
+            lastSnapshot = { index, sum, chosenIndices: chosenIndices.slice() };
             const chosenValues = chosenIndices.map((entry) => values[entry]);
 
             pushStep(
                 makeStep(
-                    `Explore index ${index}`,
-                    `Current subset [${chosenValues.join(', ')}], sum=${sum}.`,
-                    `
-                        ${renderIndexedStrip3D(values, new Set(chosenIndices), index < values.length ? new Set([index]) : new Set())}
-                        <div class="exec-summary">Chosen: [${chosenValues.join(', ')}] | Sum: ${sum} | Target: ${target}</div>
-                    `,
+                    `Visit node i=${index}`,
+                    `Current subset [${chosenValues.join(', ')}], running sum=${formatNumber(sum)}.`,
+                    renderBacktrackingStatus(index, sum, chosenIndices, 'Visit node', index < values.length ? 'Try include/exclude branches' : 'No next item', false),
                     '<code>branch(i, sum) => include(values[i]) or exclude(values[i])</code>'
                 )
             );
@@ -2812,18 +3262,53 @@
                 validKeys.add(chosenValues.slice().sort((a, b) => a - b).join(','));
                 pushStep(
                     makeStep(
-                        'Valid subset found',
-                        `[${chosenValues.join(', ')}] hits target ${target}.`,
+                        'Target hit',
+                        `[${chosenValues.join(', ')}] reaches target ${formatNumber(target)}.`,
                         `
-                            ${renderIndexedStrip3D(values, new Set(chosenIndices), new Set(chosenIndices))}
+                            ${renderBacktrackingStatus(index, sum, chosenIndices, 'Record subset', 'Count this subset as valid', false)}
                             <div class="exec-summary success">Valid subsets found: ${validKeys.size}</div>
                         `,
-                        '<code>if sum == target: count += 1</code>'
+                        '<code>if sum == target: store normalized subset</code>'
+                    )
+                );
+                const shouldStopAfterHit = allNonNegative && !hasZeroFrom(index);
+                if (shouldStopAfterHit) {
+                    prunedNodes += 1;
+                    pushStep(
+                        makeStep(
+                            'Prune after target',
+                            'Target already reached and all remaining values are positive, so further includes cannot create a new valid sum.',
+                            renderBacktrackingStatus(index, sum, chosenIndices, 'Prune', 'Positive-only tail after exact target hit', false),
+                            '<code>if sum == target and remaining values > 0: return</code>'
+                        )
+                    );
+                    return;
+                }
+            }
+
+            if (index >= values.length) {
+                prunedNodes += 1;
+                pushStep(
+                    makeStep(
+                        'Dead end',
+                        `Reached end of values with sum=${formatNumber(sum)} (target=${formatNumber(target)}).`,
+                        renderBacktrackingStatus(index, sum, chosenIndices, 'Stop branch', 'No items left to explore', false),
+                        '<code>if i == n and sum != target: return</code>'
                     )
                 );
                 return;
             }
-            if (index >= values.length || sum > target) {
+
+            if (allNonNegative && sum > target) {
+                prunedNodes += 1;
+                pushStep(
+                    makeStep(
+                        'Prune branch',
+                        `Sum ${formatNumber(sum)} exceeded target ${formatNumber(target)} with non-negative values.`,
+                        renderBacktrackingStatus(index, sum, chosenIndices, 'Prune', 'Further includes cannot decrease sum', false),
+                        '<code>if values are non-negative and sum > target: prune</code>'
+                    )
+                );
                 return;
             }
 
@@ -2837,8 +3322,9 @@
                 'Final Answer',
                 `Unique valid subsets counted: ${validKeys.size}.`,
                 `
-                    ${renderIndexedStrip3D(values)}
-                    <div class="exec-summary">Total valid subsets: ${validKeys.size}</div>
+                    ${renderBacktrackingStatus(lastSnapshot.index, lastSnapshot.sum, lastSnapshot.chosenIndices, 'Search complete', 'All reachable branches explored', true)}
+                    <div class="exec-summary">Valid subsets: ${formatFoundSubsets()}</div>
+                    <div class="exec-summary success">Answer: ${validKeys.size}</div>
                 `,
                 '<code>Count all unique subsets with sum == target</code>'
             )
@@ -2846,7 +3332,7 @@
 
         return {
             title: 'Execution Visualization - Backtracking',
-            subtitle: 'Search tree exploration with include/exclude branching.',
+            subtitle: 'Subset-sum backtracking with branch pruning, index mapping, and recursion-depth telemetry.',
             steps,
         };
     }
@@ -2857,26 +3343,59 @@
             return null;
         }
 
+        const seq = [0, 1];
+        let computedCount = 0;
+        const totalTerms = n + 1;
+
+        function renderRecursionStatus(activeIndex = 1, decisionLabel = 'Ready', detailLabel = 'Pending', done = false) {
+            const activeSet = Number.isInteger(activeIndex) && activeIndex >= 0 && activeIndex < seq.length
+                ? new Set([activeIndex])
+                : new Set();
+            const knownSet = new Set(Array.from({ length: seq.length }, (_, idx) => idx));
+            const knownTerms = Math.min(seq.length, totalTerms);
+            const progress = totalTerms > 0 ? Math.round((knownTerms / totalTerms) * 100) : 100;
+            const activeValue = Number.isInteger(activeIndex) && activeIndex >= 0 && activeIndex < seq.length
+                ? formatNumber(seq[activeIndex])
+                : '-';
+            const baseLabel = 'F0=0, F1=1';
+            const recurrenceLabel = Number.isInteger(activeIndex) && activeIndex >= 2 && activeIndex < seq.length
+                ? `F${activeIndex - 1} + F${activeIndex - 2} = ${formatNumber(seq[activeIndex - 1])} + ${formatNumber(seq[activeIndex - 2])}`
+                : 'Fi = F(i-1) + F(i-2)';
+            return `
+                ${renderIndexedStrip3D(seq, knownSet, activeSet)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Base cases:</strong> ${baseLabel}</div>
+                    <div class="binary-search-status-line"><strong>Active term:</strong> ${Number.isInteger(activeIndex) ? `F${activeIndex}` : '-'} = ${activeValue}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-status-line"><strong>Recurrence:</strong> ${escapeHtml(recurrenceLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Known terms:</strong> ${knownTerms}/${totalTerms} | <strong>Computed terms:</strong> ${computedCount}/${Math.max(0, n - 1)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Sequence coverage ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = Fibonacci index, Y = single sequence row, Z = recurrence-step depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Base Cases',
                 'Start with F0=0 and F1=1.',
-                `
-                    ${renderIndexedStrip3D([0, 1], new Set([0, 1]))}
-                    <div class="exec-summary">Sequence: [0, 1]</div>
-                `,
+                renderRecursionStatus(1, 'Initialize base cases', 'Seed sequence with two fixed values', false),
                 '<code>F(0)=0, F(1)=1</code>'
             ),
         ];
-        const seq = [0, 1];
+
         for (let i = 2; i <= n; i += 1) {
             const next = seq[i - 1] + seq[i - 2];
+            computedCount += 1;
             seq.push(next);
             steps.push(
                 makeStep(
                     `Compute F${i}`,
                     `F${i} = F${i - 1} + F${i - 2} = ${seq[i - 1]} + ${seq[i - 2]} = ${next}`,
-                    renderIndexedStrip3D(seq, new Set([i - 1, i - 2]), new Set([i])),
+                    renderRecursionStatus(i, `Compute F${i}`, `Use F${i - 1} and F${i - 2} to derive next term`, false),
                     `<code>F(${i}) = F(${i - 1}) + F(${i - 2})</code>`
                 )
             );
@@ -2885,14 +3404,18 @@
             makeStep(
                 'Final Answer',
                 `F${n} = ${seq[n]}`,
-                renderIndexedStrip3D(seq, new Set([n]), new Set([n])),
+                `
+                    ${renderRecursionStatus(n, 'Sequence complete', 'All required terms computed', true)}
+                    <div class="exec-summary">Sequence: [${seq.join(', ')}]</div>
+                    <div class="exec-summary success">Answer: ${formatNumber(seq[n])}</div>
+                `,
                 '<code>Answer is final sequence element</code>'
             )
         );
 
         return {
             title: 'Execution Visualization - Recursion (Fibonacci)',
-            subtitle: 'Build the recurrence result step by step.',
+            subtitle: 'Build Fibonacci terms from base cases with recurrence telemetry and 3D sequence mapping.',
             steps,
         };
     }
@@ -2901,6 +3424,48 @@
         const decimal = Math.floor(asFiniteNumber(payload.decimal, Number.NaN));
         if (!Number.isInteger(decimal) || decimal < 0) {
             return null;
+        }
+
+        const targetBinary = decimal.toString(2);
+        const expectedDivisions = Math.max(1, targetBinary.length);
+
+        function renderBitStatus(bitsLsbToMsb, options = {}) {
+            const safeBits = Array.isArray(bitsLsbToMsb) ? bitsLsbToMsb.slice() : [];
+            const currentDividend = Number.isFinite(options.currentDividend) ? options.currentDividend : null;
+            const quotient = Number.isFinite(options.quotient) ? options.quotient : null;
+            const remainder = Number.isFinite(options.remainder) ? options.remainder : null;
+            const done = Boolean(options.done);
+            const decisionLabel = options.decisionLabel || 'Update bits';
+            const detailLabel = options.detailLabel || 'Track quotient and remainder';
+            const divisionsDone = Number.isInteger(options.divisionsDone) ? options.divisionsDone : safeBits.length;
+            const activeIndex = Number.isInteger(options.activeIndex) ? options.activeIndex : (safeBits.length ? safeBits.length - 1 : -1);
+            const bitSequence = safeBits.length ? safeBits.join(', ') : '-';
+            const currentBinary = safeBits.length ? safeBits.slice().reverse().join('') : '0';
+            const progress = expectedDivisions > 0
+                ? Math.min(100, Math.round((divisionsDone / expectedDivisions) * 100))
+                : 100;
+            const highlightSet = safeBits.length
+                ? new Set(Array.from({ length: safeBits.length }, (_, idx) => idx))
+                : new Set();
+            const activeSet = Number.isInteger(activeIndex) && activeIndex >= 0 && activeIndex < safeBits.length
+                ? new Set([activeIndex])
+                : new Set();
+
+            return `
+                ${renderIndexedStrip3D(safeBits.length ? safeBits : [0], highlightSet, activeSet, 'bit')}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Decimal target:</strong> ${formatNumber(decimal)} | <strong>Binary target:</strong> ${targetBinary}</div>
+                    <div class="binary-search-status-line"><strong>Current value:</strong> ${currentDividend === null ? '-' : formatNumber(currentDividend)} | <strong>Quotient:</strong> ${quotient === null ? '-' : formatNumber(quotient)} | <strong>Remainder:</strong> ${remainder === null ? '-' : formatNumber(remainder)}</div>
+                    <div class="binary-search-status-line"><strong>Remainders (LSB->MSB):</strong> [${bitSequence}]</div>
+                    <div class="binary-search-status-line"><strong>Binary so far (MSB->LSB):</strong> ${currentBinary}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Division progress ${progress}% (${Math.min(divisionsDone, expectedDivisions)}/${expectedDivisions})</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = bit position capture order, Y = single bit row, Z = division-step depth cue.</em></div>
+            `;
         }
 
         if (decimal === 0) {
@@ -2912,8 +3477,17 @@
                         'Special Case',
                         'Decimal 0 directly maps to binary 0.',
                         `
-                            ${renderIndexedStrip3D([0], new Set([0]), new Set([0]), 'bit')}
-                            <div class="exec-summary">Binary: 0</div>
+                            ${renderBitStatus([0], {
+                                currentDividend: 0,
+                                quotient: 0,
+                                remainder: 0,
+                                decisionLabel: 'Special case',
+                                detailLabel: 'Zero has binary representation 0',
+                                divisionsDone: 1,
+                                activeIndex: 0,
+                                done: true,
+                            })}
+                            <div class="exec-summary success">Answer: 0</div>
                         `,
                         '<code>0 -> 0</code>'
                     ),
@@ -2924,19 +3498,28 @@
         const remainders = [];
         const steps = [];
         let current = decimal;
+        let divisionsDone = 0;
         while (current > 0) {
+            const dividend = current;
             const quotient = Math.floor(current / 2);
             const remainder = current % 2;
             remainders.push(remainder);
+            divisionsDone += 1;
             steps.push(
                 makeStep(
-                    `Divide ${current} by 2`,
+                    `Divide ${dividend} by 2`,
                     `Quotient=${quotient}, remainder=${remainder}.`,
-                    `
-                        ${renderIndexedStrip3D(remainders, new Set([remainders.length - 1]), new Set(), 'bit')}
-                        <div class="exec-summary">Remainders so far (LSB->MSB): [${remainders.join(', ')}]</div>
-                    `,
-                    `<code>${current} = 2 * ${quotient} + ${remainder}</code>`
+                    renderBitStatus(remainders, {
+                        currentDividend: dividend,
+                        quotient,
+                        remainder,
+                        decisionLabel: `Store remainder ${remainder}`,
+                        detailLabel: 'Push remainder, continue with quotient',
+                        divisionsDone,
+                        activeIndex: remainders.length - 1,
+                        done: false,
+                    }),
+                    `<code>${dividend} = 2 * ${quotient} + ${remainder}</code>`
                 )
             );
             current = quotient;
@@ -2948,8 +3531,17 @@
                 'Reverse remainders',
                 `Binary result is ${binary}.`,
                 `
-                    ${renderIndexedStrip3D(finalBits, new Set(Array.from({ length: finalBits.length }, (_, idx) => idx)), new Set([0]), 'bit')}
-                    <div class="exec-summary success">Binary: ${binary}</div>
+                    ${renderBitStatus(finalBits, {
+                        currentDividend: 0,
+                        quotient: 0,
+                        remainder: null,
+                        decisionLabel: 'Reverse order',
+                        detailLabel: 'Read bits from last remainder to first',
+                        divisionsDone: expectedDivisions,
+                        activeIndex: 0,
+                        done: true,
+                    })}
+                    <div class="exec-summary success">Answer: ${binary}</div>
                 `,
                 '<code>Read remainders in reverse order</code>'
             )
@@ -2957,7 +3549,7 @@
 
         return {
             title: 'Execution Visualization - Bit Conversion',
-            subtitle: 'Repeated division by 2 to construct binary digits.',
+            subtitle: 'Convert decimal to binary by repeated division with bit-position telemetry and 3D mapping.',
             steps,
         };
     }
@@ -2969,29 +3561,56 @@
             return null;
         }
 
+        const initialA = a;
+        const initialB = b;
+        let iterationCount = 0;
+
+        function renderMathStatus(currentA, currentB, remainder = null, decisionLabel = 'Ready', detailLabel = 'Pending', done = false) {
+            const hasRemainder = Number.isFinite(remainder);
+            const progressBase = Math.max(initialA, initialB);
+            const progress = currentB === 0
+                ? 100
+                : Math.max(8, Math.min(95, Math.round((1 - (currentB / progressBase)) * 100)));
+            const equationLabel = hasRemainder
+                ? `${formatNumber(currentA)} = ${formatNumber(currentB)} * floor(${formatNumber(currentA)}/${formatNumber(currentB)}) + ${formatNumber(remainder)}`
+                : '-';
+            return `
+                ${renderEuclidState3D(currentA, currentB, hasRemainder ? remainder : null)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Current pair:</strong> a=${formatNumber(currentA)}, b=${formatNumber(currentB)}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-status-line"><strong>Remainder:</strong> ${hasRemainder ? formatNumber(remainder) : '-'} | <strong>Equation:</strong> ${equationLabel}</div>
+                    <div class="binary-search-status-line"><strong>Invariant:</strong> gcd(a,b) is unchanged by (a,b) -> (b, a mod b)</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Iterations:</strong> ${iterationCount}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">${done ? 'Euclid reduction complete' : `Reduction progress ${progress}% (until b = 0)`}</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = variable slot (a,b,r), Y = single state row, Z = Euclid-step depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize',
                 `Find gcd(${a}, ${b}) using Euclid algorithm.`,
-                `
-                    ${renderEuclidState3D(a, b)}
-                    <div class="exec-summary">Start: a=${a}, b=${b}</div>
-                `,
+                renderMathStatus(a, b, null, 'Initialize pair', 'Start Euclid reductions', false),
                 '<code>while b != 0: (a, b) = (b, a % b)</code>'
             ),
         ];
 
         while (b !== 0) {
             const r = a % b;
+            const prevA = a;
+            const prevB = b;
+            iterationCount += 1;
             steps.push(
                 makeStep(
-                    `Euclid Step`,
-                    `a=${a}, b=${b}, remainder=${r}`,
-                    `
-                        ${renderEuclidState3D(a, b, r)}
-                        <div class="exec-summary">Next pair: (${b}, ${r})</div>
-                    `,
-                    `<code>${a} = ${b} * floor(${a}/${b}) + ${r}</code>`
+                    `Euclid Step ${iterationCount}`,
+                    `Compute remainder r = ${prevA} mod ${prevB} = ${r}.`,
+                    renderMathStatus(prevA, prevB, r, 'Compute remainder', `Set next pair to (${formatNumber(prevB)}, ${formatNumber(r)})`, false),
+                    `<code>${prevA} = ${prevB} * floor(${prevA}/${prevB}) + ${r}</code>`
                 )
             );
             a = b;
@@ -3003,7 +3622,7 @@
                 'Final Answer',
                 `gcd is ${a}.`,
                 `
-                    ${renderEuclidState3D(a, 0)}
+                    ${renderMathStatus(a, 0, null, 'Stop condition', 'b is zero, so a is gcd', true)}
                     <div class="exec-summary success">GCD: ${a}</div>
                 `,
                 '<code>When b=0, gcd=a</code>'
@@ -3012,7 +3631,7 @@
 
         return {
             title: 'Execution Visualization - Euclidean GCD',
-            subtitle: 'Modulo reduction until remainder becomes zero.',
+            subtitle: 'Modulo-based pair reduction with live invariant tracking and 3D Euclid state board.',
             steps,
         };
     }
@@ -3394,56 +4013,114 @@
             return renderStackState3D(state, activeIndex);
         }
 
+        function operationLabel(entry) {
+            if (!entry) {
+                return '-';
+            }
+            if (entry.op === 'push') {
+                return `push(${entry.value !== null ? formatNumber(entry.value) : '?'})`;
+            }
+            return 'pop()';
+        }
+
         const state = initial.slice();
+        let appliedCount = 0;
+        let pushCount = 0;
+        let popCount = 0;
+        let ignoredPopCount = 0;
+
+        function renderStackStatus(currentOp, resultLabel = 'Pending') {
+            const topLabel = state.length ? formatNumber(state[state.length - 1]) : 'empty';
+            const stackLabel = state.length ? `[${state.map((value) => formatNumber(value)).join(', ')}]` : '[]';
+            const progress = operations.length ? Math.round((appliedCount / operations.length) * 100) : 100;
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Next / Current op:</strong> ${escapeHtml(currentOp)}</div>
+                    <div class="binary-search-status-line"><strong>Applied:</strong> ${appliedCount}/${operations.length} | <strong>Size:</strong> ${state.length}</div>
+                    <div class="binary-search-status-line"><strong>Pushes:</strong> ${pushCount} | <strong>Pops:</strong> ${popCount} | <strong>Ignored pops:</strong> ${ignoredPopCount}</div>
+                    <div class="binary-search-status-line"><strong>Top:</strong> ${topLabel}</div>
+                    <div class="binary-search-status-line"><strong>Stack:</strong> ${stackLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${escapeHtml(resultLabel)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Operation replay progress</div>
+                </div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Stack',
                 'Load initial stack state before applying operations.',
                 `
                     ${renderStackState(state, state.length ? state.length - 1 : null)}
-                    <div class="exec-summary">Bottom -> Top order in memory.</div>
+                    ${renderStackStatus(operationLabel(operations[0]), 'Ready')}
                 `,
                 '<code>stack = initial</code>'
             ),
         ];
 
         operations.forEach((entry, opIdx) => {
-            if (entry.op === 'push' && entry.value !== null) {
-                state.push(entry.value);
-                steps.push(
-                    makeStep(
-                        `Operation ${opIdx + 1}: push(${formatNumber(entry.value)})`,
-                        `Push places ${formatNumber(entry.value)} at the top.`,
-                        `
-                            ${renderStackState(state, state.length - 1)}
-                            <div class="exec-summary">Size: ${state.length}</div>
-                        `,
-                        `<code>stack.append(${formatNumber(entry.value)})</code>`
-                    )
-                );
+            appliedCount += 1;
+            const nextOp = operationLabel(operations[appliedCount]);
+
+            if (entry.op === 'push') {
+                if (entry.value !== null) {
+                    state.push(entry.value);
+                    pushCount += 1;
+                    steps.push(
+                        makeStep(
+                            `Operation ${opIdx + 1}: push(${formatNumber(entry.value)})`,
+                            `Push places ${formatNumber(entry.value)} at the top.`,
+                            `
+                                ${renderStackState(state, state.length - 1)}
+                                ${renderStackStatus(nextOp, `Pushed ${formatNumber(entry.value)}`)}
+                            `,
+                            `<code>stack.append(${formatNumber(entry.value)})</code>`
+                        )
+                    );
+                } else {
+                    steps.push(
+                        makeStep(
+                            `Operation ${opIdx + 1}: push(?)`,
+                            'Push value is invalid, operation ignored.',
+                            `
+                                ${renderStackState(state, state.length ? state.length - 1 : null)}
+                                ${renderStackStatus(nextOp, 'Invalid push ignored')}
+                            `,
+                            '<code>if push value invalid: ignore</code>'
+                        )
+                    );
+                }
                 return;
             }
 
             if (entry.op === 'pop') {
                 if (state.length) {
                     const removed = state.pop();
+                    popCount += 1;
                     steps.push(
                         makeStep(
                             `Operation ${opIdx + 1}: pop()`,
                             `Remove top value ${formatNumber(removed)}.`,
                             `
                                 ${renderStackState(state, state.length ? state.length - 1 : null)}
-                                <div class="exec-summary">Size: ${state.length}</div>
+                                ${renderStackStatus(nextOp, `Popped ${formatNumber(removed)}`)}
                             `,
                             '<code>if stack: stack.pop()</code>'
                         )
                     );
                 } else {
+                    ignoredPopCount += 1;
                     steps.push(
                         makeStep(
                             `Operation ${opIdx + 1}: pop()`,
                             'Pop on empty stack is ignored.',
-                            `${renderStackState(state)}`,
+                            `
+                                ${renderStackState(state)}
+                                ${renderStackStatus(nextOp, 'Ignored empty pop')}
+                            `,
                             '<code>if stack empty: ignore pop</code>'
                         )
                     );
@@ -3460,6 +4137,7 @@
                     : 'Stack is empty after all operations.',
                 `
                     ${renderStackState(state, state.length ? state.length - 1 : null)}
+                    ${renderStackStatus('done', state.length ? `Top = ${top}` : 'Top = empty')}
                     <div class="exec-summary success">Answer: ${top}</div>
                 `,
                 '<code>answer = stack[-1] if stack else "empty"</code>'
@@ -3468,7 +4146,7 @@
 
         return {
             title: 'Execution Visualization - Stack Simulator',
-            subtitle: 'Replay LIFO push/pop transitions to final top.',
+            subtitle: 'Replay LIFO push/pop transitions with live stack telemetry.',
             steps,
         };
     }
@@ -3498,55 +4176,114 @@
         }
 
         const state = initial.slice();
+        let appliedCount = 0;
+        let enqueueCount = 0;
+        let dequeueCount = 0;
+        let ignoredDequeueCount = 0;
+
+        function operationLabel(entry) {
+            if (!entry) {
+                return '-';
+            }
+            if (entry.op === 'enqueue') {
+                return `enqueue(${entry.value !== null ? formatNumber(entry.value) : '?'})`;
+            }
+            return 'dequeue()';
+        }
+
+        function renderQueueStatus(currentOp, resultLabel = 'Pending') {
+            const frontLabel = state.length ? formatNumber(state[0]) : 'empty';
+            const rearLabel = state.length ? formatNumber(state[state.length - 1]) : 'empty';
+            const queueLabel = state.length ? `[${state.map((value) => formatNumber(value)).join(', ')}]` : '[]';
+            const progress = operations.length ? Math.round((appliedCount / operations.length) * 100) : 100;
+            return `
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Next / Current op:</strong> ${escapeHtml(currentOp)}</div>
+                    <div class="binary-search-status-line"><strong>Applied:</strong> ${appliedCount}/${operations.length} | <strong>Size:</strong> ${state.length}</div>
+                    <div class="binary-search-status-line"><strong>Enqueues:</strong> ${enqueueCount} | <strong>Dequeues:</strong> ${dequeueCount} | <strong>Ignored dequeues:</strong> ${ignoredDequeueCount}</div>
+                    <div class="binary-search-status-line"><strong>Front:</strong> ${frontLabel} | <strong>Rear:</strong> ${rearLabel}</div>
+                    <div class="binary-search-status-line"><strong>Queue:</strong> ${queueLabel}</div>
+                    <div class="binary-search-status-line"><strong>Result:</strong> ${escapeHtml(resultLabel)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Operation replay progress</div>
+                </div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Queue',
                 'Load initial queue state before applying operations.',
                 `
                     ${renderQueueState(state, state.length ? 0 : null)}
-                    <div class="exec-summary">Front at index 0, rear at last index.</div>
+                    ${renderQueueStatus(operationLabel(operations[0]), 'Ready')}
                 `,
                 '<code>queue = initial</code>'
             ),
         ];
 
         operations.forEach((entry, opIdx) => {
-            if (entry.op === 'enqueue' && entry.value !== null) {
-                state.push(entry.value);
-                steps.push(
-                    makeStep(
-                        `Operation ${opIdx + 1}: enqueue(${formatNumber(entry.value)})`,
-                        `Enqueue adds ${formatNumber(entry.value)} to the rear.`,
-                        `
-                            ${renderQueueState(state, state.length - 1)}
-                            <div class="exec-summary">Size: ${state.length}</div>
-                        `,
-                        `<code>queue.append(${formatNumber(entry.value)})</code>`
-                    )
-                );
+            appliedCount += 1;
+            const nextOp = operationLabel(operations[appliedCount]);
+
+            if (entry.op === 'enqueue') {
+                if (entry.value !== null) {
+                    state.push(entry.value);
+                    enqueueCount += 1;
+                    steps.push(
+                        makeStep(
+                            `Operation ${opIdx + 1}: enqueue(${formatNumber(entry.value)})`,
+                            `Enqueue adds ${formatNumber(entry.value)} to the rear.`,
+                            `
+                                ${renderQueueState(state, state.length - 1)}
+                                ${renderQueueStatus(nextOp, `Enqueued ${formatNumber(entry.value)}`)}
+                            `,
+                            `<code>queue.append(${formatNumber(entry.value)})</code>`
+                        )
+                    );
+                } else {
+                    steps.push(
+                        makeStep(
+                            `Operation ${opIdx + 1}: enqueue(?)`,
+                            'Enqueue value is invalid, operation ignored.',
+                            `
+                                ${renderQueueState(state, state.length ? state.length - 1 : null)}
+                                ${renderQueueStatus(nextOp, 'Invalid enqueue ignored')}
+                            `,
+                            '<code>if enqueue value invalid: ignore</code>'
+                        )
+                    );
+                }
                 return;
             }
 
             if (entry.op === 'dequeue') {
                 if (state.length) {
                     const removed = state.shift();
+                    dequeueCount += 1;
                     steps.push(
                         makeStep(
                             `Operation ${opIdx + 1}: dequeue()`,
                             `Remove front value ${formatNumber(removed)}.`,
                             `
                                 ${renderQueueState(state, state.length ? 0 : null)}
-                                <div class="exec-summary">Size: ${state.length}</div>
+                                ${renderQueueStatus(nextOp, `Dequeued ${formatNumber(removed)}`)}
                             `,
                             '<code>if queue: queue.pop(0)</code>'
                         )
                     );
                 } else {
+                    ignoredDequeueCount += 1;
                     steps.push(
                         makeStep(
                             `Operation ${opIdx + 1}: dequeue()`,
                             'Dequeue on empty queue is ignored.',
-                            `${renderQueueState(state)}`,
+                            `
+                                ${renderQueueState(state)}
+                                ${renderQueueStatus(nextOp, 'Ignored empty dequeue')}
+                            `,
                             '<code>if queue empty: ignore dequeue</code>'
                         )
                     );
@@ -3563,6 +4300,7 @@
                     : 'Queue is empty after all operations.',
                 `
                     ${renderQueueState(state, state.length ? 0 : null)}
+                    ${renderQueueStatus('done', state.length ? `Front = ${front}` : 'Front = empty')}
                     <div class="exec-summary success">Answer: ${front}</div>
                 `,
                 '<code>answer = queue[0] if queue else "empty"</code>'
@@ -3571,7 +4309,7 @@
 
         return {
             title: 'Execution Visualization - Queue Simulator',
-            subtitle: 'Replay FIFO enqueue/dequeue transitions to final front.',
+            subtitle: 'Replay FIFO enqueue/dequeue transitions with live queue telemetry.',
             steps,
         };
     }
@@ -3587,15 +4325,74 @@
         let currentStart = 0;
         let bestStart = 0;
         let bestEnd = 0;
+        let processed = 1;
+
+        function rangeSet(left, right) {
+            const set = new Set();
+            if (!Number.isInteger(left) || !Number.isInteger(right)) {
+                return set;
+            }
+            const start = Math.min(left, right);
+            const end = Math.max(left, right);
+            for (let idx = start; idx <= end; idx += 1) {
+                set.add(idx);
+            }
+            return set;
+        }
+
+        function rangeList(left, right) {
+            const list = [];
+            if (!Number.isInteger(left) || !Number.isInteger(right)) {
+                return list;
+            }
+            const start = Math.min(left, right);
+            const end = Math.max(left, right);
+            for (let idx = start; idx <= end; idx += 1) {
+                list.push(idx);
+            }
+            return list;
+        }
+
+        function renderKadaneStatus(stepLabel, detailLabel, idx, options = {}) {
+            const value = Number.isInteger(idx) && idx >= 0 && idx < values.length ? values[idx] : null;
+            const progress = Math.max(0, Math.min(100, Math.round((processed / values.length) * 100)));
+            const currentSet = rangeSet(currentStart, Number.isInteger(idx) ? idx : currentStart);
+            const bestSet = rangeSet(bestStart, bestEnd);
+            const currentLabel = currentSet.size ? `[${currentStart}..${Number.isInteger(idx) ? idx : currentStart}]` : '-';
+            const bestLabel = `[${bestStart}..${bestEnd}]`;
+            const decisionLabel = options.decisionLabel || 'Update Kadane state';
+            const formulaLabel = options.formulaLabel || 'current = max(arr[i], current + arr[i])';
+            return `
+                ${renderArrayVisualization(values, bestSet, currentSet)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Active index:</strong> ${Number.isInteger(idx) ? idx : '-'} | <strong>Value:</strong> ${value === null ? '-' : formatNumber(value)}</div>
+                    <div class="binary-search-status-line"><strong>Current range:</strong> ${currentLabel} | <strong>Current sum:</strong> ${formatNumber(currentSum)}</div>
+                    <div class="binary-search-status-line"><strong>Best range:</strong> ${bestLabel} | <strong>Best sum:</strong> ${formatNumber(bestSum)}</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Formula focus:</strong> ${escapeHtml(formulaLabel)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Kadane scan progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = array index, Y = value magnitude, Z = scan-depth cue.</em></div>
+            `;
+        }
 
         const steps = [
             makeStep(
                 'Initialize Kadane State',
                 `Start with first value ${formatNumber(values[0])}.`,
-                `
-                    ${renderIndexedStrip3D(values, new Set([0]), new Set([0]))}
-                    <div class="exec-summary">current=${formatNumber(currentSum)}, best=${formatNumber(bestSum)}</div>
-                `,
+                renderKadaneStatus(
+                    'Initialize',
+                    'Set current and best to first element.',
+                    0,
+                    {
+                        decisionLabel: 'Seed both running and best sums at index 0.',
+                        formulaLabel: `current = best = arr[0] = ${formatNumber(values[0])}`,
+                    }
+                ),
                 '<code>current = best = arr[0]</code>'
             ),
         ];
@@ -3613,44 +4410,49 @@
                 currentSum = extend;
             }
 
-            if (currentSum > bestSum) {
+            const improvedBest = currentSum > bestSum;
+            if (improvedBest) {
                 bestSum = currentSum;
                 bestStart = currentStart;
                 bestEnd = idx;
             }
 
-            const currentIndices = new Set();
-            for (let i = currentStart; i <= idx; i += 1) {
-                currentIndices.add(i);
-            }
-            const bestIndices = [];
-            for (let i = bestStart; i <= bestEnd; i += 1) {
-                bestIndices.push(i);
-            }
-
+            processed = idx + 1;
+            const bestIndices = rangeList(bestStart, bestEnd);
             steps.push(
                 makeStep(
                     `Process index ${idx}`,
                     shouldRestart
                         ? `Restart at arr[${idx}] = ${formatNumber(value)}.`
-                        : `Extend previous segment with arr[${idx}] = ${formatNumber(value)}.`,
+                        : `Extend current segment with arr[${idx}] = ${formatNumber(value)}.`,
                     `
-                        ${renderIndexedStrip3D(values, currentIndices, new Set(bestIndices))}
-                        <div class="exec-summary">current range: [${currentStart}..${idx}] sum=${formatNumber(currentSum)}</div>
-                        <div class="exec-summary">best range: [${bestStart}..${bestEnd}] sum=${formatNumber(bestSum)} (idx: ${bestIndices.join(', ')})</div>
+                        ${renderKadaneStatus(
+                            'Scan value',
+                            shouldRestart ? 'Restart because value alone beats extension.' : 'Extend because extension is better or equal.',
+                            idx,
+                            {
+                                decisionLabel: improvedBest
+                                    ? `Best updated to range [${bestStart}..${bestEnd}]`
+                                    : 'Best remains unchanged',
+                                formulaLabel: `max(${formatNumber(restart)}, ${formatNumber(extend)}) = ${formatNumber(currentSum)}`,
+                            }
+                        )}
+                        <div class="exec-summary">Best indices: ${bestIndices.join(', ') || '-'}</div>
                     `,
                     `<code>current = max(arr[i], current + arr[i]) = max(${formatNumber(restart)}, ${formatNumber(extend)}) = ${formatNumber(currentSum)}</code><br><code>best = max(best, current) = ${formatNumber(bestSum)}</code>`
                 )
             );
         }
 
+        const finalBestSet = rangeSet(bestStart, bestEnd);
         steps.push(
             makeStep(
                 'Final Answer',
                 `Maximum contiguous subarray sum is ${formatNumber(bestSum)}.`,
                 `
-                    ${renderIndexedStrip3D(values, new Set(Array.from({ length: bestEnd - bestStart + 1 }, (_, offset) => bestStart + offset)), new Set([bestStart, bestEnd]))}
-                    <div class="exec-summary success">Best range: [${bestStart}..${bestEnd}], sum=${formatNumber(bestSum)}</div>
+                    ${renderArrayVisualization(values, finalBestSet, finalBestSet)}
+                    <div class="exec-summary">Best range: [${bestStart}..${bestEnd}]</div>
+                    <div class="exec-summary success">Answer: ${formatNumber(bestSum)}</div>
                 `,
                 '<code>answer = best</code>'
             )
@@ -3658,7 +4460,7 @@
 
         return {
             title: 'Execution Visualization - Array Max Subarray',
-            subtitle: 'Kadane transitions: restart or extend at each index.',
+            subtitle: 'Kadane scan with restart/extend decisions and best-range tracking.',
             steps,
         };
     }
@@ -3672,15 +4474,74 @@
 
         const seenIndexByValue = new Map();
         let discoveredPair = null;
+        let processed = 0;
+
+        const bucketFor = (value) => Math.abs(Math.floor(Number(value))) % 6;
+
+        function renderHashStatus(
+            stepLabel = 'Initialize',
+            detailLabel = 'Prepare hash lookup state',
+            currentIndex = -1,
+            probeValue = null,
+            complement = null,
+            complementSeen = false,
+            complementIndex = null,
+            decisionLabel = 'Ready',
+            done = false
+        ) {
+            const seenPairs = Array.from(seenIndexByValue.entries());
+            const seenSetLabel = seenPairs.length
+                ? seenPairs.map(([value, idx]) => `${formatNumber(value)}@${idx}`).join(', ')
+                : '-';
+            const progress = values.length ? Math.round((processed / values.length) * 100) : 100;
+            const remaining = Math.max(0, values.length - processed);
+            const currentLabel = Number.isInteger(currentIndex) && currentIndex >= 0
+                ? `idx ${currentIndex} (value ${formatNumber(probeValue)})`
+                : '-';
+            const pairLabel = discoveredPair
+                ? `(${discoveredPair[0]}, ${discoveredPair[1]})`
+                : '-';
+            const probeBucketLabel = Number.isFinite(probeValue) ? `b${bucketFor(probeValue)}` : '-';
+            const complementBucketLabel = Number.isFinite(complement) ? `b${bucketFor(complement)}` : '-';
+            return `
+                ${renderIndexedStrip3D(values, Number.isInteger(currentIndex) && currentIndex >= 0 ? new Set([currentIndex]) : new Set(), discoveredPair ? new Set(discoveredPair) : new Set())}
+                ${renderHashBuckets3D(seenIndexByValue, {
+                    highlightValue: complementSeen ? complement : null,
+                    probeValue,
+                    complementValue: complement,
+                })}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Current:</strong> ${currentLabel}</div>
+                    <div class="binary-search-status-line"><strong>Need complement:</strong> ${complement === null ? '-' : formatNumber(complement)}${complementSeen ? ` (seen at idx ${complementIndex})` : ''}</div>
+                    <div class="binary-search-status-line"><strong>Buckets:</strong> probe -> ${probeBucketLabel} | complement -> ${complementBucketLabel} | rule h(v)=|floor(v)| mod 6</div>
+                    <div class="binary-search-status-line"><strong>Decision:</strong> ${escapeHtml(decisionLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Seen entries:</strong> [${escapeHtml(seenSetLabel)}]</div>
+                    <div class="binary-search-status-line"><strong>Found pair:</strong> ${pairLabel}${done ? ' (final)' : ''}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Processed ${processed}/${values.length} values | Remaining ${remaining}</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = hash bucket id, Y = chained entries, Z = scan depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Hash Set',
-                `Scan values once and check if complement (target - value) was seen before. Target=${formatNumber(target)}.`,
-                `
-                    ${renderIndexedStrip3D(values)}
-                    ${renderHashBuckets3D(seenIndexByValue)}
-                    <div class="exec-summary">Seen set: []</div>
-                `,
+                `Scan left-to-right: compute complement (target - x), check seen set, then insert x if needed. Target=${formatNumber(target)}.`,
+                renderHashStatus(
+                    'Initialize hash set',
+                    'Start scan with empty seen map.',
+                    -1,
+                    null,
+                    null,
+                    false,
+                    null,
+                    'Hash set starts empty',
+                    false
+                ),
                 '<code>for x in arr: if (target-x) in seen -> pair exists; else add x to seen</code>'
             ),
         ];
@@ -3690,33 +4551,55 @@
             const complement = target - value;
             const complementSeen = seenIndexByValue.has(complement);
             const complementIndex = complementSeen ? seenIndexByValue.get(complement) : null;
+            processed = idx + 1;
 
             if (complementSeen && discoveredPair === null) {
                 discoveredPair = [complementIndex, idx];
             }
 
-            const seenValues = Array.from(seenIndexByValue.keys());
-            const seenTokens = seenValues.length ? seenValues.map((entry) => formatNumber(entry)).join(', ') : '';
             const statusText = complementSeen
-                ? `Found complement ${formatNumber(complement)} at idx ${complementIndex}.`
-                : `Complement ${formatNumber(complement)} not seen yet.`;
+                ? `Complement ${formatNumber(complement)} already exists at idx ${complementIndex}.`
+                : `Complement ${formatNumber(complement)} not found in seen set.`;
 
             steps.push(
                 makeStep(
-                    `Process index ${idx}`,
+                    `Probe idx ${idx}`,
                     `x=${formatNumber(value)}. ${statusText}`,
-                    `
-                        ${renderIndexedStrip3D(values, new Set([idx]), complementSeen ? new Set([complementIndex, idx]) : new Set([idx]))}
-                        ${renderHashBuckets3D(seenIndexByValue, complementSeen ? complement : null)}
-                        <div class="exec-summary">Need: ${formatNumber(complement)} | Seen before step: [${seenTokens}]</div>
-                        ${complementSeen ? `<div class="exec-summary success">Pair candidate: (${complementIndex}, ${idx}) -> ${formatNumber(values[complementIndex])} + ${formatNumber(value)} = ${formatNumber(target)}</div>` : ''}
-                    `,
+                    renderHashStatus(
+                        'Probe value',
+                        `Compute complement and check seen map for idx ${idx}.`,
+                        idx,
+                        value,
+                        complement,
+                        complementSeen,
+                        complementIndex,
+                        complementSeen ? 'Complement hit: pair found' : 'No complement hit: continue',
+                        false
+                    ),
                     `<code>complement = ${formatNumber(target)} - ${formatNumber(value)} = ${formatNumber(complement)}</code>`
                 )
             );
 
             if (!seenIndexByValue.has(value)) {
                 seenIndexByValue.set(value, idx);
+                steps.push(
+                    makeStep(
+                        `Insert ${formatNumber(value)} into hash`,
+                        `Store value ${formatNumber(value)} with first index ${idx} for future complement checks.`,
+                        renderHashStatus(
+                            'Insert into hash',
+                            `Complement not found; cache value ${formatNumber(value)} at first occurrence.`,
+                            idx,
+                            value,
+                            complement,
+                            complementSeen,
+                            complementIndex,
+                            `Insert ${formatNumber(value)} into seen set`,
+                            false
+                        ),
+                        `<code>if ${formatNumber(value)} not in seen: seen[${formatNumber(value)}] = ${idx}</code>`
+                    )
+                );
             }
 
             if (discoveredPair !== null) {
@@ -3733,8 +4616,17 @@
                     ? `Pair exists. Answer is true.`
                     : 'No valid pair found. Answer is false.',
                 `
-                    ${renderIndexedStrip3D(values, hasPair ? new Set(discoveredPair) : new Set(), hasPair ? new Set(discoveredPair) : new Set())}
-                    ${renderHashBuckets3D(seenIndexByValue)}
+                    ${renderHashStatus(
+                        'Finalize decision',
+                        hasPair ? 'Complement hit occurred during scan.' : 'Completed scan without complement hit.',
+                        hasPair ? discoveredPair[1] : -1,
+                        hasPair ? values[discoveredPair[1]] : null,
+                        hasPair ? (target - values[discoveredPair[1]]) : null,
+                        hasPair,
+                        hasPair ? discoveredPair[0] : null,
+                        hasPair ? 'Complement found and pair confirmed' : 'Scan completed without complement match',
+                        true
+                    )}
                     <div class="exec-summary">Seen set: [${finalSeenValues}]</div>
                     <div class="exec-summary success">Answer: ${hasPair ? 'true' : 'false'}</div>
                 `,
@@ -6080,21 +6972,152 @@
 
     function buildMinimaxModel(payload) {
         const leaves = normalizeNumberArray(payload.leaves);
-        if (!leaves.length || leaves.length % 2 !== 0) {
+        if (!leaves.length || (leaves.length & (leaves.length - 1)) !== 0) {
             return null;
         }
 
         let level = leaves.slice();
         let maximizing = false;
         let depth = 0;
+        const totalPairFolds = leaves.length - 1;
+        let appliedPairFolds = 0;
+
+        function foldPreview(values, useMax) {
+            const preview = [];
+            for (let idx = 0; idx < values.length; idx += 2) {
+                const left = values[idx];
+                const right = values[idx + 1];
+                preview.push(useMax ? Math.max(left, right) : Math.min(left, right));
+            }
+            return preview;
+        }
+
+        function renderMinimaxFold3D(levelValues, options = {}) {
+            const values = Array.isArray(levelValues) ? levelValues : [];
+            if (!values.length) {
+                return '<p class="concept-muted mb-0">No minimax state available.</p>';
+            }
+
+            const operator = options.operator === 'MAX' ? 'MAX' : 'MIN';
+            const activePairIndex = Number.isInteger(options.activePairIndex) ? options.activePairIndex : -1;
+            const nextValues = Array.isArray(options.nextValues) ? options.nextValues : [];
+            const cellWidth = values.length > 8 ? 56 : 66;
+            const cellHeight = 38;
+            const gap = 10;
+            const leftPad = 24;
+            const topRowY = 66;
+            const bottomRowY = 154;
+            const depthOffset = 8;
+            const width = Math.max(500, leftPad * 2 + (values.length * (cellWidth + gap)) - gap);
+            const height = 232;
+            const uniqueId = `execMinimax${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+
+            const topCells = values.map((value, idx) => {
+                const x = leftPad + (idx * (cellWidth + gap));
+                const pairIdx = Math.floor(idx / 2);
+                const inActivePair = activePairIndex >= 0 && pairIdx === activePairIndex;
+                const fill = inActivePair ? '#dbeafe' : '#f8fafc';
+                const stroke = inActivePair ? '#2563eb' : '#94a3b8';
+                return `
+                    <g>
+                        <polygon points="${x + depthOffset},${topRowY - depthOffset} ${x + cellWidth + depthOffset},${topRowY - depthOffset} ${x + cellWidth},${topRowY} ${x},${topRowY}"
+                            fill="${inActivePair ? '#bfdbfe' : '#e2e8f0'}"></polygon>
+                        <rect x="${x}" y="${topRowY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${fill}" stroke="${stroke}" stroke-width="${inActivePair ? '2.1' : '1.3'}"></rect>
+                        <text x="${x + (cellWidth / 2)}" y="${topRowY + 22}" text-anchor="middle" font-size="13.2" class="exec-ml-text">${formatNumber(value)}</text>
+                        <text x="${x + (cellWidth / 2)}" y="${topRowY - 7}" text-anchor="middle" font-size="9.8" class="exec-ml-text exec-ml-text-muted">i${idx}</text>
+                    </g>
+                `;
+            }).join('');
+
+            const bottomCells = nextValues.map((value, idx) => {
+                const nextCellWidth = Math.max(62, cellWidth + 4);
+                const x = leftPad + (idx * ((nextCellWidth) + gap + 6));
+                const isFocus = activePairIndex >= 0 && idx === activePairIndex;
+                return `
+                    <g>
+                        <polygon points="${x + depthOffset},${bottomRowY - depthOffset} ${x + nextCellWidth + depthOffset},${bottomRowY - depthOffset} ${x + nextCellWidth},${bottomRowY} ${x},${bottomRowY}"
+                            fill="${isFocus ? '#bbf7d0' : '#dbeafe'}"></polygon>
+                        <rect x="${x}" y="${bottomRowY}" width="${nextCellWidth}" height="${cellHeight}" rx="9" fill="${isFocus ? '#dcfce7' : '#eff6ff'}" stroke="${isFocus ? '#16a34a' : '#3b82f6'}" stroke-width="${isFocus ? '2.1' : '1.3'}"></rect>
+                        <text x="${x + (nextCellWidth / 2)}" y="${bottomRowY + 22}" text-anchor="middle" font-size="13.2" class="exec-ml-text">${formatNumber(value)}</text>
+                        <text x="${x + (nextCellWidth / 2)}" y="${bottomRowY - 7}" text-anchor="middle" font-size="9.8" class="exec-ml-text exec-ml-text-muted">n${idx}</text>
+                    </g>
+                `;
+            }).join('');
+
+            const connectors = nextValues.map((_, idx) => {
+                const topLeftX = leftPad + ((idx * 2) * (cellWidth + gap)) + (cellWidth / 2);
+                const topRightX = leftPad + (((idx * 2) + 1) * (cellWidth + gap)) + (cellWidth / 2);
+                const nextCellWidth = Math.max(62, cellWidth + 4);
+                const targetX = leftPad + (idx * ((nextCellWidth) + gap + 6)) + (nextCellWidth / 2);
+                const focus = activePairIndex >= 0 && idx === activePairIndex;
+                const stroke = focus ? '#16a34a' : '#94a3b8';
+                return `
+                    <g>
+                        <line x1="${topLeftX}" y1="${topRowY + cellHeight + 2}" x2="${targetX}" y2="${bottomRowY - 10}" stroke="${stroke}" stroke-width="${focus ? '2.2' : '1.4'}" opacity="${focus ? '0.9' : '0.55'}"></line>
+                        <line x1="${topRightX}" y1="${topRowY + cellHeight + 2}" x2="${targetX}" y2="${bottomRowY - 10}" stroke="${stroke}" stroke-width="${focus ? '2.2' : '1.4'}" opacity="${focus ? '0.9' : '0.55'}"></line>
+                    </g>
+                `;
+            }).join('');
+
+            return render3DScene(`
+                <defs>
+                    <linearGradient id="${uniqueId}Bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="rgba(59,130,246,0.08)"></stop>
+                        <stop offset="100%" stop-color="rgba(16,185,129,0.08)"></stop>
+                    </linearGradient>
+                </defs>
+                <rect x="12" y="30" width="${width - 24}" height="${height - 44}" rx="16" fill="url(#${uniqueId}Bg)" stroke="var(--exec-ml-floor-stroke)" stroke-width="1.1"></rect>
+                <text x="24" y="20" font-size="10.8" class="exec-ml-text exec-ml-text-axis">Current Level (${operator})</text>
+                <text x="24" y="146" font-size="10.8" class="exec-ml-text exec-ml-text-axis">Next Fold Level</text>
+                <rect x="${width - 154}" y="10" width="132" height="22" rx="11" fill="${operator === 'MAX' ? 'rgba(147,51,234,0.16)' : 'rgba(59,130,246,0.16)'}" stroke="${operator === 'MAX' ? '#9333ea' : '#2563eb'}" stroke-width="1.2"></rect>
+                <text x="${width - 88}" y="25" text-anchor="middle" font-size="11" class="exec-ml-text ${operator === 'MAX' ? 'exec-ml-text-query' : 'exec-ml-text-axis'}">${operator} fold</text>
+                ${topCells}
+                ${connectors}
+                ${bottomCells}
+            `, width, height, '3D minimax fold state', 'exec-3d-bst');
+        }
+
+        function renderMinimaxStatus(stepLabel, detailLabel, options = {}) {
+            const operator = options.operator === 'MAX' ? 'MAX' : 'MIN';
+            const values = Array.isArray(options.values) ? options.values : [];
+            const nextValues = Array.isArray(options.nextValues) ? options.nextValues : [];
+            const pairLabel = options.pairLabel ? String(options.pairLabel) : '-';
+            const focusLabel = options.focusLabel ? String(options.focusLabel) : 'Evaluate pairwise fold operation.';
+            const progress = Math.max(0, Math.min(100, Math.round(asFiniteNumber(options.progress, 0))));
+            return `
+                ${renderMinimaxFold3D(values, { operator, activePairIndex: options.activePairIndex, nextValues })}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Operator:</strong> ${operator} | <strong>Depth:</strong> ${depth} | <strong>Active pair:</strong> ${escapeHtml(pairLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Current level:</strong> [${values.map((value) => formatNumber(value)).join(', ')}]</div>
+                    <div class="binary-search-status-line"><strong>Next level preview:</strong> [${nextValues.map((value) => formatNumber(value)).join(', ')}]</div>
+                    <div class="binary-search-status-line"><strong>Focus:</strong> ${escapeHtml(focusLabel)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Fold completion ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = node position in level, Y = fold layer (current -> next), Z = game-tree depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Load Leaf Utilities',
                 `Start fold with ${level.length} leaf values.`,
-                `
-                    ${renderIndexedStrip3D(level)}
-                    <div class="exec-summary">Fold rule starts with MIN level.</div>
-                `,
+                renderMinimaxStatus(
+                    'Initialize leaves',
+                    'Bottom layer contains terminal utilities. Start at MIN fold.',
+                    {
+                        operator: maximizing ? 'MAX' : 'MIN',
+                        values: level,
+                        nextValues: foldPreview(level, maximizing),
+                        activePairIndex: -1,
+                        pairLabel: '-',
+                        focusLabel: 'Prepare first pair fold from leaf utilities.',
+                        progress: 10,
+                    }
+                ),
                 '<code>Fold pairs bottom-up, toggling MIN/MAX each level</code>'
             ),
         ];
@@ -6103,20 +7126,34 @@
             if (level.length % 2 !== 0) {
                 return null;
             }
-            const nextLevel = [];
+            const nextLevel = foldPreview(level, maximizing);
             for (let idx = 0; idx < level.length; idx += 2) {
                 const left = level[idx];
                 const right = level[idx + 1];
                 const chosen = maximizing ? Math.max(left, right) : Math.min(left, right);
-                nextLevel.push(chosen);
+                const activePairIndex = idx / 2;
+                const progress = Math.round(((appliedPairFolds + 1) / totalPairFolds) * 100);
                 steps.push(
                     makeStep(
                         `Depth ${depth + 1} pair (${idx}, ${idx + 1})`,
                         `${maximizing ? 'MAX' : 'MIN'}(${formatNumber(left)}, ${formatNumber(right)}) = ${formatNumber(chosen)}.`,
-                        renderIndexedStrip3D(level, new Set([idx, idx + 1]), new Set([idx, idx + 1])),
+                        renderMinimaxStatus(
+                            'Evaluate pair',
+                            `${maximizing ? 'MAX' : 'MIN'} fold on the highlighted pair.`,
+                            {
+                                operator: maximizing ? 'MAX' : 'MIN',
+                                values: level,
+                                nextValues: nextLevel,
+                                activePairIndex,
+                                pairLabel: `(${idx}, ${idx + 1}) -> ${formatNumber(chosen)}`,
+                                focusLabel: `${maximizing ? 'MAX' : 'MIN'} picks ${formatNumber(chosen)} from [${formatNumber(left)}, ${formatNumber(right)}]`,
+                                progress,
+                            }
+                        ),
                         `<code>${maximizing ? 'max' : 'min'}(${formatNumber(left)}, ${formatNumber(right)})</code>`
                     )
                 );
+                appliedPairFolds += 1;
             }
             level = nextLevel;
             maximizing = !maximizing;
@@ -6126,7 +7163,19 @@
                 makeStep(
                     `Level ${depth} Fold Result`,
                     `Collapsed to ${level.length} node values.`,
-                    renderIndexedStrip3D(level),
+                    renderMinimaxStatus(
+                        'Commit folded level',
+                        'Use folded values as next layer input.',
+                        {
+                            operator: maximizing ? 'MAX' : 'MIN',
+                            values: level,
+                            nextValues: level.length > 1 ? foldPreview(level, maximizing) : [level[0]],
+                            activePairIndex: -1,
+                            pairLabel: '-',
+                            focusLabel: `Next layer ready (${level.length} nodes).`,
+                            progress: Math.round((appliedPairFolds / totalPairFolds) * 100),
+                        }
+                    ),
                     '<code>repeat until one root value remains</code>'
                 )
             );
@@ -6137,14 +7186,29 @@
             makeStep(
                 'Final Answer',
                 `Root minimax value is ${formatNumber(answer)}.`,
-                `<div class="exec-summary success">Answer: ${formatNumber(answer)}</div>`,
+                `
+                    ${renderMinimaxStatus(
+                        'Root resolved',
+                        'Only one node remains after all alternating folds.',
+                        {
+                            operator: maximizing ? 'MAX' : 'MIN',
+                            values: [answer],
+                            nextValues: [answer],
+                            activePairIndex: -1,
+                            pairLabel: '-',
+                            focusLabel: `Final minimax root = ${formatNumber(answer)}`,
+                            progress: 100,
+                        }
+                    )}
+                    <div class="exec-summary success">Answer: ${formatNumber(answer)}</div>
+                `,
                 `<code>root = ${formatNumber(answer)}</code>`
             )
         );
 
         return {
             title: 'Execution Visualization - Minimax Fold',
-            subtitle: 'Bottom-up pair folding with alternating MIN/MAX.',
+            subtitle: 'Bottom-up game-tree reduction with alternating MIN/MAX decisions.',
             steps,
         };
     }
@@ -6157,13 +7221,41 @@
         }
 
         let prefix = words[0];
+
+        function sharedPrefixLength(word, candidate) {
+            let idx = 0;
+            const limit = Math.min(String(word || '').length, String(candidate || '').length);
+            while (idx < limit && String(word || '').charAt(idx) === String(candidate || '').charAt(idx)) {
+                idx += 1;
+            }
+            return idx;
+        }
+
+        function renderPrefixStatus(activeWordIndex, probe) {
+            const candidate = String(probe || '');
+            const fullMatches = words.filter((word) => word.startsWith(candidate)).length;
+            const activeWord = Number.isInteger(activeWordIndex) && activeWordIndex >= 0 && activeWordIndex < words.length
+                ? words[activeWordIndex]
+                : null;
+            const mismatchAt = activeWord === null ? null : sharedPrefixLength(activeWord, candidate);
+            const mismatchLabel = activeWord === null
+                ? '-'
+                : (mismatchAt === candidate.length ? 'none (full prefix match)' : `idx ${mismatchAt}`);
+
+            return `
+                <div class="exec-summary"><strong>Candidate:</strong> "${escapeHtml(candidate || '(empty)')}" (len ${candidate.length})</div>
+                <div class="exec-summary"><strong>Words matching candidate:</strong> ${fullMatches}/${words.length} | <strong>Active mismatch:</strong> ${escapeHtml(mismatchLabel)}</div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = character index | Y = word row | Z = comparison depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Candidate Prefix',
                 `Start with first word as candidate: "${prefix}".`,
                 `
                     ${renderWordRail3D(words, 0, prefix)}
-                    <div class="exec-summary">Candidate prefix: "${escapeHtml(prefix)}"</div>
+                    ${renderPrefixStatus(0, prefix)}
                 `,
                 '<code>prefix = words[0]</code>'
             ),
@@ -6177,7 +7269,7 @@
                     `Check whether "${escapeHtml(word)}" starts with current prefix.`,
                     `
                         ${renderWordRail3D(words, idx, prefix)}
-                        <div class="exec-summary">Current prefix: "${escapeHtml(prefix)}"</div>
+                        ${renderPrefixStatus(idx, prefix)}
                     `,
                     '<code>while !word.startsWith(prefix): shrink prefix by 1 char</code>'
                 )
@@ -6192,7 +7284,7 @@
                         `"${escapeHtml(word)}" does not match "${escapeHtml(before)}", shrink to "${escapeHtml(prefix)}".`,
                         `
                             ${renderWordRail3D(words, idx, prefix)}
-                            <div class="exec-summary">Current prefix: "${escapeHtml(prefix)}"</div>
+                            ${renderPrefixStatus(idx, prefix)}
                         `,
                         '<code>prefix = prefix.slice(0, -1)</code>'
                     )
@@ -6206,7 +7298,7 @@
                         'No common prefix remains.',
                         `
                             ${renderWordRail3D(words, idx, '')}
-                            <div class="exec-summary">Current prefix: ""</div>
+                            ${renderPrefixStatus(idx, '')}
                         `,
                         '<code>if prefix == "": stop early</code>'
                     )
@@ -6222,6 +7314,7 @@
                 `Longest common prefix is ${answerLabel}.`,
                 `
                     ${renderWordRail3D(words, -1, answerLabel === '(empty)' ? '' : answerLabel)}
+                    ${renderPrefixStatus(-1, answerLabel === '(empty)' ? '' : answerLabel)}
                     <div class="exec-summary success">Answer: ${escapeHtml(answerLabel)}</div>
                 `,
                 '<code>answer = prefix</code>'
@@ -6570,52 +7663,109 @@
         const slope = (p2.y - p1.y) / (p2.x - p1.x);
         const intercept = p1.y - (slope * p1.x);
         const prediction = (slope * queryX) + intercept;
+        const residuals = points.map((point) => {
+            const expected = (slope * point.x) + intercept;
+            return {
+                index: point.index,
+                actual: point.y,
+                expected,
+                error: point.y - expected,
+            };
+        });
+        const mse = residuals.reduce((acc, row) => acc + (row.error ** 2), 0) / residuals.length;
+        const fitSummary = residuals
+            .slice(0, 4)
+            .map((row) => `P${row.index + 1}: err=${formatNumber(row.error, 3, true)}`)
+            .join(' | ');
+
+        function renderRegressionStatus(stepLabel, detailLabel, options = {}) {
+            const showLine = options.showLine !== false;
+            const showQuery = options.showQuery === true;
+            const highlightSet = options.highlightSet instanceof Set
+                ? options.highlightSet
+                : new Set([p1.index, p2.index]);
+            const progress = options.progress || 0;
+            return `
+                ${renderRegressionPlot(points, slope, intercept, queryX, {
+                    showLine,
+                    showQuery,
+                    highlightSet,
+                })}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Anchor points:</strong> P${p1.index + 1}(${formatNumber(p1.x)}, ${formatNumber(p1.y)}), P${p2.index + 1}(${formatNumber(p2.x)}, ${formatNumber(p2.y)})</div>
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Model:</strong> y = (${formatNumber(slope, 4)})x + (${formatNumber(intercept, 4)})</div>
+                    <div class="binary-search-status-line"><strong>Query:</strong> x=${formatNumber(queryX)} -> y=${formatNumber(prediction, 3)}</div>
+                    <div class="binary-search-status-line"><strong>Fit check:</strong> MSE=${formatNumber(mse, 5)} | ${escapeHtml(fitSummary)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Model derivation progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = feature x, Y = output y, Z = depth cue for fit/projection state.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Load Training Points',
                 `Use sample points to infer y = m*x + b, then predict for x=${formatNumber(queryX)}.`,
-                renderRegressionPlot(points, slope, intercept, queryX, {
-                    showLine: false,
-                    showQuery: false,
-                    highlightSet: new Set([p1.index, p2.index]),
-                }),
-                '<code>Linear model: y = m*x + b</code>'
+                renderRegressionStatus(
+                    'Initialize',
+                    'Select two non-vertical anchor points to define line.',
+                    {
+                        showLine: false,
+                        showQuery: false,
+                        highlightSet: new Set([p1.index, p2.index]),
+                        progress: 20,
+                    }
+                ),
+                '<code>Linear model form: y = m*x + b</code>'
             ),
             makeStep(
                 'Compute Slope (m)',
                 `From P1 and P2: (${formatNumber(p1.x)}, ${formatNumber(p1.y)}) and (${formatNumber(p2.x)}, ${formatNumber(p2.y)}).`,
-                `
-                    ${renderRegressionPlot(points, slope, intercept, queryX, {
+                renderRegressionStatus(
+                    'Slope',
+                    `Rise over run = (${formatNumber(p2.y)}-${formatNumber(p1.y)})/(${formatNumber(p2.x)}-${formatNumber(p1.x)})`,
+                    {
                         showLine: true,
                         showQuery: false,
                         highlightSet: new Set([p1.index, p2.index]),
-                    })}
-                    <div class="exec-summary">m = ${formatNumber(slope, 4)}</div>
-                `,
+                        progress: 45,
+                    }
+                ),
                 `<code>m = (y2 - y1) / (x2 - x1) = (${formatNumber(p2.y)} - ${formatNumber(p1.y)}) / (${formatNumber(p2.x)} - ${formatNumber(p1.x)}) = ${formatNumber(slope, 4)}</code>`
             ),
             makeStep(
                 'Compute Intercept (b)',
-                `Substitute any known point into y = m*x + b.`,
-                `
-                    ${renderRegressionPlot(points, slope, intercept, queryX, {
+                'Substitute one known point into y = m*x + b.',
+                renderRegressionStatus(
+                    'Intercept',
+                    `b = y1 - m*x1 = ${formatNumber(intercept, 4)}`,
+                    {
                         showLine: true,
                         showQuery: false,
                         highlightSet: new Set([p1.index]),
-                    })}
-                    <div class="exec-summary">b = ${formatNumber(intercept, 4)}</div>
-                `,
+                        progress: 70,
+                    }
+                ),
                 `<code>b = y1 - m*x1 = ${formatNumber(p1.y)} - (${formatNumber(slope, 4)} * ${formatNumber(p1.x)}) = ${formatNumber(intercept, 4)}</code>`
             ),
             makeStep(
                 'Predict Query',
                 `Evaluate model at x=${formatNumber(queryX)}.`,
                 `
-                    ${renderRegressionPlot(points, slope, intercept, queryX, {
-                        showLine: true,
-                        showQuery: true,
-                        highlightSet: new Set([p1.index, p2.index]),
-                    })}
+                    ${renderRegressionStatus(
+                        'Predict',
+                        `Apply y = m*x + b at x=${formatNumber(queryX)}`,
+                        {
+                            showLine: true,
+                            showQuery: true,
+                            highlightSet: new Set([p1.index, p2.index]),
+                            progress: 100,
+                        }
+                    )}
                     <div class="exec-summary success">Predicted y = ${formatNumber(prediction, 3)}</div>
                 `,
                 `<code>y = m*x + b = (${formatNumber(slope, 4)} * ${formatNumber(queryX)}) + ${formatNumber(intercept, 4)} = ${formatNumber(prediction, 3)}</code>`
@@ -6624,7 +7774,7 @@
 
         return {
             title: 'Execution Visualization - Linear Regression',
-            subtitle: 'Derive slope/intercept and run one prediction.',
+            subtitle: 'Derive slope/intercept, check fit residuals, then project query x.',
             steps,
         };
     }
@@ -6638,39 +7788,50 @@
         const expTerm = Math.exp(-z);
         const denominator = 1 + expTerm;
         const probability = 1 / denominator;
+
+        function renderLogisticStatus(stepLabel, detailLabel, progress = 0, showPoint = false) {
+            const odds = probability > 0 && probability < 1 ? (probability / (1 - probability)) : Number.POSITIVE_INFINITY;
+            const classLabel = probability >= 0.5 ? '1 (positive)' : '0 (negative)';
+            return `
+                ${renderLogisticCurve(z, { showPoint })}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Input z:</strong> ${formatNumber(z, 4)} | <strong>e^-z:</strong> ${formatNumber(expTerm, 6, true)}</div>
+                    <div class="binary-search-status-line"><strong>Denominator:</strong> ${formatNumber(denominator, 6, true)} | <strong>sigma(z):</strong> ${formatNumber(probability, 3, true)}</div>
+                    <div class="binary-search-status-line"><strong>Odds p/(1-p):</strong> ${Number.isFinite(odds) ? formatNumber(odds, 4, true) : 'infinite'} | <strong>Predicted class:</strong> ${classLabel}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Sigmoid computation progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = logit z, Y = probability p, Z = curve depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Start with Logit',
                 `Given z = ${formatNumber(z, 4)}.`,
-                `
-                    ${renderLogisticCurve(z, { showPoint: false })}
-                    <div class="exec-summary">Target: sigma(z)</div>
-                `,
+                renderLogisticStatus('Initialize', 'Prepare sigmoid formula with provided z.', 20, false),
                 '<code>sigma(z) = 1 / (1 + e^-z)</code>'
             ),
             makeStep(
                 'Compute Exponential Term',
                 `Evaluate e^-z.`,
-                `
-                    ${renderLogisticCurve(z, { showPoint: true })}
-                    <div class="exec-summary">e^(-z) = ${formatNumber(expTerm, 6, true)}</div>
-                `,
+                renderLogisticStatus('Exponential', `e^(-z) = ${formatNumber(expTerm, 6, true)}`, 45, true),
                 `<code>e^-z = e^(-${formatNumber(z, 4)}) = ${formatNumber(expTerm, 6, true)}</code>`
             ),
             makeStep(
                 'Build Denominator',
                 'Add 1 to exponential term.',
-                `
-                    ${renderLogisticCurve(z, { showPoint: true })}
-                    <div class="exec-summary">1 + e^-z = ${formatNumber(denominator, 6, true)}</div>
-                `,
+                renderLogisticStatus('Denominator', `1 + e^-z = ${formatNumber(denominator, 6, true)}`, 70, true),
                 `<code>denominator = 1 + ${formatNumber(expTerm, 6, true)} = ${formatNumber(denominator, 6, true)}</code>`
             ),
             makeStep(
                 'Final Probability',
                 'Invert denominator to get class probability.',
                 `
-                    ${renderLogisticCurve(z, { showPoint: true })}
+                    ${renderLogisticStatus('Final probability', 'Invert denominator and classify by threshold 0.5.', 100, true)}
                     <div class="exec-summary success">sigma(z) = ${formatNumber(probability, 3, true)}</div>
                 `,
                 `<code>sigma(z) = 1 / ${formatNumber(denominator, 6, true)} = ${formatNumber(probability, 3, true)}</code>`
@@ -6679,7 +7840,7 @@
 
         return {
             title: 'Execution Visualization - Logistic Regression',
-            subtitle: 'Transform linear score to probability with sigmoid.',
+            subtitle: 'Stepwise sigmoid evaluation with probability, odds, and class decision.',
             steps,
         };
     }
@@ -6696,11 +7857,78 @@
         const assignments = [];
         const groupOne = [];
         const groupTwo = [];
+
+        function assignmentSummaryLine(snapshotAssignments) {
+            return points
+                .map((point, idx) => {
+                    const cluster = snapshotAssignments[idx];
+                    const label = cluster === 0 ? 'C1' : cluster === 1 ? 'C2' : '-';
+                    return `P${idx + 1}(${formatNumber(point)})=>${label}`;
+                })
+                .join(' | ');
+        }
+
+        function splitGroups(snapshotAssignments) {
+            const c1Points = [];
+            const c2Points = [];
+            let assignedCount = 0;
+            points.forEach((point, idx) => {
+                if (snapshotAssignments[idx] === 0) {
+                    c1Points.push(point);
+                    assignedCount += 1;
+                } else if (snapshotAssignments[idx] === 1) {
+                    c2Points.push(point);
+                    assignedCount += 1;
+                }
+            });
+            return { c1Points, c2Points, assignedCount };
+        }
+
+        function renderKmeansStatus(stepLabel, detailLabel, options = {}) {
+            const snapshotAssignments = Array.isArray(options.assignments) ? options.assignments : [];
+            const activeCentroids = Array.isArray(options.centroids) && options.centroids.length === 2
+                ? options.centroids
+                : [c1, c2];
+            const currentIndex = Number.isInteger(options.currentIndex) ? options.currentIndex : null;
+            const progress = Math.max(0, Math.min(100, Math.round(asFiniteNumber(options.progress, 0))));
+            const groups = splitGroups(snapshotAssignments);
+            const currentPoint = currentIndex !== null ? points[currentIndex] : null;
+            const currentD1 = currentPoint === null ? null : Math.abs(currentPoint - activeCentroids[0]);
+            const currentD2 = currentPoint === null ? null : Math.abs(currentPoint - activeCentroids[1]);
+            const currentChoice = currentPoint === null
+                ? '-'
+                : (currentD1 <= currentD2 ? 'C1' : 'C2');
+
+            return `
+                ${renderOneDimClusterPlot(points, activeCentroids, snapshotAssignments, { currentIndex })}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Current point:</strong> ${currentPoint === null ? '-' : formatNumber(currentPoint)} | <strong>|x-C1|:</strong> ${currentD1 === null ? '-' : formatNumber(currentD1, 3, true)} | <strong>|x-C2|:</strong> ${currentD2 === null ? '-' : formatNumber(currentD2, 3, true)} | <strong>Choice:</strong> ${currentChoice}</div>
+                    <div class="binary-search-status-line"><strong>C1 members:</strong> [${groups.c1Points.map((value) => formatNumber(value)).join(', ') || '-'}] | <strong>C1 size:</strong> ${groups.c1Points.length}</div>
+                    <div class="binary-search-status-line"><strong>C2 members:</strong> [${groups.c2Points.map((value) => formatNumber(value)).join(', ') || '-'}] | <strong>C2 size:</strong> ${groups.c2Points.length}</div>
+                    <div class="binary-search-status-line"><strong>Assignments:</strong> ${escapeHtml(assignmentSummaryLine(snapshotAssignments))}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Iteration progress ${progress}% (${groups.assignedCount}/${points.length} points assigned)</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = point value on number line, Y = assignment lane (C1/C2 state), Z = iteration depth cue (assignment then centroid update).</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Initialize Centroids',
                 `Start with C1=${formatNumber(c1, 2, true)} and C2=${formatNumber(c2, 2, true)}.`,
-                renderOneDimClusterPlot(points, [c1, c2], assignments),
+                renderKmeansStatus(
+                    'Initialize',
+                    `Seed centroids with provided values C1=${formatNumber(c1, 2, true)}, C2=${formatNumber(c2, 2, true)}.`,
+                    {
+                        assignments: [],
+                        centroids: [c1, c2],
+                        progress: 15,
+                    }
+                ),
                 `<code>centroids = [${formatNumber(c1, 2, true)}, ${formatNumber(c2, 2, true)}]</code>`
             ),
         ];
@@ -6716,22 +7944,22 @@
                 groupTwo.push(point);
             }
 
+            const progress = Math.round(15 + (((idx + 1) / points.length) * 65));
             steps.push(
                 makeStep(
                     `Assign Point ${idx + 1}`,
-                    `Point ${formatNumber(point)} -> ${cluster === 0 ? 'C1' : 'C2'} (nearest centroid).`,
-                    `
-                        ${renderOneDimClusterPlot(points, [c1, c2], assignments, { currentIndex: idx })}
-                        <div class="exec-list">
-                            ${points.map((value, pointIdx) => {
-                                const currentCluster = assignments[pointIdx];
-                                const label = currentCluster === 0 ? 'C1' : currentCluster === 1 ? 'C2' : '-';
-                                const rowClass = pointIdx === idx ? ' active' : '';
-                                return `<div class="exec-list-row${rowClass}">Point ${formatNumber(value)} => ${label}</div>`;
-                            }).join('')}
-                        </div>
-                    `,
-                    `<code>|${formatNumber(point)} - C1|=${formatNumber(d1, 2, true)}, |${formatNumber(point)} - C2|=${formatNumber(d2, 2, true)}</code>`
+                    `Point ${formatNumber(point)} is assigned to ${cluster === 0 ? 'C1' : 'C2'} by nearest distance.`,
+                    renderKmeansStatus(
+                        'Assign nearest centroid',
+                        `Compare distances for point ${formatNumber(point)} and choose the smaller one.`,
+                        {
+                            currentIndex: idx,
+                            assignments: assignments.slice(),
+                            centroids: [c1, c2],
+                            progress,
+                        }
+                    ),
+                    `<code>|${formatNumber(point)} - ${formatNumber(c1, 2, true)}|=${formatNumber(d1, 3, true)}, |${formatNumber(point)} - ${formatNumber(c2, 2, true)}|=${formatNumber(d2, 3, true)} -> ${cluster === 0 ? 'C1' : 'C2'}</code>`
                 )
             );
         });
@@ -6746,22 +7974,26 @@
         steps.push(
             makeStep(
                 'Update Centroids',
-                'Recompute each centroid as mean of assigned points.',
+                'Recompute each centroid as the mean of its assigned points.',
                 `
-                    ${renderOneDimClusterPlot(points, [nextC1, nextC2], assignments)}
-                    <div class="exec-list">
-                        <div class="exec-list-row active">C1 points: [${groupOne.map((value) => formatNumber(value)).join(', ') || '-'}]</div>
-                        <div class="exec-list-row active">C2 points: [${groupTwo.map((value) => formatNumber(value)).join(', ') || '-'}]</div>
-                    </div>
+                    ${renderKmeansStatus(
+                        'Centroid update',
+                        `C1' and C2' become the average of their assigned members.`,
+                        {
+                            assignments: assignments.slice(),
+                            centroids: [nextC1, nextC2],
+                            progress: 100,
+                        }
+                    )}
                     <div class="exec-summary success">New centroids: ${formatNumber(nextC1, 2, true)} ${formatNumber(nextC2, 2, true)}</div>
                 `,
-                `<code>C1' = mean(C1 points), C2' = mean(C2 points)</code>`
+                `<code>C1' = mean([${groupOne.map((value) => formatNumber(value)).join(', ') || '-'}]), C2' = mean([${groupTwo.map((value) => formatNumber(value)).join(', ') || '-'}])</code>`
             )
         );
 
         return {
             title: 'Execution Visualization - K-Means (1 Iteration)',
-            subtitle: 'Assignment phase then centroid update in 1D.',
+            subtitle: 'Assign points to nearest centroid, then recompute centroid means with full state telemetry.',
             steps,
         };
     }
@@ -6797,16 +8029,53 @@
         const countA = topK.filter((row) => row.label === 'A').length;
         const prediction = countA >= (k - countA) ? 'A' : 'B';
 
+        function buildRankPreview(rankLimit = 4) {
+            return ranked
+                .slice(0, Math.max(1, rankLimit))
+                .map((entry, idx) => `#${idx + 1} idx ${entry.index} x=${formatNumber(entry.x)} ${entry.label} d=${formatNumber(entry.distance, 3, true)}`)
+                .join(' | ');
+        }
+
+        function renderKnnStatus(stepLabel, detailLabel, options = {}) {
+            const considered = options.considered instanceof Set ? options.considered : new Set();
+            const selectedTop = options.selectedTop instanceof Set ? options.selectedTop : new Set();
+            const currentRow = Number.isInteger(options.currentRow) ? ranked[options.currentRow] : null;
+            const progress = Math.max(0, Math.min(100, Math.round(asFiniteNumber(options.progress, 0))));
+            const selectedRows = ranked.filter((row) => selectedTop.has(row.index));
+            const selectedCountA = selectedRows.filter((row) => row.label === 'A').length;
+            const selectedCountB = selectedRows.length - selectedCountA;
+            const selectedVote = selectedRows.length ? (selectedCountA >= selectedCountB ? 'A' : 'B') : '-';
+
+            return `
+                ${renderKnnPlot(train, queryX, considered, selectedTop)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Query:</strong> x=${formatNumber(queryX)} | <strong>k:</strong> ${k} | <strong>Current candidate:</strong> ${currentRow ? `idx ${currentRow.index}, x=${formatNumber(currentRow.x)}, ${currentRow.label}, d=${formatNumber(currentRow.distance, 3, true)}` : '-'}</div>
+                    <div class="binary-search-status-line"><strong>Considered:</strong> ${considered.size}/${train.length} | <strong>Top-k selected:</strong> ${selectedRows.length}/${k}</div>
+                    <div class="binary-search-status-line"><strong>Vote snapshot:</strong> A=${selectedCountA}, B=${selectedCountB}, class=${selectedVote}</div>
+                    <div class="binary-search-status-line"><strong>Rank preview:</strong> ${escapeHtml(buildRankPreview(Math.min(6, ranked.length)))}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">KNN ranking progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = feature value x, Y = class lane (A/B), Z = ranking depth cue by distance order.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Load Query',
                 `Classify query x=${formatNumber(queryX)} with k=${k}.`,
-                `
-                    ${renderKnnPlot(train, queryX)}
-                    <div class="exec-list">
-                        ${train.map((row) => `<div class="exec-list-row">x=${formatNumber(row.x)}, label=${row.label}</div>`).join('')}
-                    </div>
-                `,
+                renderKnnStatus(
+                    'Initialize',
+                    'Load training points and prepare distance comparisons.',
+                    {
+                        considered: new Set(),
+                        selectedTop: new Set(),
+                        progress: 12,
+                    }
+                ),
                 '<code>distance = |x_train - x_query|</code>'
             ),
         ];
@@ -6814,16 +8083,22 @@
         const considered = new Set();
         ranked.forEach((row, rankIdx) => {
             considered.add(row.index);
+            const provisionalTop = new Set(ranked.slice(0, Math.min(k, rankIdx + 1)).map((entry) => entry.index));
+            const progress = Math.round(12 + (((rankIdx + 1) / ranked.length) * 68));
             steps.push(
                 makeStep(
                     `Rank Neighbor ${rankIdx + 1}`,
                     `Candidate x=${formatNumber(row.x)} (${row.label}) has distance ${formatNumber(row.distance)}.`,
-                    `
-                        ${renderKnnPlot(train, queryX, considered)}
-                        <div class="exec-list">
-                            ${ranked.map((entry, idx) => `<div class="exec-list-row${idx <= rankIdx ? ' active' : ''}">#${idx + 1}: x=${formatNumber(entry.x)}, label=${entry.label}, d=${formatNumber(entry.distance)}</div>`).join('')}
-                        </div>
-                    `,
+                    renderKnnStatus(
+                        'Rank by distance',
+                        'Sort by (distance, x, label, index) and extend ordered frontier.',
+                        {
+                            considered: new Set(considered),
+                            selectedTop: provisionalTop,
+                            currentRow: rankIdx,
+                            progress,
+                        }
+                    ),
                     '<code>Sort by (distance, x, label)</code>'
                 )
             );
@@ -6834,10 +8109,37 @@
                 `Take Top ${k}`,
                 `Majority vote among nearest neighbors gives class ${prediction}.`,
                 `
-                    ${renderKnnPlot(train, queryX, considered, new Set(topK.map((row) => row.index)))}
+                    ${renderKnnStatus(
+                        'Select top-k',
+                        `Freeze first ${k} ranked neighbors and compute vote.`,
+                        {
+                            considered: new Set(considered),
+                            selectedTop: new Set(topK.map((row) => row.index)),
+                            progress: 92,
+                        }
+                    )}
                     <div class="exec-list">
                         ${topK.map((row) => `<div class="exec-list-row active">x=${formatNumber(row.x)}, label=${row.label}, d=${formatNumber(row.distance)}</div>`).join('')}
                     </div>
+                `,
+                `<code>top_k = first ${k} in sorted order</code>`
+            )
+        );
+
+        steps.push(
+            makeStep(
+                'Majority Decision',
+                `Resolve final class from selected neighbors.`,
+                `
+                    ${renderKnnStatus(
+                        'Vote',
+                        `Count labels in top-k (A=${countA}, B=${k - countA}) and apply majority rule.`,
+                        {
+                            considered: new Set(considered),
+                            selectedTop: new Set(topK.map((row) => row.index)),
+                            progress: 100,
+                        }
+                    )}
                     <div class="exec-summary success">Prediction: ${prediction}</div>
                 `,
                 `<code>count(A)=${countA}, count(B)=${k - countA}, answer=${prediction}</code>`
@@ -6846,7 +8148,7 @@
 
         return {
             title: 'Execution Visualization - KNN Classification',
-            subtitle: 'Distance ranking with deterministic tie-break.',
+            subtitle: 'Distance ranking, deterministic tie-break, and majority vote with full state board.',
             steps,
         };
     }
@@ -6864,30 +8166,62 @@
         const posTerm = pPos > 0 ? -(pPos * (Math.log(pPos) / Math.log(2))) : 0;
         const negTerm = pNeg > 0 ? -(pNeg * (Math.log(pNeg) / Math.log(2))) : 0;
         const entropy = posTerm + negTerm;
+
+        function renderDecisionTreeStatus(stepLabel, detailLabel, options = {}) {
+            const progress = Math.max(0, Math.min(100, Math.round(asFiniteNumber(options.progress, 0))));
+            const showTerms = options.showTerms === true;
+            const showFinal = options.showFinal === true;
+            const runningEntropy = Number.isFinite(options.runningEntropy) ? options.runningEntropy : null;
+            const gainIfPure = 1 - entropy;
+
+            return `
+                ${renderEntropyBars(positive, negative, pPos, pNeg)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Counts:</strong> (+) ${formatNumber(positive)} , (-) ${formatNumber(negative)} , total ${formatNumber(total)}</div>
+                    <div class="binary-search-status-line"><strong>Probabilities:</strong> p(+)=${formatNumber(pPos, 4, true)} , p(-)=${formatNumber(pNeg, 4, true)}</div>
+                    <div class="binary-search-status-line"><strong>Entropy terms:</strong> t+ = ${formatNumber(posTerm, 6, true)} , t- = ${formatNumber(negTerm, 6, true)}${showTerms ? '' : ' (computed next)'}</div>
+                    <div class="binary-search-status-line"><strong>Entropy snapshot:</strong> ${runningEntropy === null ? '-' : formatNumber(runningEntropy, 6, true)} | <strong>Impurity reduction to pure split:</strong> ${formatNumber(gainIfPure, 6, true)}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Entropy derivation progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = class bucket (+/-), Y = probability magnitude, Z = entropy derivation depth cue.</em></div>
+                ${showFinal ? `<div class="exec-summary success">Final entropy H = ${formatNumber(entropy, 3, true)}</div>` : ''}
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Class Distribution',
                 `Positive=${formatNumber(positive)}, Negative=${formatNumber(negative)}, Total=${formatNumber(total)}.`,
-                `
-                    ${renderEntropyBars(positive, negative, pPos, pNeg)}
-                    <div class="exec-summary">Counts -> (+): ${formatNumber(positive)}, (-): ${formatNumber(negative)}</div>
-                `,
+                renderDecisionTreeStatus(
+                    'Initialize class counts',
+                    'Start with class frequencies before computing impurity.',
+                    { progress: 20, showTerms: false, runningEntropy: null }
+                ),
                 '<code>H = -sum(p_i * log2(p_i))</code>'
             ),
             makeStep(
                 'Convert to Probabilities',
                 'Compute class probabilities.',
-                `
-                    ${renderEntropyBars(positive, negative, pPos, pNeg)}
-                    <div class="exec-summary">p(+)=${formatNumber(pPos, 4, true)}, p(-)=${formatNumber(pNeg, 4, true)}</div>
-                `,
+                renderDecisionTreeStatus(
+                    'Normalize counts',
+                    `p(+)=${formatNumber(pPos, 4, true)}, p(-)=${formatNumber(pNeg, 4, true)}`,
+                    { progress: 45, showTerms: false, runningEntropy: null }
+                ),
                 `<code>p(+)=${formatNumber(positive)}/${formatNumber(total)}, p(-)=${formatNumber(negative)}/${formatNumber(total)}</code>`
             ),
             makeStep(
                 'Compute Entropy Terms',
                 'Evaluate each class contribution.',
                 `
-                    ${renderEntropyBars(positive, negative, pPos, pNeg)}
+                    ${renderDecisionTreeStatus(
+                        'Compute term contributions',
+                        'Evaluate -(p+)log2(p+) and -(p-)log2(p-).',
+                        { progress: 72, showTerms: true, runningEntropy: posTerm + negTerm }
+                    )}
                     <div class="exec-list">
                         <div class="exec-list-row active">-(p+)log2(p+) = ${formatNumber(posTerm, 6, true)}</div>
                         <div class="exec-list-row active">-(p-)log2(p-) = ${formatNumber(negTerm, 6, true)}</div>
@@ -6899,8 +8233,11 @@
                 'Final Entropy',
                 'Sum both contributions and round to 3 decimals.',
                 `
-                    ${renderEntropyBars(positive, negative, pPos, pNeg)}
-                    <div class="exec-summary success">Entropy = ${formatNumber(entropy, 3, true)}</div>
+                    ${renderDecisionTreeStatus(
+                        'Sum terms',
+                        'Entropy is the sum of both term contributions.',
+                        { progress: 100, showTerms: true, runningEntropy: entropy, showFinal: true }
+                    )}
                 `,
                 `<code>H = ${formatNumber(entropy, 3, true)}</code>`
             ),
@@ -6921,24 +8258,69 @@
         }
 
         const predicted = spamScore >= hamScore ? 'spam' : 'ham';
+        const total = spamScore + hamScore;
+        const spamShare = total > 0 ? (spamScore / total) : 0;
+        const hamShare = total > 0 ? (hamScore / total) : 0;
+        const margin = Math.abs(spamScore - hamScore);
+        const logOdds = spamScore > 0 && hamScore > 0 ? Math.log(spamScore / hamScore) : Number.POSITIVE_INFINITY;
+
+        function renderNaiveBayesStatus(stepLabel, detailLabel, options = {}) {
+            const progress = Math.max(0, Math.min(100, Math.round(asFiniteNumber(options.progress, 0))));
+            const showDecision = options.showDecision === true;
+            return `
+                ${renderScoreBars(spamScore, hamScore)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Posterior scores:</strong> spam=${formatNumber(spamScore, 6, true)} | ham=${formatNumber(hamScore, 6, true)}</div>
+                    <div class="binary-search-status-line"><strong>Normalized shares:</strong> spam=${formatNumber(spamShare, 4, true)} | ham=${formatNumber(hamShare, 4, true)}</div>
+                    <div class="binary-search-status-line"><strong>Margin:</strong> ${formatNumber(margin, 6, true)} | <strong>log(spam/ham):</strong> ${Number.isFinite(logOdds) ? formatNumber(logOdds, 6, true) : 'infinite'}</div>
+                    <div class="binary-search-status-line"><strong>Decision rule:</strong> pick larger score${showDecision ? ` -> ${predicted}` : ''}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Posterior comparison progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = class label (spam/ham), Y = posterior score magnitude, Z = comparison-depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Load Posterior Scores',
                 'Compare unnormalized posteriors for each label.',
+                renderNaiveBayesStatus(
+                    'Initialize scores',
+                    'Read posterior values for spam and ham classes.',
+                    { progress: 30, showDecision: false }
+                ),
+                '<code>score(label) = prior(label) * likelihood(features|label)</code>'
+            ),
+            makeStep(
+                'Normalize and Compare',
+                'Inspect relative confidence and separation margin.',
                 `
-                    ${renderScoreBars(spamScore, hamScore)}
+                    ${renderNaiveBayesStatus(
+                        'Compute confidence',
+                        'Normalize both scores and calculate margin/log-odds.',
+                        { progress: 68, showDecision: false }
+                    )}
                     <div class="exec-list">
-                        <div class="exec-list-row">Spam score: ${formatNumber(spamScore, 6, true)}</div>
-                        <div class="exec-list-row">Ham score: ${formatNumber(hamScore, 6, true)}</div>
+                        <div class="exec-list-row active">spam share = ${formatNumber(spamShare, 4, true)}</div>
+                        <div class="exec-list-row active">ham share = ${formatNumber(hamShare, 4, true)}</div>
+                        <div class="exec-list-row active">margin = ${formatNumber(margin, 6, true)}</div>
                     </div>
                 `,
-                '<code>score(label) = prior(label) * likelihood(features|label)</code>'
+                '<code>confidence(label) = score(label) / (score_spam + score_ham)</code>'
             ),
             makeStep(
                 'Choose Maximum Score',
                 `Higher score decides class (${predicted}).`,
                 `
-                    ${renderScoreBars(spamScore, hamScore)}
+                    ${renderNaiveBayesStatus(
+                        'Argmax decision',
+                        'Choose class with highest posterior score.',
+                        { progress: 100, showDecision: true }
+                    )}
                     <div class="exec-summary success">Prediction: ${predicted}</div>
                 `,
                 `<code>argmax(score_spam, score_ham) -> ${predicted}</code>`
@@ -6966,48 +8348,83 @@
         const termTwo = w2 * x2;
         const z = termOne + termTwo + b;
         const output = 1 / (1 + Math.exp(-z));
+        const predictedClass = output >= 0.5 ? '1 (positive)' : '0 (negative)';
+
+        function renderNeuralStatus(stepLabel, detailLabel, stage, options = {}) {
+            const progress = Math.max(0, Math.min(100, Math.round(asFiniteNumber(options.progress, 0))));
+            const highlightLine = String(options.highlightLine || '');
+            return `
+                ${renderNeuronDiagram(x1, x2, w1, w2, b, z, output, stage)}
+                <div class="binary-search-status">
+                    <div class="binary-search-status-line"><strong>Step:</strong> ${escapeHtml(stepLabel)} | <strong>Detail:</strong> ${escapeHtml(detailLabel)}</div>
+                    <div class="binary-search-status-line"><strong>Inputs:</strong> x1=${formatNumber(x1)}, x2=${formatNumber(x2)} | <strong>Weights:</strong> w1=${formatNumber(w1, 3, true)}, w2=${formatNumber(w2, 3, true)} | <strong>b:</strong> ${formatNumber(b, 3, true)}</div>
+                    <div class="binary-search-status-line"><strong>Terms:</strong> w1*x1=${formatNumber(termOne, 4, true)} | w2*x2=${formatNumber(termTwo, 4, true)}</div>
+                    <div class="binary-search-status-line"><strong>Linear sum z:</strong> ${formatNumber(z, 4, true)} | <strong>sigma(z):</strong> ${formatNumber(output, 3, true)} | <strong>Class:</strong> ${predictedClass}</div>
+                    <div class="binary-search-status-line"><strong>Focus:</strong> ${escapeHtml(highlightLine || 'Forward-pass decomposition')}</div>
+                    <div class="binary-search-progress-track">
+                        <span class="binary-search-progress-fill" style="width:${progress}%;"></span>
+                    </div>
+                    <div class="binary-search-progress-text">Forward-pass computation progress ${progress}%</div>
+                </div>
+                <div class="exec-summary"><em><strong>3D Axes:</strong> X = neuron stage (input -> weighted sum -> output), Y = numeric value magnitude, Z = operation depth cue.</em></div>
+            `;
+        }
+
         const steps = [
             makeStep(
                 'Load Neuron Inputs',
                 `x1=${formatNumber(x1)}, x2=${formatNumber(x2)}, w1=${formatNumber(w1, 3, true)}, w2=${formatNumber(w2, 3, true)}, b=${formatNumber(b, 3, true)}.`,
-                `
-                    ${renderNeuronDiagram(x1, x2, w1, w2, b, z, output, 'input')}
-                    <div class="exec-summary">Forward pass target: sigma(w1*x1 + w2*x2 + b)</div>
-                `,
+                renderNeuralStatus(
+                    'Initialize neuron',
+                    'Load inputs, weights, and bias for single-neuron forward pass.',
+                    'input',
+                    { progress: 18, highlightLine: 'Prepare z = w1*x1 + w2*x2 + b' }
+                ),
                 '<code>z = w1*x1 + w2*x2 + b</code>'
             ),
             makeStep(
                 'Weighted Term 1',
                 `Compute w1*x1.`,
-                `
-                    ${renderNeuronDiagram(x1, x2, w1, w2, b, z, output, 'term1')}
-                    <div class="exec-summary">w1*x1 = ${formatNumber(termOne, 4, true)}</div>
-                `,
+                renderNeuralStatus(
+                    'Compute first contribution',
+                    'Multiply first feature by first weight.',
+                    'term1',
+                    { progress: 36, highlightLine: `w1*x1 = ${formatNumber(termOne, 4, true)}` }
+                ),
                 `<code>${formatNumber(w1, 3, true)} * ${formatNumber(x1)} = ${formatNumber(termOne, 4, true)}</code>`
             ),
             makeStep(
                 'Weighted Term 2',
                 `Compute w2*x2.`,
-                `
-                    ${renderNeuronDiagram(x1, x2, w1, w2, b, z, output, 'term2')}
-                    <div class="exec-summary">w2*x2 = ${formatNumber(termTwo, 4, true)}</div>
-                `,
+                renderNeuralStatus(
+                    'Compute second contribution',
+                    'Multiply second feature by second weight.',
+                    'term2',
+                    { progress: 56, highlightLine: `w2*x2 = ${formatNumber(termTwo, 4, true)}` }
+                ),
                 `<code>${formatNumber(w2, 3, true)} * ${formatNumber(x2)} = ${formatNumber(termTwo, 4, true)}</code>`
             ),
             makeStep(
                 'Linear Combination',
                 'Add weighted terms and bias.',
-                `
-                    ${renderNeuronDiagram(x1, x2, w1, w2, b, z, output, 'linear')}
-                    <div class="exec-summary">z = ${formatNumber(z, 4, true)}</div>
-                `,
+                renderNeuralStatus(
+                    'Build linear sum',
+                    'Aggregate both weighted terms with bias.',
+                    'linear',
+                    { progress: 78, highlightLine: `z = ${formatNumber(termOne, 4, true)} + ${formatNumber(termTwo, 4, true)} + ${formatNumber(b, 3, true)}` }
+                ),
                 `<code>z = ${formatNumber(termOne, 4, true)} + ${formatNumber(termTwo, 4, true)} + ${formatNumber(b, 3, true)} = ${formatNumber(z, 4, true)}</code>`
             ),
             makeStep(
                 'Sigmoid Activation',
                 'Map z to probability.',
                 `
-                    ${renderNeuronDiagram(x1, x2, w1, w2, b, z, output, 'output')}
+                    ${renderNeuralStatus(
+                        'Activation output',
+                        'Apply sigmoid to z and read final class probability.',
+                        'output',
+                        { progress: 100, highlightLine: `sigma(z) = ${formatNumber(output, 3, true)}` }
+                    )}
                     <div class="exec-summary success">sigma(z) = ${formatNumber(output, 3, true)}</div>
                 `,
                 `<code>sigma(z) = 1/(1+e^-z) = ${formatNumber(output, 3, true)}</code>`
@@ -7016,7 +8433,7 @@
 
         return {
             title: 'Execution Visualization - Neural Network (1 Neuron)',
-            subtitle: 'Single-neuron forward pass with sigmoid activation.',
+            subtitle: 'Single-neuron forward pass with weighted decomposition, sigmoid output, and class decision telemetry.',
             steps,
         };
     }
@@ -7120,9 +8537,9 @@
                     <div class="control-group">
                         <button type="button" class="viz-btn viz-btn-start" id="execPlayBtn"><i class="bi bi-play-fill"></i> Play</button>
                         <button type="button" class="viz-btn viz-btn-pause" id="execPauseBtn" disabled><i class="bi bi-pause-fill"></i> Pause</button>
-                        <button type="button" class="viz-btn viz-btn-reset" id="execPrevBtn"><i class="bi bi-chevron-left"></i> Prev</button>
-                        <button type="button" class="viz-btn viz-btn-reset" id="execNextBtn">Next <i class="bi bi-chevron-right"></i></button>
-                        <button type="button" class="viz-btn viz-btn-reset" id="execResetBtn"><i class="bi bi-arrow-clockwise"></i> Reset</button>
+                        <button type="button" class="viz-btn viz-btn-step-prev" id="execPrevBtn"><i class="bi bi-chevron-left"></i> Prev</button>
+                        <button type="button" class="viz-btn viz-btn-step-next" id="execNextBtn">Next <i class="bi bi-chevron-right"></i></button>
+                        <button type="button" class="viz-btn viz-btn-step-reset" id="execResetBtn"><i class="bi bi-arrow-clockwise"></i> Reset</button>
                     </div>
                     <div class="control-group ms-auto">
                         <label for="execSpeedControl"><i class="bi bi-speedometer2 me-1"></i> Speed:</label>
