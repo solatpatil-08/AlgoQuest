@@ -43,6 +43,10 @@ PASSWORD_RESET_OTP_EXPIRY_SECONDS = 10 * 60
 PASSWORD_RESET_OTP_MAX_ATTEMPTS = 5
 PASSWORD_RESET_OTP_SESSION_KEY = 'password_reset_otp_data'
 PASSWORD_RESET_VERIFIED_USER_SESSION_KEY = 'password_reset_verified_user_id'
+PASSWORD_RESET_RATE_LIMIT_SESSION_KEY = 'password_reset_rate_limit'
+PASSWORD_RESET_OTP_COOLDOWN_SECONDS = 60
+PASSWORD_RESET_OTP_WINDOW_SECONDS = 60 * 60
+PASSWORD_RESET_OTP_MAX_REQUESTS_PER_WINDOW = 5
 
 
 def _mask_email(email):
@@ -59,6 +63,45 @@ def _mask_email(email):
 def _clear_password_reset_session(request):
     request.session.pop(PASSWORD_RESET_OTP_SESSION_KEY, None)
     request.session.pop(PASSWORD_RESET_VERIFIED_USER_SESSION_KEY, None)
+
+
+def _consume_password_reset_rate_limit(request, email):
+    now = int(time.time())
+    state = request.session.get(PASSWORD_RESET_RATE_LIMIT_SESSION_KEY, {})
+    if not isinstance(state, dict):
+        state = {}
+
+    key = (email or '').strip().lower()
+    entry = state.get(key, {})
+    raw_timestamps = entry.get('timestamps', [])
+
+    timestamps = []
+    for value in raw_timestamps:
+        try:
+            timestamp = int(value)
+        except (TypeError, ValueError):
+            continue
+        if now - timestamp < PASSWORD_RESET_OTP_WINDOW_SECONDS:
+            timestamps.append(timestamp)
+
+    if timestamps:
+        since_last = now - timestamps[-1]
+        if since_last < PASSWORD_RESET_OTP_COOLDOWN_SECONDS:
+            retry_after = PASSWORD_RESET_OTP_COOLDOWN_SECONDS - since_last
+            state[key] = {'timestamps': timestamps}
+            request.session[PASSWORD_RESET_RATE_LIMIT_SESSION_KEY] = state
+            return False, ('cooldown', max(1, retry_after))
+
+    if len(timestamps) >= PASSWORD_RESET_OTP_MAX_REQUESTS_PER_WINDOW:
+        retry_after = PASSWORD_RESET_OTP_WINDOW_SECONDS - (now - timestamps[0])
+        state[key] = {'timestamps': timestamps}
+        request.session[PASSWORD_RESET_RATE_LIMIT_SESSION_KEY] = state
+        return False, ('window', max(1, retry_after))
+
+    timestamps.append(now)
+    state[key] = {'timestamps': timestamps}
+    request.session[PASSWORD_RESET_RATE_LIMIT_SESSION_KEY] = state
+    return True, None
 
 
 def _get_branded_from_email():
@@ -163,6 +206,7 @@ def dashboard_view(request):
     effective_level = max(1, (profile.xp // XP_PER_LEVEL) + 1)
     if profile.level != effective_level:
         profile.level = effective_level
+        profile.save(update_fields=['level', 'updated_at'])
 
     xp_in_level = profile.xp % XP_PER_LEVEL
     xp_to_next_level = XP_PER_LEVEL - xp_in_level
@@ -277,6 +321,16 @@ class CustomPasswordResetView(FormView):
 
     def form_valid(self, form):
         email = form.cleaned_data.get('email', '').strip().lower()
+        allowed, limit_payload = _consume_password_reset_rate_limit(self.request, email)
+        if not allowed:
+            limit_kind, retry_after = limit_payload
+            if limit_kind == 'cooldown':
+                form.add_error(None, f'Please wait {retry_after} second(s) before requesting another OTP.')
+            else:
+                retry_after_minutes = max(1, (retry_after + 59) // 60)
+                form.add_error(None, f'Too many OTP requests. Try again in {retry_after_minutes} minute(s).')
+            return self.form_invalid(form)
+
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         _clear_password_reset_session(self.request)
 

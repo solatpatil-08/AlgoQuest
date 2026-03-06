@@ -84,6 +84,34 @@ class UserViewsTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('password reset', mail.outbox[0].subject.lower())
 
+    def test_password_reset_request_rate_limit_enforces_cooldown(self):
+        user = User.objects.create_user(username='cooldown-user', email='cooldown@example.com', password='StrongPass123!')
+
+        with patch('users.views.time.time', return_value=1_700_000_000):
+            first = self.client.post(reverse('password_reset'), {'email': user.email})
+        self.assertRedirects(first, reverse('password_reset_done'))
+
+        with patch('users.views.time.time', return_value=1_700_000_015):
+            second = self.client.post(reverse('password_reset'), {'email': user.email})
+        self.assertEqual(second.status_code, 200)
+        self.assertContains(second, 'Please wait')
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_password_reset_request_rate_limit_enforces_hourly_cap(self):
+        user = User.objects.create_user(username='window-user', email='window@example.com', password='StrongPass123!')
+        start = 1_700_100_000
+
+        for idx in range(5):
+            with patch('users.views.time.time', return_value=start + (idx * 61)):
+                response = self.client.post(reverse('password_reset'), {'email': user.email})
+            self.assertRedirects(response, reverse('password_reset_done'))
+
+        with patch('users.views.time.time', return_value=start + (5 * 61)):
+            blocked = self.client.post(reverse('password_reset'), {'email': user.email})
+        self.assertEqual(blocked.status_code, 200)
+        self.assertContains(blocked, 'Too many OTP requests')
+        self.assertEqual(len(mail.outbox), 5)
+
     def test_password_reset_confirm_page_renders_with_valid_token(self):
         user = User.objects.create_user(username='tokenuser', email='token@example.com', password='StrongPass123!')
         uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -160,8 +188,20 @@ class UserViewsTests(TestCase):
             prompt='prompt',
             expected_answer='ok',
         )
-        ChallengeAttempt.objects.create(user=user, challenge=challenge, score=80, is_correct=True)
-        ChallengeAttempt.objects.create(user=user, challenge=challenge, score=0, is_correct=False)
+        ChallengeAttempt.objects.create(
+            user=user,
+            challenge=challenge,
+            attempt_index=1,
+            score=80,
+            is_correct=True,
+        )
+        ChallengeAttempt.objects.create(
+            user=user,
+            challenge=challenge,
+            attempt_index=2,
+            score=0,
+            is_correct=False,
+        )
         self.client.force_login(user)
 
         response = self.client.get(reverse('dashboard'))

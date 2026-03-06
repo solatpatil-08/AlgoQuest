@@ -215,6 +215,12 @@ class ChallengeAttempt(models.Model):
 
     class Meta:
         ordering = ('-created_at',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=('user', 'challenge', 'attempt_index'),
+                name='unique_attempt_index_per_user_challenge',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.username} - {self.challenge.title} ({self.score})"

@@ -108,6 +108,38 @@ class MatchmakingTests(TestCase):
         self.assertEqual(first_match.preferred_topic, self.topic_graphs)
         self.assertEqual(joined_match.preferred_topic, self.topic_arrays)
 
+    def test_find_or_create_reuses_existing_waiting_room_for_same_user(self):
+        user = User.objects.create_user(username='single_waiter', password='StrongPass123!')
+
+        first_match, first_waiting = find_or_create_match(user, topic_preference='arrays')
+        second_match, second_waiting = find_or_create_match(user, topic_preference='graphs')
+
+        self.assertTrue(first_waiting)
+        self.assertTrue(second_waiting)
+        self.assertEqual(first_match.id, second_match.id)
+        first_match.refresh_from_db()
+        self.assertEqual(first_match.preferred_topic, self.topic_arrays)
+        self.assertEqual(
+            BattleMatch.objects.filter(
+                player_one=user,
+                status=BattleMatch.Status.WAITING,
+                player_two__isnull=True,
+            ).count(),
+            1,
+        )
+
+    def test_reused_waiting_room_can_adopt_topic_preference_when_missing(self):
+        user = User.objects.create_user(username='topicless_waiter', password='StrongPass123!')
+
+        first_match, first_waiting = find_or_create_match(user, topic_preference=None)
+        second_match, second_waiting = find_or_create_match(user, topic_preference='graphs')
+
+        self.assertTrue(first_waiting)
+        self.assertTrue(second_waiting)
+        self.assertEqual(first_match.id, second_match.id)
+        first_match.refresh_from_db()
+        self.assertEqual(first_match.preferred_topic, self.topic_graphs)
+
 
 class BattleApiAndAccessTests(TestCase):
     def setUp(self):
@@ -227,6 +259,14 @@ class BattleApiAndAccessTests(TestCase):
         self.assertNotContains(response, 'if (button)')
         self.assertNotContains(response, 'statusEl.innerHTML')
 
+    def test_lobby_waiting_flow_uses_polling_before_live_redirect(self):
+        self.client.force_login(self.first)
+        response = self.client.get(reverse('battle-lobby'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'pollWaitingRoom')
+        self.assertContains(response, 'if (data.is_waiting)')
+        self.assertContains(response, 'setInterval(pollWaitingRoom, 3000)')
+
     def test_battle_lobby_query_count_sanity(self):
         self.client.force_login(self.first)
         Topic.objects.create(
@@ -271,6 +311,8 @@ class BattleApiAndAccessTests(TestCase):
         script = script_path.read_text(encoding='utf-8')
         self.assertNotIn('alert-${type}', script)
         self.assertIn("error: 'alert-danger'", script)
+        self.assertIn('queueScoreToken', script)
+        self.assertIn('flushPendingScoreTokens', script)
 
 
 class BattleConsumerSecurityTests(TransactionTestCase):

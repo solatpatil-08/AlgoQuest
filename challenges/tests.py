@@ -115,6 +115,26 @@ class ChallengeAttemptFlowTests(TestCase):
         self.assertLess(payload['score'], self.challenge.max_score)
         self.assertEqual(payload['xp_gained'], 0)
 
+    def test_attempt_index_must_be_unique_for_same_user_and_challenge(self):
+        ChallengeAttempt.objects.create(
+            user=self.user,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_correct=False,
+            score=0,
+            submitted_answer='x',
+        )
+
+        with self.assertRaises(Exception):
+            ChallengeAttempt.objects.create(
+                user=self.user,
+                challenge=self.challenge,
+                attempt_index=1,
+                is_correct=True,
+                score=100,
+                submitted_answer='queue',
+            )
+
 
 class KnapsackActionSubmissionTests(TestCase):
     def setUp(self):
@@ -2462,6 +2482,42 @@ class ChallengeCategorySubtypeNavigationTests(TestCase):
         response = self.client.get(reverse('challenge-detail', args=[duplicate.slug]))
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('challenge-detail', args=[canonical.slug]))
+
+    def test_solved_ids_use_preferred_variant_for_legacy_progress_rows(self):
+        user = User.objects.create_user(username='legacy_progress_user', password='StrongPass123!')
+        self.client.force_login(user)
+
+        canonical = Challenge.objects.filter(
+            topic=self.graph_topic,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            order_index=0,
+        ).first()
+        self.assertIsNotNone(canonical)
+
+        duplicate = Challenge.objects.create(
+            title='Legacy BFS Solved Duplicate',
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='legacy solved duplicate',
+            prompt='test',
+            expected_answer='queue',
+            order_index=0,
+        )
+        UserChallengeProg.objects.create(
+            user=user,
+            challenge=duplicate,
+            is_solved=True,
+            is_unlocked=True,
+        )
+
+        response = self.client.get(
+            reverse('challenges-list'),
+            {'category': 'trees_graphs', 'subtype': 'bfs'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(canonical.id, response.context['solved_ids'])
+        self.assertIn(canonical.id, response.context['unlocked_ids'])
 
     def test_alias_compatibility(self):
         alias_cases = [

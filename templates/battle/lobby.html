@@ -160,10 +160,12 @@
 
 {% block scripts %}
 <script>
-    const isAuthenticated = {{ user.is_authenticated|yesno:"true,false" }};
+const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
     const matchmakeBtn = document.getElementById('matchmakeBtn');
     const matchStatus = document.getElementById('matchStatus');
     const topicBattleButtons = document.querySelectorAll('.battle-topic-btn');
+    let waitingPollTimer = null;
+    let waitingRoomCode = '';
 
     function getCsrfToken() {
         const tokenInput = document.querySelector("input[name='csrfmiddlewaretoken']");
@@ -192,6 +194,45 @@
         }
         button.disabled = false;
         button.innerHTML = button.dataset.originalHtml || idleHtml || button.innerHTML;
+    }
+
+    function stopWaitingPoll() {
+        if (waitingPollTimer) {
+            window.clearInterval(waitingPollTimer);
+            waitingPollTimer = null;
+        }
+        waitingRoomCode = '';
+    }
+
+    async function pollWaitingRoom() {
+        if (!isAuthenticated || !waitingRoomCode) {
+            return;
+        }
+        try {
+            const response = await fetch('/api/battle/', {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+            });
+            if (!response.ok) {
+                return;
+            }
+            const matches = await response.json();
+            if (!Array.isArray(matches)) {
+                return;
+            }
+            const room = matches.find((match) => match && match.room_code === waitingRoomCode);
+            if (!room) {
+                return;
+            }
+            if (room.status === 'live') {
+                const roomCode = waitingRoomCode;
+                stopWaitingPoll();
+                setStatus('<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...', 'success');
+                window.location.href = `/battle/live/${roomCode}/`;
+            }
+        } catch (error) {
+            // Keep waiting silently; transient poll failures should not interrupt user flow.
+        }
     }
 
     async function startMatchmaking(topicId = null, triggerButton = null) {
@@ -245,12 +286,19 @@
 
             if (data.is_waiting) {
                 setStatus('<i class="bi bi-clock me-1"></i>Battle room created. Waiting for opponent...', 'info');
+                waitingRoomCode = data.room_code;
+                if (waitingPollTimer) {
+                    window.clearInterval(waitingPollTimer);
+                }
+                waitingPollTimer = window.setInterval(pollWaitingRoom, 3000);
+                pollWaitingRoom();
             } else {
+                stopWaitingPoll();
                 setStatus('<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...', 'success');
+                window.setTimeout(() => {
+                    window.location.href = `/battle/live/${data.room_code}/`;
+                }, 800);
             }
-            window.setTimeout(() => {
-                window.location.href = `/battle/live/${data.room_code}/`;
-            }, 800);
         } catch (error) {
             console.error('Battle matchmaking error:', error);
             setStatus('<i class="bi bi-wifi-off me-1"></i>Network error while finding a match. Please retry.', 'error');
@@ -261,6 +309,8 @@
             }
         }
     }
+
+    window.addEventListener('beforeunload', stopWaitingPoll);
 
     if (matchmakeBtn) {
         matchmakeBtn.addEventListener('click', function (event) {

@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from itertools import groupby
 
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Q, Value, When
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -612,6 +613,23 @@ def _get_user_challenge_progress(user, challenge):
     return prog
 
 
+def _get_locked_user_challenge_progress(user, challenge):
+    """Get or create progress row and lock it for concurrent-safe attempt accounting."""
+    if not user or not user.is_authenticated:
+        return None
+
+    try:
+        prog, _ = UserChallengeProg.objects.get_or_create(
+            user=user,
+            challenge=challenge,
+            defaults={'is_unlocked': False, 'is_solved': False},
+        )
+    except IntegrityError:
+        # Concurrent create raced this request. Fetch the winner row.
+        prog = UserChallengeProg.objects.get(user=user, challenge=challenge)
+    return UserChallengeProg.objects.select_for_update().get(pk=prog.pk)
+
+
 def _is_challenge_unlocked(user, challenge):
     """Check if user has unlocked this challenge."""
     if not user or not user.is_authenticated:
@@ -789,6 +807,63 @@ def _bulk_unlock_map(challenges, solved_ids, explicit_unlocked_ids):
         unlock_map[challenge.id] = is_unlocked
 
     return unlock_map
+
+
+def _build_preferred_variant_id_map(algorithm_level_keys):
+    """
+    Resolve canonical challenge ids for (algorithm_type, order_index) pairs.
+    """
+    if not algorithm_level_keys:
+        return {}
+
+    algorithm_types = {algorithm_type for algorithm_type, _ in algorithm_level_keys if algorithm_type}
+    order_indexes = {order_index for _, order_index in algorithm_level_keys}
+    rows = (
+        Challenge.objects.filter(
+            is_active=True,
+            algorithm_type__in=algorithm_types,
+            order_index__in=order_indexes,
+        )
+        .select_related('topic')
+        .only('id', 'algorithm_type', 'order_index', 'topic__stable_id', 'topic__visualization_type')
+    )
+
+    preferred = {}
+    for row in rows:
+        key = (row.algorithm_type, row.order_index)
+        if key not in algorithm_level_keys:
+            continue
+        score = _challenge_row_preference(row)
+        current = preferred.get(key)
+        if current is None or score > current['score']:
+            preferred[key] = {'id': row.id, 'score': score}
+
+    return {key: payload['id'] for key, payload in preferred.items()}
+
+
+def _normalize_progress_rows_to_preferred_ids(user_progress_rows):
+    """
+    Normalize solved/unlocked ids to preferred challenge variants for deduped UI rows.
+    """
+    solved_ids = set()
+    unlocked_ids = set()
+    algorithm_level_keys = {
+        (algorithm_type, order_index)
+        for _, _, _, algorithm_type, order_index in user_progress_rows
+        if algorithm_type
+    }
+    preferred_id_map = _build_preferred_variant_id_map(algorithm_level_keys)
+
+    for challenge_id, is_solved, is_unlocked, algorithm_type, order_index in user_progress_rows:
+        effective_id = challenge_id
+        if algorithm_type:
+            effective_id = preferred_id_map.get((algorithm_type, order_index), challenge_id)
+        if is_solved:
+            solved_ids.add(effective_id)
+        if is_unlocked:
+            unlocked_ids.add(effective_id)
+
+    return solved_ids, unlocked_ids
 
 
 def _unlock_next_challenge(user, challenge):
@@ -2959,16 +3034,16 @@ def challenge_list_view(request):
     solved_ids = set()
     explicit_unlocked_ids = set()
     if request.user.is_authenticated:
-        user_progress_rows = UserChallengeProg.objects.filter(user=request.user, challenge__is_active=True).values_list(
-            'challenge_id',
-            'is_solved',
-            'is_unlocked',
+        user_progress_rows = list(
+            UserChallengeProg.objects.filter(user=request.user, challenge__is_active=True).values_list(
+                'challenge_id',
+                'is_solved',
+                'is_unlocked',
+                'challenge__algorithm_type',
+                'challenge__order_index',
+            )
         )
-        for challenge_id, is_solved, is_unlocked in user_progress_rows:
-            if is_solved:
-                solved_ids.add(challenge_id)
-            if is_unlocked:
-                explicit_unlocked_ids.add(challenge_id)
+        solved_ids, explicit_unlocked_ids = _normalize_progress_rows_to_preferred_ids(user_progress_rows)
 
     selected_kind = request.GET.get('kind', 'all')
     selected_difficulty = request.GET.get('difficulty', 'all')
@@ -3234,53 +3309,54 @@ def submit_attempt_view(request, slug):
             status=403,
         )
 
-    prog = _get_user_challenge_progress(request.user, challenge)
-
     answer = request.POST.get('answer', '').strip()
     action_eval = _evaluate_action_payload(challenge, request.POST.get('action_payload', '').strip())
     if action_eval:
         answer = action_eval['answer']
 
-    expected_answer = challenge.expected_answer.strip()
-    is_correct = bool(expected_answer) and expected_answer.lower() == answer.lower()
-    attempt_index = prog.attempt_count + 1
-    is_score_eligible = attempt_index == 1
-    hint_used = bool(prog.hint_used)
+    with transaction.atomic():
+        prog = _get_locked_user_challenge_progress(request.user, challenge)
 
-    if is_correct and is_score_eligible:
-        if hint_used:
-            score = int(challenge.max_score * HINT_REMAINING_RATIO)
-            gained_xp = int(challenge.xp_reward * HINT_REMAINING_RATIO)
+        expected_answer = challenge.expected_answer.strip()
+        is_correct = bool(expected_answer) and expected_answer.lower() == answer.lower()
+        attempt_index = prog.attempt_count + 1
+        is_score_eligible = attempt_index == 1
+        hint_used = bool(prog.hint_used)
+
+        if is_correct and is_score_eligible:
+            if hint_used:
+                score = int(challenge.max_score * HINT_REMAINING_RATIO)
+                gained_xp = int(challenge.xp_reward * HINT_REMAINING_RATIO)
+            else:
+                score = challenge.max_score
+                gained_xp = challenge.xp_reward
         else:
-            score = challenge.max_score
-            gained_xp = challenge.xp_reward
-    else:
-        score = 0
-        gained_xp = 0
+            score = 0
+            gained_xp = 0
 
-    attempt = ChallengeAttempt.objects.create(
-        user=request.user,
-        challenge=challenge,
-        attempt_index=attempt_index,
-        hint_used=hint_used,
-        is_score_eligible=is_score_eligible,
-        score=score,
-        is_correct=is_correct,
-        submitted_answer=answer,
-    )
+        attempt = ChallengeAttempt.objects.create(
+            user=request.user,
+            challenge=challenge,
+            attempt_index=attempt_index,
+            hint_used=hint_used,
+            is_score_eligible=is_score_eligible,
+            score=score,
+            is_correct=is_correct,
+            submitted_answer=answer,
+        )
 
-    prog.attempt_count += 1
-    prog.best_score = max(prog.best_score, score)
-    prog.last_attempted_at = timezone.now()
-    if not prog.first_attempted_at:
-        prog.first_attempted_at = timezone.now()
+        prog.attempt_count += 1
+        prog.best_score = max(prog.best_score, score)
+        prog.last_attempted_at = timezone.now()
+        if not prog.first_attempted_at:
+            prog.first_attempted_at = timezone.now()
 
-    if is_correct and not prog.is_solved:
-        prog.is_solved = True
-        prog.solved_at = timezone.now()
-        _unlock_next_challenge(request.user, challenge)
+        if is_correct and not prog.is_solved:
+            prog.is_solved = True
+            prog.solved_at = timezone.now()
+            _unlock_next_challenge(request.user, challenge)
 
-    prog.save()
+        prog.save()
 
     if gained_xp > 0:
         request.user.profile.add_xp(gained_xp)

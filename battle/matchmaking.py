@@ -50,6 +50,24 @@ def select_challenge_for_match(topic=None):
 def find_or_create_match(user, topic_preference=None):
     profile = user.profile
     preferred_topic = resolve_topic_preference(topic_preference)
+
+    # Reuse an already-open waiting room for this user to avoid queue spam.
+    existing_waiting = (
+        BattleMatch.objects.filter(
+            player_one=user,
+            status=BattleMatch.Status.WAITING,
+            player_two__isnull=True,
+        )
+        .select_related('preferred_topic')
+        .order_by('created_at')
+        .first()
+    )
+    if existing_waiting:
+        if existing_waiting.preferred_topic_id is None and preferred_topic is not None:
+            existing_waiting.preferred_topic = preferred_topic
+            existing_waiting.save(update_fields=['preferred_topic'])
+        return existing_waiting, True
+
     candidates = BattleMatch.objects.filter(
         status=BattleMatch.Status.WAITING,
         player_two__isnull=True,

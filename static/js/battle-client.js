@@ -9,6 +9,8 @@ const endBattleBtn = document.getElementById('endBattleBtn');
 
 let socket = null;
 let battleFinished = false;
+let pendingScoreTokens = [];
+const queuedScoreTokenSet = new Set();
 
 function renderStatus(message, type = 'info') {
     if (!battleStatusEl) return;
@@ -43,6 +45,26 @@ function isSocketOpen() {
     return socket && socket.readyState === WebSocket.OPEN;
 }
 
+function queueScoreToken(scoreToken) {
+    if (!scoreToken || typeof scoreToken !== 'string') return;
+    if (queuedScoreTokenSet.has(scoreToken)) return;
+    queuedScoreTokenSet.add(scoreToken);
+    pendingScoreTokens.push(scoreToken);
+}
+
+function flushPendingScoreTokens() {
+    if (!isSocketOpen() || battleFinished || !pendingScoreTokens.length) {
+        return;
+    }
+
+    const toSend = pendingScoreTokens;
+    pendingScoreTokens = [];
+    for (const token of toSend) {
+        queuedScoreTokenSet.delete(token);
+        socket.send(JSON.stringify({ event: 'score_update', score_token: token }));
+    }
+}
+
 function renderBattleState(data) {
     if (!data) return;
 
@@ -72,8 +94,15 @@ function renderBattleState(data) {
 }
 
 function sendScoreIncrement(scoreToken) {
-    if (!isSocketOpen() || battleFinished) return false;
     if (!scoreToken || typeof scoreToken !== 'string') return false;
+    if (battleFinished) return false;
+
+    if (!isSocketOpen()) {
+        queueScoreToken(scoreToken);
+        renderStatus('Socket disconnected. Score update queued and will sync on reconnect.', 'warning');
+        return true;
+    }
+
     socket.send(JSON.stringify({ event: 'score_update', score_token: scoreToken }));
     return true;
 }
@@ -100,6 +129,7 @@ if (roomCode) {
 
     socket.onopen = () => {
         setConnectionBadge('Connected', 'bg-success');
+        flushPendingScoreTokens();
         if (!battleFinished) {
             renderStatus('Connected to battle socket.', 'info');
         }
