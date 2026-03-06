@@ -177,8 +177,8 @@
                     <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${front}" stroke="${stroke}" stroke-width="${isCurrent ? '2.9' : (isHighlight ? '2.1' : '1.7')}"></rect>
                     ${tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${isCurrent ? '#f59e0b' : '#22c55e'}"></rect>` : ''}
                     ${tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${escapeHtml(tag.toUpperCase())}</text>` : ''}
-                    <text class="exec-3d-value-text" x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '13' : '14.2'}" font-weight="800" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
-                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">${escapeHtml(indexLabel)} ${idx}</text>
+                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text class="exec-3d-index-text" x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">${escapeHtml(indexLabel)} ${idx}</text>
                 </g>
             `;
         }).join('');
@@ -477,7 +477,7 @@
                     <rect x="${left}" y="${y}" width="${bucketWidth}" height="${bucketHeight}" rx="8" fill="${front}" stroke="${stroke}" stroke-width="${hasHighlight ? '2.2' : '1.5'}"></rect>
                     <text x="${left + 10}" y="${y + 21}" font-size="11" fill="#334155">b${bucketIndex}</text>
                     <text x="${left + 34}" y="${y + 21}" font-size="10.4" fill="#475569">${escapeHtml(countLabel)}</text>
-                    <text class="exec-3d-value-text" x="${left + 102}" y="${y + 21}" font-size="11.8" fill="#0f172a">${escapeHtml(line)}</text>
+                    <text x="${left + 102}" y="${y + 21}" font-size="11.2" fill="#0f172a">${escapeHtml(line)}</text>
                 </g>
             `;
         }).join('');
@@ -894,8 +894,8 @@
                     <polygon points="${x},${y} ${x + depth},${y - depth} ${x + barWidth + depth},${y - depth} ${x + barWidth},${y}" fill="${top}"></polygon>
                     <polygon points="${x + barWidth},${y} ${x + barWidth + depth},${y - depth} ${x + barWidth + depth},${y + barHeight - depth} ${x + barWidth},${y + barHeight}" fill="${side}" opacity="0.95"></polygon>
                     <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="6" fill="${front}" stroke="${stroke}" stroke-width="${isComparing ? '2.6' : '1.7'}"></rect>
-                    <text x="${x + (barWidth / 2)}" y="${axisY + 17}" text-anchor="middle" font-size="10.8" font-weight="700" fill="#334155" style="paint-order:stroke;stroke:rgba(248,250,252,0.95);stroke-width:1.6px;stroke-linejoin:round;">${idx}</text>
-                    <text class="exec-3d-value-text" x="${x + (barWidth / 2)}" y="${Math.max(18, y - 6)}" text-anchor="middle" font-size="12.4" font-weight="800" fill="#f8fafc" style="paint-order:stroke;stroke:rgba(2,6,23,0.92);stroke-width:2.2px;stroke-linejoin:round;">${escapeHtml(formatNumber(value))}</text>
+                    <text class="exec-3d-index-text" x="${x + (barWidth / 2)}" y="${axisY + 17}" text-anchor="middle" font-size="10.8" font-weight="700" fill="#334155">${idx}</text>
+                    <text class="exec-3d-value-text" x="${x + (barWidth / 2)}" y="${Math.max(18, y - 6)}" text-anchor="middle" font-size="12" font-weight="700" fill="#e2e8f0" style="paint-order:stroke;stroke:rgba(15,23,42,0.62);stroke-width:1.7px;stroke-linejoin:round;">${escapeHtml(formatNumber(value))}</text>
                 </g>
             `;
         }).join('');

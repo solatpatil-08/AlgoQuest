@@ -1084,10 +1084,10 @@
 
 .exec-svg.exec-svg-3d {
     position: relative;
-    transform: translateZ(0) rotateX(0.35deg);
+    transform: translateZ(0);
     width: max(100%, 460px);
-    filter: drop-shadow(0 18px 24px rgba(2, 6, 23, 0.42)) saturate(1.08);
-    animation: execSceneFloat 4s ease-in-out infinite;
+    filter: none;
+    animation: none;
 }
 
 .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text {
@@ -1095,12 +1095,20 @@
     stroke: rgba(248, 250, 252, 0.92);
     stroke-width: 1.6px;
     stroke-linejoin: round;
+    text-rendering: geometricPrecision;
 }
 
 .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text.exec-3d-value-text {
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: 0.01em;
-    stroke-width: 2.2px;
+    stroke-width: 1.8px;
+    text-rendering: geometricPrecision;
+}
+
+.exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    fill: #1f2937 !important;
+    stroke: rgba(241, 245, 249, 0.96);
+    stroke-width: 1.05px;
     text-rendering: geometricPrecision;
 }
 
@@ -1113,7 +1121,7 @@
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-strip .exec-svg.exec-svg-3d {
-    filter: drop-shadow(0 20px 24px rgba(2, 6, 23, 0.46)) saturate(1.1);
+    filter: none;
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-bst {
@@ -1125,7 +1133,7 @@
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-bst .exec-svg.exec-svg-3d {
-    filter: drop-shadow(0 20px 26px rgba(2, 6, 23, 0.48)) saturate(1.1);
+    filter: none;
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-ml {
@@ -2766,12 +2774,26 @@
 }
 
 [data-theme="dark"] .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text {
-    stroke: rgba(2, 6, 23, 0.92);
-    stroke-width: 1.8px;
+    stroke: rgba(15, 23, 42, 0.42);
+    stroke-width: 0.95px;
 }
 
 [data-theme="dark"] .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text.exec-3d-value-text {
-    stroke-width: 2.4px;
+    stroke-width: 1.3px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    fill: #dbeafe !important;
+    stroke: rgba(2, 6, 23, 0.72);
+    stroke-width: 1px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text[fill="#334155"] {
+    fill: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text[fill="#475569"] {
+    fill: #94a3b8 !important;
 }
 
 [data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-bst {

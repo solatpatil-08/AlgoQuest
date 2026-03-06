@@ -176,15 +176,19 @@
                                                 <i class="bi bi-code-square me-1"></i>Solve
                                             </a>
                                             {% if request.user.is_authenticated %}
-                                                <span class="badge badge-secondary">
-                                                    {% if challenge.id in solved_ids %}
-                                                        <i class="bi bi-check-circle-fill text-success"></i> Solved
-                                                    {% elif challenge.id in unlocked_ids %}
-                                                        <i class="bi bi-unlock"></i> Unlocked
-                                                    {% else %}
-                                                        <i class="bi bi-lock"></i> Locked
-                                                    {% endif %}
-                                                </span>
+                                                {% if challenge.id in solved_ids %}
+                                                    <span class="badge badge-secondary challenge-status-badge is-solved">
+                                                        <i class="bi bi-check-circle-fill status-icon status-icon-solved"></i> Solved
+                                                    </span>
+                                                {% elif challenge.id in unlocked_ids %}
+                                                    <span class="badge badge-secondary challenge-status-badge is-unlocked">
+                                                        <i class="bi bi-unlock status-icon status-icon-unlocked"></i> Unlocked
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge badge-secondary challenge-status-badge is-locked">
+                                                        <i class="bi bi-lock status-icon status-icon-locked"></i> Locked
+                                                    </span>
+                                                {% endif %}
                                             {% endif %}
                                         </div>
                                     </div>
