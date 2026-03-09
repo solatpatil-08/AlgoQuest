@@ -25,6 +25,8 @@
         legendOverlay: null,
         statusPanel: null,
         overlayDock: null,
+        initialCameraPosition: null,
+        initialControlTarget: null,
         nodeStates: new Map(), // Tracks state of each node: unvisited, frontier, current, visited
         nodeHalos: new Map(), // Tracks halo/outline meshes for non-color cues
         nodeLabels: new Map(), // Tracks label sprites
@@ -143,6 +145,11 @@
         Visualization3DState.controls.dampingFactor = 0.05;
         Visualization3DState.controls.minDistance = 50;
         Visualization3DState.controls.maxDistance = 500;
+        Visualization3DState.controls.target.set(0, 0, 0);
+        Visualization3DState.controls.update();
+        if (typeof Visualization3DState.controls.saveState === 'function') {
+            Visualization3DState.controls.saveState();
+        }
     }
 
     function defineMaterials() {
@@ -249,7 +256,13 @@
 
     function buildNodeLayout(nodeIds, container) {
         const count = nodeIds.length || 1;
-        const radius = Math.min(container.clientWidth, 500) / 3.5;
+        const minArcSpacing = Visualization3DState.baseNodeSize * 3.8;
+        const requiredRadius = (count * minArcSpacing) / (2 * Math.PI);
+        const radius = Math.max(
+            88,
+            requiredRadius,
+            Math.min(container.clientWidth, 560) / 3.05
+        );
         return nodeIds.map((id, idx) => {
             const angle = (2 * Math.PI * idx) / count;
             return {
@@ -381,7 +394,7 @@
 
         const nodes = [];
         const cellToIndex = new Map();
-        const spacing = 34;
+        const spacing = 46;
         const startX = -((cols - 1) * spacing) / 2;
         const startY = ((rows - 1) * spacing) / 2;
 
@@ -438,6 +451,57 @@
             target,
             grid: true,
         };
+    }
+
+    function frameCameraToNodes(nodes, options = {}) {
+        const camera = Visualization3DState.camera;
+        const controls = Visualization3DState.controls;
+        if (!camera || !Array.isArray(nodes) || !nodes.length) {
+            return;
+        }
+
+        let minX = Infinity;
+        let minY = Infinity;
+        let minZ = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        let maxZ = -Infinity;
+
+        nodes.forEach((node) => {
+            minX = Math.min(minX, Number(node.x) || 0);
+            minY = Math.min(minY, Number(node.y) || 0);
+            minZ = Math.min(minZ, Number(node.z) || 0);
+            maxX = Math.max(maxX, Number(node.x) || 0);
+            maxY = Math.max(maxY, Number(node.y) || 0);
+            maxZ = Math.max(maxZ, Number(node.z) || 0);
+        });
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+        const spanZ = maxZ - minZ;
+        const maxSpan = Math.max(spanX, spanY, spanZ, Visualization3DState.baseNodeSize * 8);
+        const distance = options.isGrid
+            ? Math.max(260, maxSpan * 2.2)
+            : Math.max(280, maxSpan * 2.35);
+
+        camera.position.set(centerX, centerY + (options.isGrid ? 10 : 0), centerZ + distance);
+        camera.lookAt(centerX, centerY, centerZ);
+
+        if (controls) {
+            controls.target.set(centerX, centerY, centerZ);
+            controls.minDistance = Math.max(70, distance * 0.35);
+            controls.maxDistance = Math.max(520, distance * 3.25);
+            controls.update();
+            if (typeof controls.saveState === 'function') {
+                controls.saveState();
+            }
+        }
+
+        Visualization3DState.initialCameraPosition = camera.position.clone();
+        Visualization3DState.initialControlTarget = controls ? controls.target.clone() : new THREE.Vector3(centerX, centerY, centerZ);
     }
 
     function bstConfigFromPayload(defaultConfig) {
@@ -1303,6 +1367,8 @@
             if (normalized === 'bfs' || normalized === 'dfs' || normalized === 'bst') {
                 addLabelsToNodes(nodes);
             }
+
+            frameCameraToNodes(nodes, { isGrid: Boolean(config.grid) });
             
             // Add axis helpers
             Visualization3DState.axisGroup = createAxisHelpers();
@@ -2045,6 +2111,22 @@
             
             Visualization3DState.nodeStates.clear();
             Visualization3DState.visitedOrder = [];
+
+            const camera = Visualization3DState.camera;
+            const controls = Visualization3DState.controls;
+            if (camera && Visualization3DState.initialCameraPosition) {
+                camera.position.copy(Visualization3DState.initialCameraPosition);
+            }
+            if (controls) {
+                if (Visualization3DState.initialControlTarget) {
+                    controls.target.copy(Visualization3DState.initialControlTarget);
+                }
+                if (typeof controls.reset === 'function') {
+                    controls.reset();
+                } else if (typeof controls.update === 'function') {
+                    controls.update();
+                }
+            }
         },
 
         cleanup() {

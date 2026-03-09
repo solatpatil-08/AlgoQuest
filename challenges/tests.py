@@ -159,7 +159,7 @@ class KnapsackActionSubmissionTests(TestCase):
             },
         )
 
-    def test_knapsack_action_payload_derives_authoritative_answer(self):
+    def test_knapsack_action_payload_is_ignored_until_hint_is_used(self):
         self.client.force_login(self.user)
 
         response = self.client.post(
@@ -172,17 +172,19 @@ class KnapsackActionSubmissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertTrue(payload['is_correct'])
-        self.assertEqual(payload['score'], 100)
-        self.assertEqual(payload['xp_gained'], 50)
-        self.assertEqual(payload['knapsack_total_weight'], 5)
-        self.assertFalse(payload['knapsack_over_capacity'])
+        self.assertFalse(payload['is_correct'])
+        self.assertFalse(payload['hint_used'])
+        self.assertEqual(payload['score'], 0)
+        self.assertEqual(payload['xp_gained'], 0)
+        self.assertNotIn('knapsack_total_weight', payload)
 
         attempt = ChallengeAttempt.objects.get(user=self.user, challenge=self.challenge)
-        self.assertEqual(attempt.submitted_answer, '13')
+        self.assertEqual(attempt.submitted_answer, '999')
 
     def test_knapsack_over_capacity_submission_stays_incorrect(self):
         self.client.force_login(self.user)
+        hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(hint_response.status_code, 200)
 
         response = self.client.post(
             reverse('challenge-submit', args=[self.challenge.slug]),
@@ -2861,7 +2863,7 @@ class SubmitBehaviorTests(TestCase):
         ).is_solved)
 
 
-class HintAndFirstAttemptScoringTests(TestCase):
+class HintDrivenScoringTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='hint_user', password='Pass123!')
         self.topic = Topic.objects.create(
@@ -2933,7 +2935,31 @@ class HintAndFirstAttemptScoringTests(TestCase):
         self.assertTrue(attempt.hint_used)
         self.assertTrue(attempt.is_score_eligible)
 
-    def test_second_attempt_gets_zero_points_even_if_correct(self):
+    def test_correct_after_manual_failure_and_then_hint_gets_reduced_points(self):
+        self.client.force_login(self.user)
+        wrong = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'wrong'},
+        )
+        self.assertEqual(wrong.status_code, 200)
+        self.assertEqual(wrong.json()['score'], 0)
+
+        hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
+        self.assertEqual(hint_response.status_code, 200)
+
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'queue'},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['attempt_index'], 2)
+        self.assertTrue(payload['hint_used'])
+        self.assertTrue(payload['is_score_eligible'])
+        self.assertEqual(payload['score'], 25)
+        self.assertEqual(payload['xp_gained'], 25)
+
+    def test_second_attempt_without_hint_can_still_get_full_points(self):
         self.client.force_login(self.user)
         first = self.client.post(
             reverse('challenge-submit', args=[self.challenge.slug]),
@@ -2949,14 +2975,14 @@ class HintAndFirstAttemptScoringTests(TestCase):
         self.assertEqual(second.status_code, 200)
         payload = second.json()
         self.assertEqual(payload['attempt_index'], 2)
-        self.assertFalse(payload['is_score_eligible'])
-        self.assertEqual(payload['score'], 0)
-        self.assertEqual(payload['xp_gained'], 0)
+        self.assertTrue(payload['is_score_eligible'])
+        self.assertEqual(payload['score'], 100)
+        self.assertEqual(payload['xp_gained'], 100)
 
         attempt = ChallengeAttempt.objects.get(user=self.user, challenge=self.challenge, attempt_index=2)
-        self.assertFalse(attempt.is_score_eligible)
+        self.assertTrue(attempt.is_score_eligible)
 
-    def test_hint_not_available_after_first_attempt(self):
+    def test_hint_remains_available_after_wrong_manual_attempt(self):
         self.client.force_login(self.user)
         submit = self.client.post(
             reverse('challenge-submit', args=[self.challenge.slug]),
@@ -2965,7 +2991,28 @@ class HintAndFirstAttemptScoringTests(TestCase):
         self.assertEqual(submit.status_code, 200)
 
         hint_response = self.client.post(reverse('challenge-hint', args=[self.challenge.slug]))
-        self.assertEqual(hint_response.status_code, 400)
+        self.assertEqual(hint_response.status_code, 200)
+        self.assertTrue(hint_response.json()['hint_used'])
+
+    def test_repeat_correct_submission_after_solving_awards_no_additional_points(self):
+        self.client.force_login(self.user)
+        first = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'queue'},
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()['score'], 100)
+
+        second = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'queue'},
+        )
+        self.assertEqual(second.status_code, 200)
+        payload = second.json()
+        self.assertEqual(payload['attempt_index'], 2)
+        self.assertFalse(payload['is_score_eligible'])
+        self.assertEqual(payload['score'], 0)
+        self.assertEqual(payload['xp_gained'], 0)
 
     def test_hint_button_is_disabled_after_hint_is_used(self):
         self.client.force_login(self.user)
@@ -2977,6 +3024,19 @@ class HintAndFirstAttemptScoringTests(TestCase):
         self.assertContains(detail, 'id="hintBtn"')
         self.assertTrue(detail.context['hint_used'])
         self.assertFalse(detail.context['can_use_hint'])
+
+    def test_hint_button_stays_enabled_after_wrong_manual_attempt(self):
+        self.client.force_login(self.user)
+        submit = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {'answer': 'wrong'},
+        )
+        self.assertEqual(submit.status_code, 200)
+
+        detail = self.client.get(reverse('challenge-detail', args=[self.challenge.slug]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertFalse(detail.context['hint_used'])
+        self.assertTrue(detail.context['can_use_hint'])
 
     def test_challenge_detail_renders_prompt_with_line_break_support(self):
         response = self.client.get(reverse('challenge-detail', args=[self.challenge.slug]))

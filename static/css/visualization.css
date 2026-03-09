@@ -403,15 +403,15 @@
 }
 
 .viz-btn-reset {
-    color: #dbeafe;
-    border-color: rgba(191, 219, 254, 0.38);
-    background: rgba(15, 23, 42, 0.34);
+    color: #475569;
+    border-color: rgba(100, 116, 139, 0.42);
+    background: rgba(226, 232, 240, 0.56);
 }
 
 .viz-btn-reset:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: rgba(191, 219, 254, 0.62);
-    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(100, 116, 139, 0.68);
+    background: rgba(203, 213, 225, 0.72);
 }
 
 .viz-btn-step-prev {
@@ -555,6 +555,9 @@
     border: 1px solid var(--aq-border);
     border-radius: var(--aq-radius-md);
     background: var(--aq-surface);
+    box-sizing: border-box;
+    min-width: 0;
+    overflow: hidden;
     padding: 0.75rem;
 }
 
@@ -835,6 +838,30 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 0.72rem;
+    min-width: 0;
+}
+
+#execStatePanel,
+#execFormulaPanel {
+    display: grid;
+    gap: 0.72rem;
+    min-width: 0;
+}
+
+.exec-panel .exec-diagram-wrap,
+.exec-panel .binary-search-status {
+    max-width: 100%;
+}
+
+.exec-panel .binary-search-status-line,
+.exec-panel .binary-search-progress-text,
+.exec-panel code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.exec-panel code {
+    white-space: pre-wrap;
 }
 
 .exec-strip {
@@ -1209,6 +1236,44 @@
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-label {
     fill: var(--exec-ll-label);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular {
+    --exec-ll-text: #020617;
+    --exec-ll-label: #1e293b;
+    --exec-ll-halo: rgba(248, 250, 252, 0.98);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-3d-chrome {
+    display: inline-block;
+    min-width: max-content;
+    padding: 0 0.45rem 0.45rem;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-svg.exec-svg-3d {
+    width: auto;
+    min-width: 100%;
+    max-width: none;
+    height: auto;
+    margin: 0;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-text {
+    stroke-width: 2.6px;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-label,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-badge {
+    font-weight: 700;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-value,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-index {
+    fill: #0f172a;
+    stroke: rgba(248, 250, 252, 0.98);
+    stroke-width: 1.3px;
+    paint-order: stroke;
+    font-weight: 800;
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-badge {
@@ -2833,6 +2898,24 @@
     --exec-ll-halo: rgba(2, 6, 23, 0.96);
 }
 
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular {
+    --exec-ll-text: #020617;
+    --exec-ll-label: #0f172a;
+    --exec-ll-badge: #020617;
+    --exec-ll-halo: rgba(248, 250, 252, 0.98);
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-text {
+    stroke-width: 3px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-value,
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular .exec-ll-index {
+    fill: #020617;
+    stroke: rgba(248, 250, 252, 0.99);
+    stroke-width: 1.5px;
+}
+
 [data-theme="dark"] .exec-3d-chrome-head {
     border-color: rgba(125, 211, 252, 0.42);
     background:
@@ -2861,6 +2944,13 @@
 
 [data-theme="dark"] .viz-btn-reset {
     color: #cbd5e1;
+    border-color: rgba(100, 116, 139, 0.58);
+    background: rgba(30, 41, 59, 0.54);
+}
+
+[data-theme="dark"] .viz-btn-reset:hover:not(:disabled) {
+    border-color: rgba(148, 163, 184, 0.72);
+    background: rgba(51, 65, 85, 0.72);
 }
 
 [data-theme="dark"] .viz-btn-step-prev {

@@ -3244,7 +3244,7 @@ def challenge_detail_view(request, slug):
     if request.user.is_authenticated and is_unlocked and challenge.starter_code:
         current_prog = user_progress or _get_user_challenge_progress(request.user, challenge)
         hint_used = bool(current_prog and current_prog.hint_used)
-        can_use_hint = bool(current_prog and not current_prog.hint_used and current_prog.attempt_count == 0)
+        can_use_hint = bool(current_prog and not current_prog.hint_used and not current_prog.is_solved)
 
     return render(
         request,
@@ -3273,8 +3273,8 @@ def request_hint_view(request, slug):
         return JsonResponse({'error': 'No hint is available for this challenge.'}, status=400)
 
     prog = _get_user_challenge_progress(request.user, challenge)
-    if prog.attempt_count > 0:
-        return JsonResponse({'error': 'Hints are available only before your first attempt.'}, status=400)
+    if prog.is_solved:
+        return JsonResponse({'error': 'Hints are not available after solving this challenge.'}, status=400)
 
     if prog.hint_used:
         return JsonResponse(
@@ -3302,6 +3302,7 @@ def request_hint_view(request, slug):
 def submit_attempt_view(request, slug):
     """Submit attempt with unlock enforcement and progression tracking."""
     challenge = get_object_or_404(Challenge, slug=slug, is_active=True)
+    raw_action_payload = request.POST.get('action_payload', '').strip()
 
     if not _is_challenge_unlocked(request.user, challenge):
         return JsonResponse(
@@ -3310,18 +3311,20 @@ def submit_attempt_view(request, slug):
         )
 
     answer = request.POST.get('answer', '').strip()
-    action_eval = _evaluate_action_payload(challenge, request.POST.get('action_payload', '').strip())
-    if action_eval:
-        answer = action_eval['answer']
 
     with transaction.atomic():
         prog = _get_locked_user_challenge_progress(request.user, challenge)
+        hint_used = bool(prog.hint_used)
+        action_eval = None
+        if raw_action_payload and (hint_used or not challenge.starter_code.strip()):
+            action_eval = _evaluate_action_payload(challenge, raw_action_payload)
+            if action_eval:
+                answer = action_eval['answer']
 
         expected_answer = challenge.expected_answer.strip()
         is_correct = bool(expected_answer) and expected_answer.lower() == answer.lower()
         attempt_index = prog.attempt_count + 1
-        is_score_eligible = attempt_index == 1
-        hint_used = bool(prog.hint_used)
+        is_score_eligible = not prog.is_solved
 
         if is_correct and is_score_eligible:
             if hint_used:
@@ -3364,22 +3367,22 @@ def submit_attempt_view(request, slug):
 
     if not is_score_eligible:
         if is_correct:
-            message = 'Correct, but points are awarded only on the first attempt.'
+            message = 'Correct, but this challenge was already solved so no additional points were awarded.'
         else:
-            message = 'Try again. Points are awarded only on the first attempt.'
+            message = 'This challenge is already solved. No additional points are available.'
     elif is_correct and hint_used:
         message = 'Correct! Hint penalty applied (75% reduction).'
     elif is_correct:
         message = 'Correct!'
     elif hint_used:
-        message = 'Try again. First-attempt points were consumed with hint usage.'
+        message = 'Try again. Hint mode is active, so reduced scoring will apply when you solve it.'
     else:
         message = 'Try again'
 
     if action_eval and action_eval.get('feedback') and not is_correct:
         message = action_eval['feedback']
         if not is_score_eligible:
-            message = f'{message} Points are awarded only on the first attempt.'
+            message = f'{message} No additional points are available.'
 
     response_data = {
         'is_correct': is_correct,

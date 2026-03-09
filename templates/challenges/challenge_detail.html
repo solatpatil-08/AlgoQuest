@@ -114,8 +114,8 @@
                             <input type="hidden" name="action_payload" id="actionPayloadInput" value="">
                             
                             <div class="mb-3">
-                                <label for="answerInput" class="form-label text-muted small">Enter your solution:</label>
-                                <textarea id="answerInput" class="form-control" name="answer" rows="4" placeholder="You will see your answer here. If correct, click Submit. If not, reattempt." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
+                                <label for="answerInput" class="form-label text-muted small">Your solution:</label>
+                                <textarea id="answerInput" class="form-control" name="answer" rows="4" placeholder="You will see answer here. If correct, submit. If not, reattempt." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
                             </div>
                             
                             <div class="d-flex gap-2">
@@ -138,7 +138,7 @@
                         {% if challenge.starter_code %}
                             <div id="hintBox" class="alert alert-warning mt-3 mb-0 {% if not hint_used %}d-none{% endif %}">
                                 <strong>Hint:</strong> <span id="hintText">{{ challenge.starter_code }}</span>
-                                <small class="d-block mt-1" style="color: var(--aq-warning-ink);">Hint usage reduces first-attempt points to 25%.</small>
+                                <small class="d-block mt-1" style="color: var(--aq-warning-ink);">Hint usage reduces challenge rewards to 25% until you solve it.</small>
                             </div>
                         {% endif %}
                         
@@ -157,6 +157,380 @@
 
 {% block scripts %}
 <link href="{% static 'css/visualization.css' %}" rel="stylesheet">
+<style>
+    #actionGameHost.aq-manual-mode [class*="status"],
+    #actionGameHost.aq-manual-mode [id*="Guide"],
+    #actionGameHost.aq-manual-mode [id*="Meta"],
+    #actionGameHost.aq-manual-mode [id*="Hint"],
+    #actionGameHost.aq-manual-mode .binary-search-hint,
+    #actionGameHost.aq-manual-mode .bst-route-status,
+    #actionGameHost.aq-manual-mode .binary-search-status {
+        display: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #activityLegend,
+    #actionGameHost.aq-manual-mode #arrayLegend,
+    #actionGameHost.aq-manual-mode #astarLegend,
+    #actionGameHost.aq-manual-mode #backtrackingLegend,
+    #actionGameHost.aq-manual-mode #bitLegend,
+    #actionGameHost.aq-manual-mode #bstLegend,
+    #actionGameHost.aq-manual-mode #circularLegend,
+    #actionGameHost.aq-manual-mode #decisionLegend,
+    #actionGameHost.aq-manual-mode #sortingLegend,
+    #actionGameHost.aq-manual-mode #traversalLegend {
+        display: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #activityBoard .activity-choice.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #activityBoard .activity-choice.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #activityBoard .activity-choice .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #activityBoard .activity-choice.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #activityBoard .activity-choice.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #activityBoard .activity-choice .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #astarGridBoard .astar-grid-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #astarGridBoard .astar-grid-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #astarGridBoard .astar-grid-cell .astar-grid-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #astarGridBoard .astar-grid-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #astarGridBoard .astar-grid-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #astarGridBoard .astar-grid-cell .astar-grid-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #backtrackingBoard .backtracking-choice.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #backtrackingBoard .backtracking-choice.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #backtrackingBoard .backtracking-choice .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #backtrackingBoard .backtracking-choice.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #backtrackingBoard .backtracking-choice.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #backtrackingBoard .backtracking-choice .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle:disabled,
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected:disabled {
+        opacity: 1 !important;
+    }
+
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node .bfs-route-node-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle:disabled,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected:disabled {
+        opacity: 1 !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node .bfs-route-node-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bitBoard .bit-choice.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bitBoard .bit-choice.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bitBoard .bit-choice .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bitBoard .bit-choice.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bitBoard .bit-choice.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bitBoard .bit-choice .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node .bst-route-node-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node.manual-selected:disabled {
+        opacity: 1 !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node .bst-route-node-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #bstInsertBoard .bst-insert-node.manual-selected:disabled {
+        opacity: 1 !important;
+    }
+
+    #actionGameHost.aq-manual-mode #sortingBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #sortingBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #sortingBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #sortingBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #sortingBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #sortingBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #decisionMetricBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #decisionMetricBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #decisionMetricBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #decisionMetricBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode button[data-guidance-helper="true"] {
+        pointer-events: none;
+        opacity: 0.5;
+    }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="{% static 'js/visualization.js' %}"></script>
@@ -260,6 +634,12 @@
     const actionGameHost = document.getElementById('actionGameHost');
     const actionPayloadInput = document.getElementById('actionPayloadInput');
     const CATEGORY_SEQUENCE_KEY = 'aqCategorySequenceState';
+    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree']);
+    const manualReadOnlyAnswerAlgorithms = new Set(['bst']);
+    let derivedAnswersEnabled = {% if hint_used or not challenge.starter_code %}true{% else %}false{% endif %};
+    let pendingDerivedAnswer = '';
+    let actionModeActive = false;
+    let actionModeRerender = null;
     let categorySequenceTimer = null;
     function setActionPayload(payload) {
         if (actionPayloadInput) {
@@ -280,21 +660,99 @@
         }
     }
 
+    function allowsManualDerivedAnswer() {
+        return manualDerivedAnswerAlgorithms.has((algorithmTypeValue || '').toLowerCase());
+    }
+
+    function shouldAllowDerivedAnswer() {
+        return derivedAnswersEnabled || allowsManualDerivedAnswer();
+    }
+
+    function shouldLockAnswerInput() {
+        const algo = (algorithmTypeValue || '').toLowerCase();
+        return shouldAllowDerivedAnswer() || manualReadOnlyAnswerAlgorithms.has(algo);
+    }
+
+    function normalizeHintText(value) {
+        const raw = String(value ?? '').trim();
+        return raw.replace(/^hint\s*:\s*/i, '');
+    }
+
+    function syncAnswerInputLock() {
+        if (!answerInput) {
+            return;
+        }
+        if (!actionModeActive) {
+            setAnswerInputLocked(false);
+            return;
+        }
+        setAnswerInputLocked(shouldLockAnswerInput());
+    }
+
     function setDerivedAnswer(value) {
         if (!answerInput) {
             return;
         }
         const nextDerived = String(value ?? '');
+        pendingDerivedAnswer = nextDerived;
+        if (!shouldAllowDerivedAnswer()) {
+            syncAnswerInputLock();
+            return;
+        }
         answerInput.value = nextDerived;
-        setAnswerInputLocked(true);
+        syncAnswerInputLock();
     }
 
     function clearDerivedAnswer(lockInput = false) {
         if (!answerInput) {
             return;
         }
+        pendingDerivedAnswer = '';
+        if (!shouldAllowDerivedAnswer()) {
+            syncAnswerInputLock();
+            return;
+        }
         answerInput.value = '';
-        setAnswerInputLocked(lockInput);
+        setAnswerInputLocked(Boolean(lockInput) && actionModeActive);
+    }
+
+    function enableDerivedAnswers() {
+        derivedAnswersEnabled = true;
+        if (!answerInput) {
+            return;
+        }
+        answerInput.value = pendingDerivedAnswer;
+        syncAnswerInputLock();
+    }
+
+    function refreshActionMode() {
+        if (typeof actionModeRerender === 'function') {
+            actionModeRerender();
+        }
+    }
+
+    function markGuidanceControls(...controls) {
+        controls.forEach((control) => {
+            if (control) {
+                control.dataset.guidanceHelper = 'true';
+            }
+        });
+    }
+
+    function applyActionModeGuidanceState() {
+        if (!actionGameHost) {
+            return;
+        }
+        actionGameHost.classList.toggle('aq-manual-mode', !derivedAnswersEnabled);
+        const subtitle = actionGameHost.querySelector('.action-shell-subtitle');
+        if (subtitle) {
+            if (!subtitle.dataset.guidedText) {
+                subtitle.dataset.guidedText = subtitle.textContent || '';
+            }
+            subtitle.textContent = derivedAnswersEnabled
+                ? subtitle.dataset.guidedText
+                : 'Interactive workspace. Use Hint to unlock guided help.';
+        }
     }
 
     function roundTo(value, digits = 3) {
@@ -385,7 +843,7 @@
                     <div><strong>Capacity:</strong> ${formatActionNumber(capacity, 3, false)}</div>
                     <div><strong>Items:</strong> ${items.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="backtrackingLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Selected</span>
                     <span class="binary-search-chip is-window">Fits</span>
                     <span class="binary-search-chip is-mid">Would exceed</span>
@@ -578,6 +1036,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -624,7 +1083,7 @@
                     <div><strong>Activities:</strong> ${activities.length}</div>
                     <div><strong>Greedy order:</strong> by finish time</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="activityLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Selected</span>
                     <span class="binary-search-chip is-window">Compatible</span>
                     <span class="binary-search-chip is-mid">Would overlap</span>
@@ -703,15 +1162,22 @@
                 .map((activity) => {
                     const isSelected = selected.has(activity.index);
                     const wouldOverlap = !isSelected && hasOverlapAfterAdding(activity.index);
-                    let stateClass = 'is-window';
-                    if (isSelected) {
-                        stateClass = overlap ? 'is-mid' : 'is-found';
-                    } else if (wouldOverlap) {
-                        stateClass = 'is-mid';
+                    let stateClass = 'manual-idle';
+                    let helper = 'Click to select';
+                    if (derivedAnswersEnabled) {
+                        stateClass = 'is-window';
+                        if (isSelected) {
+                            stateClass = overlap ? 'is-mid' : 'is-found';
+                        } else if (wouldOverlap) {
+                            stateClass = 'is-mid';
+                        }
+                        helper = isSelected
+                            ? (overlap ? 'Selected | overlaps' : 'Selected')
+                            : (wouldOverlap ? 'Would overlap' : 'Compatible');
+                    } else if (isSelected) {
+                        stateClass = 'manual-selected';
+                        helper = 'Selected';
                     }
-                    const helper = isSelected
-                        ? (overlap ? 'Selected | overlaps' : 'Selected')
-                        : (wouldOverlap ? 'Would overlap' : 'Compatible');
                     return `
                         <button type="button" class="btn btn-sm action-value-btn binary-search-cell activity-choice ${stateClass}" data-index="${activity.index}">
                             <span class="binary-search-main">A${activity.index + 1} [${formatActionNumber(activity.start, 3, false)}, ${formatActionNumber(activity.end, 3, false)})</span>
@@ -821,6 +1287,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -1013,6 +1480,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -1113,15 +1581,23 @@
                     const isSelected = selected.has(idx);
                     const projected = currentSum + value;
                     const wouldExceed = allNonNegative && !isSelected && projected > target;
-                    let stateClass = 'is-window';
-                    if (isSelected) {
-                        stateClass = 'is-found';
-                    } else if (wouldExceed) {
-                        stateClass = 'is-mid';
-                    }
-                    const helper = isSelected
+                    let stateClass = 'manual-idle';
+                    let helper = isSelected
                         ? 'In subset'
-                        : (wouldExceed ? `sum->${formatActionNumber(projected, 3, false)} (too high)` : `sum->${formatActionNumber(projected, 3, false)}`);
+                        : `sum->${formatActionNumber(projected, 3, false)}`;
+                    if (derivedAnswersEnabled) {
+                        stateClass = 'is-window';
+                        if (isSelected) {
+                            stateClass = 'is-found';
+                        } else if (wouldExceed) {
+                            stateClass = 'is-mid';
+                        }
+                        helper = isSelected
+                            ? 'In subset'
+                            : (wouldExceed ? `sum->${formatActionNumber(projected, 3, false)} (too high)` : `sum->${formatActionNumber(projected, 3, false)}`);
+                    } else if (isSelected) {
+                        stateClass = 'manual-selected';
+                    }
                     return `
                         <button type="button" class="btn btn-sm action-value-btn binary-search-cell backtracking-choice ${stateClass}" data-index="${idx}">
                             <span class="binary-search-main">i${idx} | v=${formatActionNumber(value, 3, false)}</span>
@@ -1280,6 +1756,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -1553,6 +2030,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -1589,9 +2067,9 @@
             <div class="binary-search-shell">
                 <div class="binary-search-head">
                     <div><strong>Decimal target:</strong> ${decimal}</div>
-                    <div><strong>Expected binary:</strong> ${expectedBinary}</div>
+                    <div><strong>Binary target:</strong> <span id="bitExpectedValue"></span></div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="bitLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Bit = 1</span>
                     <span class="binary-search-chip is-window">Bit = 0</span>
                     <span class="binary-search-chip is-mid">Mismatch remains</span>
@@ -1622,11 +2100,13 @@
         const progressFill = shell.body.querySelector('#bitProgressFill');
         const progressText = shell.body.querySelector('#bitProgressText');
         const hintText = shell.body.querySelector('#bitHint');
+        const expectedValueText = shell.body.querySelector('#bitExpectedValue');
         const undoBtn = shell.body.querySelector('#bitUndoBtn');
         const resetBtn = shell.body.querySelector('#bitResetBtn');
         const history = [];
 
         function render() {
+            const manualBitMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const binary = bits.join('').replace(/^0+(?=\d)/, '') || '0';
             const rawBinary = bits.join('');
             const decimalValue = parseInt(rawBinary || '0', 2) || 0;
@@ -1648,9 +2128,13 @@
                     const expectedBit = expectedBinary[Math.max(0, idx - (expectedSize - expectedBinary.length))] || '0';
                     const value = bits[idx];
                     const matches = String(value) === expectedBit;
-                    button.classList.remove('is-window', 'is-mid', 'is-found');
-                    button.classList.add(value === 1 ? 'is-found' : 'is-window');
-                    if (!exact && !matches) {
+                    button.classList.remove('manual-idle', 'manual-selected', 'is-window', 'is-mid', 'is-found');
+                    if (manualBitMode) {
+                        button.classList.add(value === 1 ? 'manual-selected' : 'manual-idle');
+                    } else {
+                        button.classList.add(value === 1 ? 'is-found' : 'is-window');
+                    }
+                    if (!manualBitMode && !exact && !matches) {
                         button.classList.add('is-mid');
                     }
                     const main = button.querySelector('.binary-search-main');
@@ -1659,9 +2143,15 @@
                         main.textContent = `b${idx} = ${value}`;
                     }
                     if (sub) {
-                        sub.textContent = `2^${power} | expected ${expectedBit}`;
+                        sub.textContent = manualBitMode
+                            ? `2^${power} place`
+                            : `2^${power} | expected ${expectedBit}`;
                     }
                 });
+            }
+
+            if (expectedValueText) {
+                expectedValueText.textContent = manualBitMode ? `Hidden until Hint (${expectedSize} bits)` : expectedBinary;
             }
 
             if (metaPrimary) {
@@ -1690,7 +2180,10 @@
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (exact) {
+                if (manualBitMode) {
+                    shell.badge.textContent = exact ? 'Matched' : 'Editing';
+                    shell.badge.classList.add(exact ? 'badge-accent' : 'badge-primary');
+                } else if (exact) {
                     shell.badge.textContent = 'Matched';
                     shell.badge.classList.add('badge-accent');
                 } else {
@@ -1744,6 +2237,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -1821,6 +2315,7 @@
         const progressFill = shell.body.querySelector('#mathProgressFill');
         const progressText = shell.body.querySelector('#mathProgressText');
         const hintText = shell.body.querySelector('#mathHint');
+        markGuidanceControls(fillBtn, autoStepBtn);
 
         let a = initialA;
         let b = initialB;
@@ -2046,6 +2541,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -2199,7 +2695,7 @@
                 <div class="text-muted small bfs-route-edge-list">
                     <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
                 </div>
-                <div class="bfs-route-legend" aria-hidden="true">
+                <div class="bfs-route-legend" id="traversalLegend" aria-hidden="true">
                     <span class="bfs-route-chip is-visited">Visited</span>
                     <span class="bfs-route-chip is-next">Next</span>
                     <span class="bfs-route-chip is-pending">Pending</span>
@@ -2289,6 +2785,7 @@
             if (!board) {
                 return;
             }
+            const manualTraversalMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const expectedNext = expectedOrder[order.length];
             const isComplete = order.length >= expectedLength;
             board.innerHTML = nodes
@@ -2306,13 +2803,17 @@
                         btnClass = 'btn-outline-warning';
                     }
                     if (isBfsMode) {
-                        const nodeState = !isReachable ? 'locked' : (isUsed ? 'visited' : (isExpected ? 'next' : 'pending'));
+                        const nodeState = manualTraversalMode
+                            ? (isUsed ? 'manual-selected' : 'manual-idle')
+                            : (!isReachable ? 'locked' : (isUsed ? 'visited' : (isExpected ? 'next' : 'pending')));
                         const levelValue = levelByNode.has(node) ? levelByNode.get(node) : '?';
-                        const helperText = !isReachable
-                            ? 'Out'
-                            : (isUsed ? `#${stepNumber}` : (isExpected ? 'Next' : `L${levelValue}`));
+                        const helperText = manualTraversalMode
+                            ? (isUsed ? `#${stepNumber}` : '')
+                            : (!isReachable
+                                ? 'Out'
+                                : (isUsed ? `#${stepNumber}` : (isExpected ? 'Next' : `L${levelValue}`)));
                         return `
-                            <button type="button" class="btn btn-sm action-value-btn bfs-route-node is-${nodeState}" data-node="${node}" data-state="${nodeState}"
+                            <button type="button" class="btn btn-sm action-value-btn bfs-route-node ${nodeState} is-${nodeState}" data-node="${node}" data-state="${nodeState}"
                                 ${!isReachable || isUsed || isComplete ? 'disabled' : ''}
                                 title="${isReachable ? (isUsed ? `Visited at step ${stepNumber}` : `Level ${levelValue}`) : 'Unreachable node'}">
                                 <span class="bfs-route-node-main">${node}</span>
@@ -2372,6 +2873,7 @@
 
         function render() {
             renderBoard();
+            const manualTraversalMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const isComplete = order.length >= expectedLength;
             const expectedNext = expectedOrder[order.length];
             const traceIndex = Math.max(0, Math.min(order.length - 1, traversalTrace.length - 1));
@@ -2409,7 +2911,10 @@
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (feedback) {
+                if (manualTraversalMode) {
+                    shell.badge.textContent = isComplete ? `${order.length}/${expectedLength}` : `Selected ${order.length}`;
+                    shell.badge.classList.add(isComplete ? 'badge-accent' : 'badge-primary');
+                } else if (feedback) {
                     shell.badge.textContent = 'Wrong step';
                     shell.badge.classList.add('badge-danger');
                 } else if (isComplete) {
@@ -2452,6 +2957,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -2829,6 +3335,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -2964,7 +3471,7 @@
                 <div class="text-muted small astar-route-meta-line">
                     <strong>Start:</strong> (${start[0]}, ${start[1]}) | <strong>Goal:</strong> (${goal[0]}, ${goal[1]}) | <strong>Heuristic:</strong> Manhattan
                 </div>
-                <div class="astar-route-legend" aria-hidden="true">
+                <div class="astar-route-legend" id="astarLegend" aria-hidden="true">
                     <span class="astar-route-chip is-path">Path</span>
                     <span class="astar-route-chip is-next">Next</span>
                     <span class="astar-route-chip is-open">Open</span>
@@ -3042,17 +3549,24 @@
                         && !goalBlocked
                         && (isNext || isPrev);
 
-                    let stateClass = 'is-open';
-                    if (isBlocked) {
+                    let stateClass = 'manual-idle';
+                    if (derivedAnswersEnabled) {
+                        stateClass = 'is-open';
+                        if (isBlocked) {
+                            stateClass = 'is-blocked';
+                        } else if (inPath && isGoal) {
+                            stateClass = 'is-path-goal';
+                        } else if (inPath) {
+                            stateClass = 'is-path';
+                        } else if (isNext) {
+                            stateClass = 'is-next';
+                        } else if (!isReachable) {
+                            stateClass = 'is-locked';
+                        }
+                    } else if (isBlocked) {
                         stateClass = 'is-blocked';
-                    } else if (inPath && isGoal) {
-                        stateClass = 'is-path-goal';
                     } else if (inPath) {
-                        stateClass = 'is-path';
-                    } else if (isNext) {
-                        stateClass = 'is-next';
-                    } else if (!isReachable) {
-                        stateClass = 'is-locked';
+                        stateClass = 'manual-selected';
                     }
                     if (isStart) {
                         stateClass += ' is-start';
@@ -3066,7 +3580,7 @@
 
                     const step = pathStep.get(key);
                     const heuristic = manhattan(row, col);
-                    let subLabel = `h${heuristic}`;
+                    let subLabel = derivedAnswersEnabled ? `h${heuristic}` : '';
                     if (isBlocked) {
                         subLabel = 'X';
                     } else if (isStart) {
@@ -3075,7 +3589,7 @@
                         subLabel = 'G';
                     } else if (Number.isInteger(step)) {
                         subLabel = `#${step}`;
-                    } else if (isNext) {
+                    } else if (derivedAnswersEnabled && isNext) {
                         subLabel = 'Next';
                     }
 
@@ -3259,6 +3773,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -3466,6 +3981,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -3770,6 +4286,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -4136,6 +4653,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -4166,7 +4684,7 @@
                     <div><strong>Insert Sequence:</strong> [${sequence.map((value) => formatActionNumber(value, 3, false)).join(', ')}]</div>
                     <div><strong>Total Values:</strong> ${sequence.length}</div>
                 </div>
-                <div class="bst-route-legend" aria-hidden="true">
+                <div class="bst-route-legend" id="bstLegend" aria-hidden="true">
                     <span class="bst-route-chip is-inserted">Inserted</span>
                     <span class="bst-route-chip is-next">Next</span>
                     <span class="bst-route-chip is-pending">Pending</span>
@@ -4201,7 +4719,8 @@
         const hintText = shell.body.querySelector('#bstHint');
         const treeBoard = shell.body.querySelector('#bstTreeBoard');
 
-        let applied = 0;
+        const insertedOrder = [];
+        const insertedSet = new Set();
         let feedback = '';
 
         function createNode(value) {
@@ -4278,14 +4797,14 @@
             return rows;
         }
 
-        function computeState(count) {
+        function computeState(indices) {
             let root = null;
             let lastTrace = 'BST is empty.';
-            for (let idx = 0; idx < count; idx += 1) {
-                const result = insertWithTrace(root, sequence[idx]);
+            indices.forEach((sequenceIndex) => {
+                const result = insertWithTrace(root, sequence[sequenceIndex]);
                 root = result.root;
                 lastTrace = result.trace;
-            }
+            });
             const inorder = [];
             inorderTraversal(root, inorder);
             const rows = collectTreeRows(root);
@@ -4314,16 +4833,19 @@
             if (!insertBoard) {
                 return;
             }
-            const complete = applied >= sequence.length;
+            const manualBstMode = !derivedAnswersEnabled;
+            const complete = insertedOrder.length >= sequence.length;
             insertBoard.innerHTML = sequence
                 .map((value, idx) => {
-                    const state = idx < applied
-                        ? 'inserted'
-                        : (idx === applied ? 'next' : 'pending');
-                    const helper = idx < applied ? `#${idx + 1}` : (idx === applied ? 'Next' : `#${idx + 1}`);
+                    const state = manualBstMode
+                        ? (insertedSet.has(idx) ? 'manual-selected' : 'manual-idle')
+                        : (insertedSet.has(idx) ? 'inserted' : 'pending');
+                    const helper = manualBstMode
+                        ? (insertedSet.has(idx) ? `#${insertedOrder.indexOf(idx) + 1}` : `#${idx + 1}`)
+                        : (insertedSet.has(idx) ? `#${insertedOrder.indexOf(idx) + 1}` : `#${idx + 1}`);
                     return `
-                        <button type="button" class="btn btn-sm action-value-btn bst-insert-node is-${state}" data-index="${idx}"
-                            ${complete || idx < applied ? 'disabled' : ''}>
+                        <button type="button" class="btn btn-sm action-value-btn bst-insert-node ${state} is-${state}" data-index="${idx}"
+                            ${complete || insertedSet.has(idx) ? 'disabled' : ''}>
                             <span class="bst-route-node-main">${formatActionNumber(value, 3, false)}</span>
                             <span class="bst-route-node-sub">${helper}</span>
                         </button>
@@ -4334,15 +4856,11 @@
             insertBoard.querySelectorAll('.bst-insert-node').forEach((button) => {
                 button.addEventListener('click', () => {
                     const idx = Number(button.dataset.index);
-                    if (!Number.isInteger(idx) || applied >= sequence.length) {
+                    if (!Number.isInteger(idx) || insertedOrder.length >= sequence.length || insertedSet.has(idx)) {
                         return;
                     }
-                    if (idx !== applied) {
-                        feedback = `Wrong step. Choose position #${applied + 1} (${formatActionNumber(sequence[applied], 3, false)}) next.`;
-                        render();
-                        return;
-                    }
-                    applied += 1;
+                    insertedOrder.push(idx);
+                    insertedSet.add(idx);
                     feedback = '';
                     render();
                 });
@@ -4350,10 +4868,14 @@
         }
 
         function render() {
-            const state = computeState(applied);
-            const done = applied >= sequence.length;
-            const nextValue = done ? null : sequence[applied];
+            const manualBstMode = !derivedAnswersEnabled;
+            const state = computeState(insertedOrder);
+            const done = insertedOrder.length >= sequence.length;
+            const remainingValues = sequence
+                .filter((_, idx) => !insertedSet.has(idx))
+                .map((value) => formatActionNumber(value, 3, false));
             const inorderAnswer = state.inorder.map((value) => formatActionNumber(value, 3, false)).join(' ');
+            const manualPreviewAnswer = insertedOrder.map((idx) => formatActionNumber(sequence[idx], 3, false)).join(' ');
 
             renderInsertBoard();
             renderTree(state.rows);
@@ -4361,7 +4883,7 @@
             if (metaPrimary) {
                 metaPrimary.textContent = done
                     ? `All ${sequence.length} values processed.`
-                    : `Inserted ${applied}/${sequence.length}. Next: ${formatActionNumber(nextValue, 3, false)}`;
+                    : `Inserted ${insertedOrder.length}/${sequence.length}. Remaining: ${remainingValues.join(', ') || '-'}`;
             }
             if (metaSecondary) {
                 metaSecondary.textContent = `Inorder: ${inorderAnswer || '-'}`;
@@ -4370,41 +4892,50 @@
                 metaTertiary.textContent = `Last step: ${state.lastTrace}`;
             }
             if (progressFill) {
-                const progress = sequence.length ? Math.round((applied / sequence.length) * 100) : 0;
+                const progress = sequence.length ? Math.round((insertedOrder.length / sequence.length) * 100) : 0;
                 progressFill.style.width = `${progress}%`;
             }
             if (progressText) {
-                progressText.textContent = `Inserted ${applied}/${sequence.length} values`;
+                progressText.textContent = `Inserted ${insertedOrder.length}/${sequence.length} values`;
             }
             if (hintText) {
                 hintText.textContent = feedback
                     || (done
                         ? 'BST insertion complete. Submit the inorder answer.'
-                        : `Choose ${formatActionNumber(nextValue, 3, false)} at position #${applied + 1}.`);
+                        : 'Insert any remaining value. Final answer is the inorder traversal.');
                 hintText.classList.toggle('error', Boolean(feedback));
             }
 
-            if (undoBtn) undoBtn.disabled = applied === 0;
+            if (undoBtn) undoBtn.disabled = insertedOrder.length === 0;
 
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (feedback) {
-                    shell.badge.textContent = 'Wrong step';
-                    shell.badge.classList.add('badge-danger');
+                if (manualBstMode) {
+                    shell.badge.textContent = done ? `${insertedOrder.length}/${sequence.length}` : `Selected ${insertedOrder.length}`;
+                    shell.badge.classList.add(done ? 'badge-accent' : 'badge-primary');
                 } else if (done) {
                     shell.badge.textContent = 'Ready to Submit';
                     shell.badge.classList.add('badge-accent');
                 } else {
-                    shell.badge.textContent = `Next ${formatActionNumber(nextValue, 3, false)}`;
+                    shell.badge.textContent = `Inserted ${insertedOrder.length}`;
                     shell.badge.classList.add('badge-primary');
                 }
             }
 
-            setDerivedAnswer(done ? inorderAnswer : '');
+            if (manualBstMode) {
+                pendingDerivedAnswer = manualPreviewAnswer;
+                if (answerInput) {
+                    answerInput.value = manualPreviewAnswer;
+                }
+                syncAnswerInputLock();
+            } else {
+                setDerivedAnswer(done ? inorderAnswer : '');
+            }
             setActionPayload({
                 mode: 'bst_inorder_trace',
-                inserted_count: applied,
-                inserted_values: sequence.slice(0, applied),
+                inserted_count: insertedOrder.length,
+                inserted_values: insertedOrder.map((idx) => sequence[idx]),
+                inserted_indices: insertedOrder.slice(),
                 inorder: state.inorder.slice(),
                 is_complete: done,
                 feedback: feedback || null,
@@ -4413,8 +4944,9 @@
 
         if (undoBtn) {
             undoBtn.addEventListener('click', () => {
-                if (applied > 0) {
-                    applied -= 1;
+                if (insertedOrder.length > 0) {
+                    const removed = insertedOrder.pop();
+                    insertedSet.delete(removed);
                     feedback = '';
                     render();
                 }
@@ -4422,12 +4954,14 @@
         }
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
-                applied = 0;
+                insertedOrder.length = 0;
+                insertedSet.clear();
                 feedback = '';
                 render();
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -4516,6 +5050,7 @@
         const progressFill = shell.body.querySelector('#stringProgressFill');
         const progressText = shell.body.querySelector('#stringProgressText');
         const hintText = shell.body.querySelector('#stringPrefixHint');
+        markGuidanceControls(useExpectedBtn, useMaxBtn);
 
         let candidate = '';
         let feedback = '';
@@ -4770,6 +5305,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -4825,7 +5361,7 @@
                     <div><strong>Best sum target:</strong> ${formatActionNumber(best.bestSum, 3, false)}</div>
                     <div><strong>Best range:</strong> [${best.bestStart}, ${best.bestEnd}]</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="arrayLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Selected range</span>
                     <span class="binary-search-chip is-mid">Range endpoint</span>
                     <span class="binary-search-chip is-window">Best range hint</span>
@@ -4860,6 +5396,7 @@
         const progressFill = shell.body.querySelector('#arrayProgressFill');
         const progressText = shell.body.querySelector('#arrayProgressText');
         const hintText = shell.body.querySelector('#arrayHint');
+        markGuidanceControls(useBestBtn);
 
         let startIndex = null;
         let endIndex = null;
@@ -4901,15 +5438,20 @@
                         ? (idx === startIndex || idx === endIndex)
                         : false;
                     const isBestHint = idx >= best.bestStart && idx <= best.bestEnd;
-                    let stateClass = 'is-discarded';
-                    if (isBestHint) {
-                        stateClass = 'is-window';
-                    }
-                    if (isBoundary) {
-                        stateClass = 'is-mid';
-                    }
-                    if (isPicked) {
-                        stateClass = 'is-found';
+                    let stateClass = 'manual-idle';
+                    if (derivedAnswersEnabled) {
+                        stateClass = 'is-discarded';
+                        if (isBestHint) {
+                            stateClass = 'is-window';
+                        }
+                        if (isBoundary) {
+                            stateClass = 'is-mid';
+                        }
+                        if (isPicked) {
+                            stateClass = 'is-found';
+                        }
+                    } else if (isPicked) {
+                        stateClass = 'manual-selected';
                     }
                     return `
                         <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" data-index="${idx}">
@@ -5067,6 +5609,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -5153,6 +5696,7 @@
         const progressFill = shell.body.querySelector('#hashProgressFill');
         const progressText = shell.body.querySelector('#hashProgressText');
         const hintText = shell.body.querySelector('#hashHint');
+        markGuidanceControls(usePairBtn);
 
         const selected = new Set();
         let declareNoPair = false;
@@ -5400,6 +5944,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -6039,7 +6584,7 @@
                         <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
                         <div><strong>Start index:</strong> ${startIndex}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="circularLegend" aria-hidden="true">
                         <span class="binary-search-chip is-mid">Current Node</span>
                         <span class="binary-search-chip is-window">Visited</span>
                         <span class="binary-search-chip is-found">Answer</span>
@@ -6138,10 +6683,15 @@
                 if (!board) {
                     return;
                 }
+                const manualCircularMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = values
                     .map((value, idx) => {
                         let stateClass = 'is-discarded';
-                        if (finished && answerIndex === idx) {
+                        if (manualCircularMode) {
+                            stateClass = ((!finished && idx === currentIndex) || (finished && answerIndex === idx && answerIndex >= 0))
+                                ? 'manual-selected'
+                                : 'manual-idle';
+                        } else if (finished && answerIndex === idx) {
                             stateClass = 'is-found';
                         } else if (!finished && idx === currentIndex) {
                             stateClass = 'is-mid';
@@ -6159,6 +6709,7 @@
             }
 
             function render() {
+                const manualCircularMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 renderBoard();
                 const progress = values.length ? Math.round((visitedSet.size / values.length) * 100) : 100;
                 const expected = expectedAction();
@@ -6219,7 +6770,12 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualCircularMode) {
+                        shell.badge.textContent = finished
+                            ? (answerIndex >= 0 ? `Selected @ ${answerIndex}` : 'Not Found')
+                            : `Step ${stepsTaken + 1}`;
+                        shell.badge.classList.add(finished ? 'badge-accent' : 'badge-primary');
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -6246,6 +6802,28 @@
 
             function applyDecision(action) {
                 if (finished) {
+                    return;
+                }
+                const manualCircularMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
+                if (manualCircularMode) {
+                    undoStack.push(snapshotState());
+                    feedback = '';
+                    comparisons += 1;
+                    if (action === 'match') {
+                        answerIndex = currentIndex;
+                        finished = true;
+                    } else if (action === 'next') {
+                        stepsTaken += 1;
+                        currentIndex = (currentIndex + 1) % values.length;
+                        if (!visitedSet.has(currentIndex)) {
+                            visitedSet.add(currentIndex);
+                        }
+                        visitedOrder.push(currentIndex);
+                    } else {
+                        answerIndex = -1;
+                        finished = true;
+                    }
+                    render();
                     return;
                 }
                 const expected = expectedAction();
@@ -6322,6 +6900,7 @@
                 });
             }
 
+            actionModeRerender = render;
             render();
             return true;
         }
@@ -6416,6 +6995,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -6644,6 +7224,7 @@
             render();
         });
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -6877,6 +7458,7 @@
             render();
         });
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -6914,7 +7496,7 @@
                         <div><strong>Target Order:</strong> Non-decreasing</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="sortingLegend" aria-hidden="true">
                         <span class="binary-search-chip is-window">Unsorted</span>
                         <span class="binary-search-chip is-mid">Current Pair</span>
                         <span class="binary-search-chip is-found">Fixed Tail</span>
@@ -7030,13 +7612,16 @@
                 if (!board) {
                     return;
                 }
+                const manualBubbleMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const tailStart = fixedStart();
                 board.innerHTML = current
                     .map((value, idx) => {
                         const isPair = !finished && (idx === cursor || idx === cursor + 1);
                         const isTailFixed = idx >= tailStart;
                         let stateClass = 'is-window';
-                        if (finished) {
+                        if (manualBubbleMode) {
+                            stateClass = (finished || isPair) ? 'manual-selected' : 'manual-idle';
+                        } else if (finished) {
                             stateClass = 'is-discarded';
                         } else if (isPair) {
                             stateClass = 'is-mid';
@@ -7056,6 +7641,7 @@
             function render() {
                 renderBoard();
 
+                const manualBubbleMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const tailStart = fixedStart();
                 const fixedCount = Math.max(0, current.length - tailStart);
                 const progress = current.length > 0 ? Math.round((fixedCount / current.length) * 100) : 0;
@@ -7109,7 +7695,10 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualBubbleMode) {
+                        shell.badge.textContent = finished ? `Sorted ${current.length}/${current.length}` : `Pass ${pass + 1}`;
+                        shell.badge.classList.add(finished ? 'badge-accent' : 'badge-primary');
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -7206,6 +7795,7 @@
                 });
             }
 
+            actionModeRerender = render;
             render();
             return true;
         }
@@ -9228,6 +9818,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -9324,6 +9915,7 @@
         const progressFill = shell.body.querySelector('#linearProgressFill');
         const progressText = shell.body.querySelector('#linearProgressText');
         const hintText = shell.body.querySelector('#linearHint');
+        markGuidanceControls(usePairBtn);
         let feedback = '';
 
         function render() {
@@ -9468,6 +10060,7 @@
             });
         });
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -9552,6 +10145,7 @@
         const progressFill = shell.body.querySelector('#logisticProgressFill');
         const progressText = shell.body.querySelector('#logisticProgressText');
         const hintText = shell.body.querySelector('#logisticHint');
+        markGuidanceControls(useExpectedBtn, setHalfBtn);
 
         function clampProbability(value) {
             if (!Number.isFinite(value)) {
@@ -9685,6 +10279,7 @@
             });
         }
         setProbability(0.5);
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -9769,6 +10364,7 @@
         const progressFill = shell.body.querySelector('#kmeansProgressFill');
         const progressText = shell.body.querySelector('#kmeansProgressText');
         const hintText = shell.body.querySelector('#kmeansHint');
+        markGuidanceControls(nearestBtn, allC1Btn, allC2Btn);
 
         function render() {
             const groupOne = [];
@@ -9922,6 +10518,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -10018,6 +10615,7 @@
         const progressFill = shell.body.querySelector('#knnProgressFill');
         const progressText = shell.body.querySelector('#knnProgressText');
         const hintText = shell.body.querySelector('#knnHint');
+        markGuidanceControls(nearestBtn);
         let feedback = '';
 
         function predictionFromSelected(indices) {
@@ -10142,6 +10740,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -10164,7 +10763,6 @@
         if (!shell || !shell.body) {
             return false;
         }
-
         function clampEntropy(value) {
             if (!Number.isFinite(value)) {
                 return 0;
@@ -10185,24 +10783,24 @@
                     <div><strong>Negative:</strong> ${formatActionNumber(negative, 3, false)}</div>
                     <div><strong>Total:</strong> ${formatActionNumber(total, 3, false)}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="decisionLegend" aria-hidden="true">
                     <span class="binary-search-chip is-window">Exact 3-decimal match</span>
                     <span class="binary-search-chip is-found">Near expected entropy</span>
                     <span class="binary-search-chip is-mid">Far from expected</span>
                     <span class="binary-search-chip is-discarded">Adjust entropy value</span>
                 </div>
-                <div class="binary-search-board" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
-                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell is-window" disabled>
+                <div class="binary-search-board" id="decisionMetricBoard" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell" id="decisionPositiveCard" disabled>
                         <span class="binary-search-main">p(+) = ${formatActionNumber(pPos, 4, true)}</span>
                         <span class="binary-search-sub">positive / total</span>
                     </button>
-                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell is-window" disabled>
+                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell" id="decisionNegativeCard" disabled>
                         <span class="binary-search-main">p(-) = ${formatActionNumber(pNeg, 4, true)}</span>
                         <span class="binary-search-sub">negative / total</span>
                     </button>
-                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell is-found" disabled>
-                        <span class="binary-search-main">Expected H = ${formatActionNumber(expectedEntropy, 3, true)}</span>
-                        <span class="binary-search-sub">rounded target</span>
+                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell" id="decisionExpectedCard" disabled>
+                        <span class="binary-search-main" id="decisionExpectedMain"></span>
+                        <span class="binary-search-sub" id="decisionExpectedSub"></span>
                     </button>
                 </div>
                 <div class="mb-2">
@@ -10246,6 +10844,12 @@
         const progressFill = shell.body.querySelector('#entropyProgressFill');
         const progressText = shell.body.querySelector('#entropyProgressText');
         const hintText = shell.body.querySelector('#entropyHint');
+        const positiveCard = shell.body.querySelector('#decisionPositiveCard');
+        const negativeCard = shell.body.querySelector('#decisionNegativeCard');
+        const expectedCard = shell.body.querySelector('#decisionExpectedCard');
+        const expectedMain = shell.body.querySelector('#decisionExpectedMain');
+        const expectedSub = shell.body.querySelector('#decisionExpectedSub');
+        markGuidanceControls(expectedBtn, halfBtn);
 
         function setEntropy(nextValue) {
             const clamped = clampEntropy(nextValue);
@@ -10258,6 +10862,7 @@
         }
 
         function render() {
+            const manualDecisionMode = !derivedAnswersEnabled;
             const entropy = clampEntropy(Number(slider ? slider.value : 0.5));
             const formatted = formatActionNumber(entropy, 3, true);
             const expectedFormatted = formatActionNumber(expectedEntropy, 3, true);
@@ -10270,6 +10875,26 @@
 
             if (label) {
                 label.textContent = formatted;
+            }
+            [positiveCard, negativeCard, expectedCard].forEach((card) => {
+                if (card) {
+                    card.classList.remove('manual-idle', 'is-window', 'is-found');
+                }
+            });
+            if (positiveCard) {
+                positiveCard.classList.add(manualDecisionMode ? 'manual-idle' : 'is-window');
+            }
+            if (negativeCard) {
+                negativeCard.classList.add(manualDecisionMode ? 'manual-idle' : 'is-window');
+            }
+            if (expectedCard) {
+                expectedCard.classList.add(manualDecisionMode ? 'manual-idle' : 'is-found');
+            }
+            if (expectedMain) {
+                expectedMain.textContent = manualDecisionMode ? 'Expected H hidden' : `Expected H = ${formatActionNumber(expectedEntropy, 3, true)}`;
+            }
+            if (expectedSub) {
+                expectedSub.textContent = manualDecisionMode ? 'unlock with hint' : 'rounded target';
             }
             if (metaPrimary) {
                 metaPrimary.textContent = `Current entropy: ${formatted} | Expected: ${expectedFormatted} | Error: ${formatActionNumber(error, 4, true)}`;
@@ -10300,7 +10925,10 @@
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (exact) {
+                if (manualDecisionMode) {
+                    shell.badge.textContent = `Current ${formatted}`;
+                    shell.badge.classList.add('badge-primary');
+                } else if (exact) {
                     shell.badge.textContent = `Matched ${formatted}`;
                     shell.badge.classList.add('badge-accent');
                 } else if (near) {
@@ -10364,6 +10992,7 @@
             });
         }
         setEntropy(0.5);
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -10439,6 +11068,7 @@
         const progressFill = shell.body.querySelector('#naiveProgressFill');
         const progressText = shell.body.querySelector('#naiveProgressText');
         const hintText = shell.body.querySelector('#naiveHint');
+        markGuidanceControls(autoBtn);
         let feedback = '';
 
         function render() {
@@ -10535,6 +11165,7 @@
             });
         }
 
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -10668,6 +11299,7 @@
         const progressFill = shell.body.querySelector('#neuralProgressFill');
         const progressText = shell.body.querySelector('#neuralProgressText');
         const hintText = shell.body.querySelector('#neuralHint');
+        markGuidanceControls(setZBtn, autoBtn, autoAllBtn);
         let feedback = '';
 
         function render() {
@@ -10825,6 +11457,7 @@
         }
 
         setOutputValue(0.5);
+        actionModeRerender = render;
         render();
         return true;
     }
@@ -10833,6 +11466,7 @@
         if (!actionGameHost || !answerInput) {
             return;
         }
+        actionModeRerender = null;
         const algo = (algorithmTypeValue || '').toLowerCase();
         const builders = {
             knapsack: buildKnapsackActionMode,
@@ -10874,18 +11508,30 @@
         };
         const builder = builders[algo];
         const built = Boolean(builder && builder());
+        actionModeActive = built;
         if (!built) {
             actionGameHost.classList.add('d-none');
             actionGameHost.innerHTML = '';
             clearDerivedAnswer(false);
             setActionPayload({});
             setAnswerInputLocked(false);
+            actionModeRerender = null;
             return;
         }
-        setAnswerInputLocked(true);
+        applyActionModeGuidanceState();
+        if (shouldAllowDerivedAnswer()) {
+            answerInput.value = pendingDerivedAnswer;
+            syncAnswerInputLock();
+        } else {
+            syncAnswerInputLock();
+        }
     }
 
     initializeActionGameMode();
+
+    if (hintText) {
+        hintText.textContent = normalizeHintText(hintText.textContent);
+    }
 
     if (hintBtn) {
         hintBtn.addEventListener("click", async function () {
@@ -10905,9 +11551,13 @@
                     throw new Error(data.error || "Unable to fetch hint.");
                 }
                 if (hintBox && hintText) {
-                    hintText.textContent = data.hint || "";
+                    hintText.textContent = normalizeHintText(data.hint || "");
                     hintBox.classList.remove("d-none");
                 }
+                derivedAnswersEnabled = true;
+                applyActionModeGuidanceState();
+                refreshActionMode();
+                enableDerivedAnswers();
                 hintBtn.innerHTML = '<i class=\"bi bi-check2 me-1\"></i>Hint Used';
             } catch (err) {
                 attemptResult.innerHTML = `<div class=\"alert alert-danger fade-in\">
@@ -10953,8 +11603,8 @@
                 if (data.current_level !== undefined) {
                     messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
                 }
-                if (data.is_score_eligible === false && !/first-attempt|first attempt/i.test(String(data.message || ''))) {
-                    messageContent += " &middot; <strong>First-attempt scoring already consumed</strong>";
+                if (data.is_score_eligible === false && !/no additional points/i.test(String(data.message || ''))) {
+                    messageContent += " &middot; <strong>No additional points available</strong>";
                 }
 
                 attemptResult.innerHTML = `<div class="alert alert-${alertClass} fade-in">
@@ -10965,7 +11615,7 @@
                 </div>`;
 
                 if (hintBtn) {
-                    hintBtn.disabled = true;
+                    hintBtn.disabled = data.is_correct || data.hint_used;
                 }
 
                 if (data.is_correct && data.next_challenge_url) {

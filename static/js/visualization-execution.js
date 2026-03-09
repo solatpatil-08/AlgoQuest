@@ -518,7 +518,8 @@
         const pointerSlotWidth = mode === 'doubly' ? 28 : 26;
         const depth = 10;
         const pad = mode === 'doubly' ? 76 : 44;
-        const width = Math.max(560, (pad * 2) + ((values.length - 1) * spacing) + nodeWidth + 152);
+        const trailingScenePad = mode === 'circular' ? 212 : 152;
+        const width = Math.max(560, (pad * 2) + ((values.length - 1) * spacing) + nodeWidth + trailingScenePad);
         const baseY = mode === 'circular' ? 96 : 78;
         const height = mode === 'circular' ? 268 : 216;
         const pointerDivider = nodeWidth - pointerSlotWidth;
@@ -667,9 +668,9 @@
                     ${mode === 'doubly'
                         ? `<circle cx="${x + 1.5}" cy="${y + 40}" r="2.2" fill="#0D9488"></circle>`
                         : ''}
-                    <text x="${x + ((nodeWidth - pointerSlotWidth) / 2)}" y="${y + 31}" text-anchor="middle" font-size="${valueFontSize}" font-weight="700"${valueFitAttrs} class="exec-ll-text">${escapeHtml(compactValue)}</text>
+                    <text x="${x + ((nodeWidth - pointerSlotWidth) / 2)}" y="${y + 31}" text-anchor="middle" font-size="${valueFontSize}" font-weight="700"${valueFitAttrs} class="exec-ll-text exec-ll-value">${escapeHtml(compactValue)}</text>
                     <rect x="${x + 12}" y="${y + nodeHeight + 8}" width="${nodeWidth - pointerSlotWidth - 16}" height="16" rx="8" fill="var(--exec-ll-index-bg)" stroke="var(--exec-ll-index-stroke)" stroke-width="1"></rect>
-                    <text x="${x + ((nodeWidth - pointerSlotWidth) / 2)}" y="${y + nodeHeight + 20}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label">idx ${idx}</text>
+                    <text x="${x + ((nodeWidth - pointerSlotWidth) / 2)}" y="${y + nodeHeight + 20}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label exec-ll-index">idx ${idx}</text>
                     ${mode === 'doubly'
                         ? `
                             <text x="${x + pointerDivider + (pointerSlotWidth / 2)}" y="${y + 20}" text-anchor="middle" font-size="9.2" class="exec-ll-text exec-ll-label">N</text>
@@ -701,7 +702,7 @@
                 width,
                 height,
                 '3D linked list diagram',
-                'exec-3d-linked',
+                `exec-3d-linked${mode === 'circular' ? ' exec-3d-linked-circular' : ''}`,
                 `width:${width}px;max-width:none;height:auto;`
             )}
             <div class="exec-legend">
