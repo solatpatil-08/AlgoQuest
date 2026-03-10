@@ -575,15 +575,17 @@
             const nextNodeX = pad + ((idx + 1) * spacing);
             const nextStartX = currentNodeX + nodeWidth - 1.5;
             const nextEndX = nextNodeX + 1.5;
+            const nextPath = `M ${nextStartX} ${nextPortY} C ${nextStartX + linkCurveX} ${nextPortY - linkCurveUp}, ${nextEndX - linkCurveX} ${nextPortY - linkCurveUp}, ${nextEndX} ${nextPortY}`;
             edges.push(`
-                <path class="exec-ll-next-path" d="M ${nextStartX} ${nextPortY} C ${nextStartX + linkCurveX} ${nextPortY - linkCurveUp}, ${nextEndX - linkCurveX} ${nextPortY - linkCurveUp}, ${nextEndX} ${nextPortY}"
+                <path class="exec-ll-next-path" d="${nextPath}"
                     fill="none" stroke="#1D4ED8" stroke-width="${mode === 'doubly' ? '2.35' : '2.5'}" marker-end="url(#${nextMarkerId})"></path>
             `);
             if (mode === 'doubly') {
                 const prevStartX = nextNodeX + 1.5;
                 const prevEndX = currentNodeX + 1.5;
+                const prevPath = `M ${prevStartX} ${prevPortY} C ${prevStartX - linkCurveX} ${prevPortY + linkCurveDown}, ${prevEndX + linkCurveX} ${prevPortY + linkCurveDown}, ${prevEndX} ${prevPortY}`;
                 edges.push(`
-                    <path class="exec-ll-prev-path" d="M ${prevStartX} ${prevPortY} C ${prevStartX - linkCurveX} ${prevPortY + linkCurveDown}, ${prevEndX + linkCurveX} ${prevPortY + linkCurveDown}, ${prevEndX} ${prevPortY}"
+                    <path class="exec-ll-prev-path" d="${prevPath}"
                         fill="none" stroke="#0D9488" stroke-width="2.35" marker-end="url(#${prevMarkerId})"></path>
                 `);
             }
@@ -597,11 +599,12 @@
             nullNodes.push(`
                 <g>
                     <rect x="${rightNullX}" y="${baseY + 14}" width="52" height="24" rx="7" fill="var(--exec-ll-null-bg)" stroke="var(--exec-ll-null-stroke)" stroke-width="1.3"></rect>
-                    <text x="${rightNullX + 26}" y="${baseY + 30}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label">NULL</text>
+                    <text x="${rightNullX + 26}" y="${baseY + 30}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label exec-ll-null-label">NULL</text>
                 </g>
             `);
+            const rightNullPath = `M ${pad + ((values.length - 1) * spacing) + nodeWidth - 1.5} ${nextPortY} C ${pad + ((values.length - 1) * spacing) + nodeWidth + (linkCurveX - 6)} ${nextPortY - (linkCurveUp - 3)}, ${rightNullEntryX - (linkCurveX - 10)} ${rightNullEntryY - (linkCurveUp - 8)}, ${rightNullEntryX} ${rightNullEntryY}`;
             edges.push(`
-                <path class="exec-ll-next-path" d="M ${pad + ((values.length - 1) * spacing) + nodeWidth - 1.5} ${nextPortY} C ${pad + ((values.length - 1) * spacing) + nodeWidth + (linkCurveX - 6)} ${nextPortY - (linkCurveUp - 3)}, ${rightNullEntryX - (linkCurveX - 10)} ${rightNullEntryY - (linkCurveUp - 8)}, ${rightNullEntryX} ${rightNullEntryY}"
+                <path class="exec-ll-next-path" d="${rightNullPath}"
                     fill="none" stroke="#1D4ED8" stroke-width="2.35" marker-end="url(#${nextMarkerId})"></path>
             `);
 
@@ -611,11 +614,12 @@
                 nullNodes.push(`
                     <g>
                         <rect x="${leftNullX}" y="${baseY + 14}" width="52" height="24" rx="7" fill="var(--exec-ll-null-bg)" stroke="var(--exec-ll-null-stroke)" stroke-width="1.3"></rect>
-                        <text x="${leftNullX + 26}" y="${baseY + 30}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label">NULL</text>
+                        <text x="${leftNullX + 26}" y="${baseY + 30}" text-anchor="middle" font-size="10.5" class="exec-ll-text exec-ll-label exec-ll-null-label">NULL</text>
                     </g>
                 `);
+                const leftNullPath = `M ${pad + 1.5} ${prevPortY} C ${pad - (linkCurveX - 12)} ${prevPortY + (linkCurveDown - 6)}, ${leftNullEntryX + (linkCurveX - 14)} ${prevPortY + (linkCurveDown - 6)}, ${leftNullEntryX} ${prevPortY}`;
                 edges.push(`
-                    <path class="exec-ll-prev-path" d="M ${pad + 1.5} ${prevPortY} C ${pad - (linkCurveX - 12)} ${prevPortY + (linkCurveDown - 6)}, ${leftNullEntryX + (linkCurveX - 14)} ${prevPortY + (linkCurveDown - 6)}, ${leftNullEntryX} ${prevPortY}"
+                    <path class="exec-ll-prev-path" d="${leftNullPath}"
                         fill="none" stroke="#0D9488" stroke-width="2.3" marker-end="url(#${prevMarkerId})"></path>
                 `);
             }
@@ -625,8 +629,9 @@
             const headEntryX = pad + 1.5;
             const tailExitX = pad + ((values.length - 1) * spacing) + nodeWidth - 1.5;
             const wrapLaneY = baseY + nodeHeight + 94;
+            const wrapPath = `M ${tailExitX} ${nextPortY} C ${tailExitX + (linkCurveX + 20)} ${wrapLaneY}, ${headEntryX - (linkCurveX + 20)} ${wrapLaneY}, ${headEntryX} ${nextPortY}`;
             edges.push(`
-                <path class="exec-ll-wrap-path" d="M ${tailExitX} ${nextPortY} C ${tailExitX + (linkCurveX + 20)} ${wrapLaneY}, ${headEntryX - (linkCurveX + 20)} ${wrapLaneY}, ${headEntryX} ${nextPortY}"
+                <path class="exec-ll-wrap-path" d="${wrapPath}"
                     fill="none" stroke="#7C3AED" stroke-width="2.55" marker-end="url(#${nextMarkerId})"></path>
             `);
             edges.push(`
@@ -677,12 +682,17 @@
                             <text x="${x + pointerDivider + (pointerSlotWidth / 2)}" y="${y + 39}" text-anchor="middle" font-size="9.2" class="exec-ll-text exec-ll-label">P</text>
                         `
                         : `<text x="${x + pointerDivider + (pointerSlotWidth / 2)}" y="${y + 30}" text-anchor="middle" font-size="9.4" class="exec-ll-text exec-ll-label">next</text>`}
-                    ${badges.map((badge, badgeIndex) => `
-                        <g>
-                            <rect x="${x + (badgeIndex * 46)}" y="${y - 20}" width="42" height="15" rx="7" fill="${badge.color}" opacity="0.94"></rect>
-                            <text x="${x + 21 + (badgeIndex * 46)}" y="${y - 9}" text-anchor="middle" font-size="9.4" class="exec-ll-text exec-ll-badge">${badge.label}</text>
-                        </g>
-                    `).join('')}
+                    ${badges.map((badge, badgeIndex) => {
+                        const badgeWidth = Math.max(44, (badge.label.length * 7.2) + 12);
+                        const badgeX = x + (badgeIndex * (badgeWidth + 4));
+                        const badgeCenterX = badgeX + (badgeWidth / 2);
+                        return `
+                            <g class="exec-ll-node-badge">
+                                <rect x="${badgeX}" y="${y - 22}" width="${badgeWidth}" height="16" rx="8" fill="${badge.color}" opacity="0.96" class="exec-ll-node-badge-pill"></rect>
+                                <text x="${badgeCenterX}" y="${y - 10}" text-anchor="middle" font-size="9.6" class="exec-ll-text exec-ll-badge exec-ll-node-badge-text">${badge.label}</text>
+                            </g>
+                        `;
+                    }).join('')}
                 </g>
             `;
         }).join('');
@@ -702,7 +712,7 @@
                 width,
                 height,
                 '3D linked list diagram',
-                `exec-3d-linked${mode === 'circular' ? ' exec-3d-linked-circular' : ''}`,
+                `exec-3d-linked${mode === 'circular' ? ' exec-3d-linked-circular' : ''}${mode === 'doubly' ? ' exec-3d-linked-doubly' : ''}${mode === 'singly' ? ' exec-3d-linked-singly' : ''}`,
                 `width:${width}px;max-width:none;height:auto;`
             )}
             <div class="exec-legend">

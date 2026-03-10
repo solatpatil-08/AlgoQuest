@@ -176,8 +176,17 @@
     #actionGameHost.aq-manual-mode #bstLegend,
     #actionGameHost.aq-manual-mode #circularLegend,
     #actionGameHost.aq-manual-mode #decisionLegend,
+    #actionGameHost.aq-manual-mode #doublyLegend,
+    #actionGameHost.aq-manual-mode #dijkstraLegend,
+    #actionGameHost.aq-manual-mode #linkedLegend,
+    #actionGameHost.aq-manual-mode #hashLegend,
     #actionGameHost.aq-manual-mode #sortingLegend,
-    #actionGameHost.aq-manual-mode #traversalLegend {
+    #actionGameHost.aq-manual-mode #traversalLegend,
+    #actionGameHost.aq-manual-mode #kmeansLegend,
+    #actionGameHost.aq-manual-mode #knapsackLegend,
+    #actionGameHost.aq-manual-mode #knnLegend,
+    #actionGameHost.aq-manual-mode #lcsLegend,
+    #actionGameHost.aq-manual-mode #linearLegend {
         display: none !important;
     }
 
@@ -317,14 +326,16 @@
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
-    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle {
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle,
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-idle {
         border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
         background: transparent !important;
         color: inherit !important;
         box-shadow: none !important;
     }
 
-    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected {
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected,
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-selected {
         border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
         background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
         color: #0c4a6e !important;
@@ -332,32 +343,40 @@
     }
 
     #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle:disabled,
-    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected:disabled {
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected:disabled,
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-idle:disabled,
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-selected:disabled {
         opacity: 1 !important;
     }
 
-    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node .bfs-route-node-sub {
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node .bfs-route-node-sub,
+    #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node .dfs-route-node-sub {
         color: rgba(51, 65, 85, 0.82) !important;
     }
 
-    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle {
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-idle {
         color: #e2e8f0 !important;
         border-color: rgba(100, 116, 139, 0.42) !important;
         background: transparent !important;
     }
 
-    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected {
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-selected {
         color: #7dd3fc !important;
         border-color: rgba(14, 165, 233, 0.48) !important;
         background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
     }
 
     [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-idle:disabled,
-    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected:disabled {
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node.manual-selected:disabled,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-idle:disabled,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node.manual-selected:disabled {
         opacity: 1 !important;
     }
 
-    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node .bfs-route-node-sub {
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .bfs-route-node .bfs-route-node-sub,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #traversalNodeBoard .dfs-route-node .dfs-route-node-sub {
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
@@ -471,6 +490,176 @@
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
+    #actionGameHost.aq-manual-mode #kmeansPointBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #kmeansPointBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #kmeansPointBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #kmeansPointBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #kmeansPointBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #kmeansPointBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #knapsackItemBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #knapsackItemBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #knapsackItemBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #knapsackItemBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #knapsackItemBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #knapsackItemBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #knnPointBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #knnPointBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #knnPointBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #knnPointBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #knnPointBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #knnPointBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #lcsCharBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #lcsCharBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #lcsCharBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #lcsCharBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #lcsCharBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #lcsCharBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #linearPointBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #linearPointBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #linearPointBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #linearPointBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #linearPointBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #linearPointBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
     #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell.manual-idle {
         border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
         background: transparent !important;
@@ -523,6 +712,118 @@
     }
 
     [data-theme="dark"] #actionGameHost.aq-manual-mode #decisionMetricBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-idle:disabled,
+    #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-selected:disabled {
+        opacity: 1 !important;
+    }
+
+    #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node .dijkstra-route-node-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-idle:disabled,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node.manual-selected:disabled {
+        opacity: 1 !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #dijkstraNodeBoard .dijkstra-route-node .dijkstra-route-node-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #linkedNodeBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #linkedNodeBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #linkedNodeBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #linkedNodeBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #linkedNodeBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #linkedNodeBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #hashBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #hashBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #hashBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #hashBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #hashBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #hashBoard .binary-search-cell .binary-search-sub {
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
@@ -634,7 +935,7 @@
     const actionGameHost = document.getElementById('actionGameHost');
     const actionPayloadInput = document.getElementById('actionPayloadInput');
     const CATEGORY_SEQUENCE_KEY = 'aqCategorySequenceState';
-    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree']);
+    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression']);
     const manualReadOnlyAnswerAlgorithms = new Set(['bst']);
     let derivedAnswersEnabled = {% if hint_used or not challenge.starter_code %}true{% else %}false{% endif %};
     let pendingDerivedAnswer = '';
@@ -843,7 +1144,7 @@
                     <div><strong>Capacity:</strong> ${formatActionNumber(capacity, 3, false)}</div>
                     <div><strong>Items:</strong> ${items.length}</div>
                 </div>
-                <div class="binary-search-legend" id="backtrackingLegend" aria-hidden="true">
+                <div class="binary-search-legend" id="knapsackLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Selected</span>
                     <span class="binary-search-chip is-window">Fits</span>
                     <span class="binary-search-chip is-mid">Would exceed</span>
@@ -914,13 +1215,16 @@
             if (!board) {
                 return;
             }
+            const manualKnapsackMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             board.innerHTML = items
                 .map((item) => {
                     const isSelected = selected.has(item.index);
                     const projectedWeight = totalWeight + (isSelected ? 0 : item.weight);
                     const wouldExceed = !isSelected && projectedWeight > capacity;
                     let stateClass = 'is-window';
-                    if (isSelected) {
+                    if (manualKnapsackMode) {
+                        stateClass = isSelected ? 'manual-selected' : 'manual-idle';
+                    } else if (isSelected) {
                         stateClass = isOverCapacity ? 'is-mid' : 'is-found';
                     } else if (wouldExceed) {
                         stateClass = 'is-mid';
@@ -966,6 +1270,7 @@
             const itemUsage = items.length ? Math.round((ordered.length / items.length) * 100) : 0;
 
             renderBoard(totalWeight, isOverCapacity);
+            const manualKnapsackMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             if (metaPrimary) {
                 metaPrimary.textContent = `Selected: ${ordered.length ? ordered.map((itemIndex) => `I${itemIndex + 1}`).join(', ') : 'none'}`;
@@ -990,7 +1295,9 @@
                 } else if (!ordered.length) {
                     hintText.textContent = 'Start by selecting one or more items.';
                 } else {
-                    hintText.textContent = 'Pack is valid. You can submit or keep improving value.';
+                    hintText.textContent = manualKnapsackMode
+                        ? 'Pack items freely. Guidance returns after Hint.'
+                        : 'Pack is valid. You can submit or keep improving value.';
                 }
                 hintText.classList.toggle('error', Boolean(feedback) || isOverCapacity);
             }
@@ -1002,6 +1309,9 @@
                 } else if (!ordered.length) {
                     shell.badge.textContent = 'Ready';
                     shell.badge.classList.add('badge-primary');
+                } else if (manualKnapsackMode) {
+                    shell.badge.textContent = `Manual Pack | w ${formatActionNumber(totalWeight, 3, false)}`;
+                    shell.badge.classList.add('badge-primary');
                 } else {
                     shell.badge.textContent = `Valid | Value ${formatActionNumber(totalValue, 3, false)}`;
                     shell.badge.classList.add('badge-accent');
@@ -1011,7 +1321,8 @@
                 undoBtn.disabled = history.length === 0;
             }
 
-            setDerivedAnswer(totalValue);
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && ordered.length > 0 && !isOverCapacity);
+            setDerivedAnswer(shouldFill ? totalValue : '');
             setActionPayload({ mode: 'knapsack_pack', selected_indices: ordered });
         }
 
@@ -1352,7 +1663,7 @@
                     <div><strong>s1:</strong> ${escapeHtml(s1)} (${s1.length})</div>
                     <div><strong>s2:</strong> ${escapeHtml(s2)} (${s2.length})</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="lcsLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Keeps valid</span>
                     <span class="binary-search-chip is-window">Neutral</span>
                     <span class="binary-search-chip is-mid">Breaks validity</span>
@@ -1385,6 +1696,7 @@
         const hintText = shell.body.querySelector('#lcsHint');
 
         function render() {
+            const manualLcsMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const valid = isSubsequence(candidate, s1) && isSubsequence(candidate, s2);
             const ratio = optimalLength > 0
                 ? Math.min(100, Math.round((candidate.length / optimalLength) * 100))
@@ -1395,7 +1707,11 @@
                     .map((ch, idx) => {
                         const nextCandidate = candidate + ch;
                         const nextValid = isSubsequence(nextCandidate, s1) && isSubsequence(nextCandidate, s2);
-                        const classState = nextValid ? 'is-found' : 'is-mid';
+                        const isActive = candidate.includes(ch);
+                        let classState = nextValid ? 'is-found' : 'is-mid';
+                        if (manualLcsMode) {
+                            classState = isActive ? 'manual-selected' : 'manual-idle';
+                        }
                         return `
                             <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${classState} lcs-char-btn" data-index="${idx}">
                                 <span class="binary-search-main">${escapeHtml(ch)}</span>
@@ -1411,7 +1727,14 @@
                         if (!Number.isInteger(charIndex) || charIndex < 0 || charIndex >= uniqueChars.length) {
                             return;
                         }
-                        candidate += uniqueChars[charIndex];
+                        const ch = uniqueChars[charIndex];
+                        if (candidate.includes(ch)) {
+                            // remove first occurrence of this char
+                            const pos = candidate.indexOf(ch);
+                            candidate = candidate.slice(0, pos) + candidate.slice(pos + 1);
+                        } else {
+                            candidate += ch;
+                        }
                         render();
                     });
                 });
@@ -1434,7 +1757,9 @@
             }
             if (hintText) {
                 if (!candidate.length) {
-                    hintText.textContent = 'Build any common subsequence. Answer will be its length.';
+                    hintText.textContent = manualLcsMode
+                        ? 'Build any common subsequence. Guidance unlocks after Hint.'
+                        : 'Build any common subsequence. Answer will be its length.';
                     hintText.classList.remove('error');
                 } else if (valid) {
                     hintText.textContent = candidate.length === optimalLength
@@ -1442,7 +1767,9 @@
                         : 'Valid subsequence. You can continue to improve length.';
                     hintText.classList.remove('error');
                 } else {
-                    hintText.textContent = 'Current candidate is invalid for at least one string.';
+                    hintText.textContent = manualLcsMode
+                        ? 'Candidate breaks validity; use Hint to see guided coloring.'
+                        : 'Current candidate is invalid for at least one string.';
                     hintText.classList.add('error');
                 }
             }
@@ -1456,12 +1783,13 @@
                     shell.badge.textContent = candidate.length === optimalLength ? 'Optimal' : 'Valid';
                     shell.badge.classList.add('badge-accent');
                 } else {
-                    shell.badge.textContent = 'Invalid';
+                    shell.badge.textContent = manualLcsMode ? 'Manual (invalid)' : 'Invalid';
                     shell.badge.classList.add('badge-danger');
                 }
             }
 
-            setDerivedAnswer(valid ? candidate.length : -1);
+            const shouldFill = valid && candidate.length > 0;
+            setDerivedAnswer(shouldFill ? candidate.length : '');
             setActionPayload({ mode: 'lcs_builder', candidate_subsequence: candidate });
         }
 
@@ -1511,7 +1839,7 @@
                     <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
                     <div><strong>Items:</strong> ${values.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="kmeansLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">In current subset</span>
                     <span class="binary-search-chip is-window">Can include</span>
                     <span class="binary-search-chip is-mid">Would exceed target</span>
@@ -1802,7 +2130,7 @@
                     <div><strong>Target term:</strong> F${n}</div>
                     <div><strong>Formula:</strong> Fi = F(i-1) + F(i-2)</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="knnLegend" aria-hidden="true">
                     <span class="binary-search-chip is-discarded">Fixed base</span>
                     <span class="binary-search-chip is-window">Pending</span>
                     <span class="binary-search-chip is-found">Valid term</span>
@@ -2265,7 +2593,7 @@
                     <div><strong>Initial a:</strong> ${initialA}</div>
                     <div><strong>Initial b:</strong> ${initialB}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="knnLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Current a</span>
                     <span class="binary-search-chip is-window">Current b</span>
                     <span class="binary-search-chip is-mid">Remainder r</span>
@@ -2728,7 +3056,7 @@
                 <div class="text-muted small dfs-route-edge-list">
                     <strong>Edges:</strong> ${edges.map((edge) => `(${edge[0]}-${edge[1]})`).join(', ')}
                 </div>
-                <div class="dfs-route-legend" aria-hidden="true">
+                <div class="dfs-route-legend" id="traversalLegend" aria-hidden="true">
                     <span class="dfs-route-chip is-visited">Visited</span>
                     <span class="dfs-route-chip is-next">Stack Top</span>
                     <span class="dfs-route-chip is-pending">Pending</span>
@@ -2822,13 +3150,17 @@
                         `;
                     }
                     if (isDfsMode) {
-                        const nodeState = !isReachable ? 'locked' : (isUsed ? 'visited' : (isExpected ? 'next' : 'pending'));
+                        const nodeState = manualTraversalMode
+                            ? (isUsed ? 'manual-selected' : 'manual-idle')
+                            : (!isReachable ? 'locked' : (isUsed ? 'visited' : (isExpected ? 'next' : 'pending')));
                         const depthValue = depthByNode.has(node) ? depthByNode.get(node) : '?';
-                        const helperText = !isReachable
-                            ? 'Out'
-                            : (isUsed ? `#${stepNumber}` : (isExpected ? 'Top' : `D${depthValue}`));
+                        const helperText = manualTraversalMode
+                            ? (isUsed ? `#${stepNumber}` : '')
+                            : (!isReachable
+                                ? 'Out'
+                                : (isUsed ? `#${stepNumber}` : (isExpected ? 'Top' : `D${depthValue}`)));
                         return `
-                            <button type="button" class="btn btn-sm action-value-btn dfs-route-node is-${nodeState}" data-node="${node}" data-state="${nodeState}"
+                            <button type="button" class="btn btn-sm action-value-btn dfs-route-node ${nodeState} is-${nodeState}" data-node="${node}" data-state="${nodeState}"
                                 ${!isReachable || isUsed || isComplete ? 'disabled' : ''}
                                 title="${isReachable ? (isUsed ? `Visited at step ${stepNumber}` : `Depth ${depthValue}`) : 'Unreachable node'}">
                                 <span class="dfs-route-node-main">${node}</span>
@@ -2848,6 +3180,7 @@
             board.querySelectorAll('.action-value-btn').forEach((button) => {
                 button.addEventListener('click', () => {
                     const node = Number(button.dataset.node);
+                    const manualTraversalMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                     if (!Number.isInteger(node) || used.has(node)) {
                         return;
                     }
@@ -2857,7 +3190,7 @@
                         return;
                     }
                     const expectedNext = expectedOrder[order.length];
-                    if (!Number.isInteger(expectedNext) || node !== expectedNext) {
+                    if (!manualTraversalMode && (!Number.isInteger(expectedNext) || node !== expectedNext)) {
                         feedback = `Wrong next node. Choose ${expectedNext}.`;
                         render();
                         return;
@@ -3091,7 +3424,7 @@
                 <div class="text-muted small dijkstra-route-edge-list">
                     <strong>Edges:</strong> ${edges.map((edge) => `${edge[0]}-${edge[1]}(${edge[2]})`).join(', ')}
                 </div>
-                <div class="dijkstra-route-legend" aria-hidden="true">
+                <div class="dijkstra-route-legend" id="dijkstraLegend" aria-hidden="true">
                     <span class="dijkstra-route-chip is-path">Path</span>
                     <span class="dijkstra-route-chip is-next">Neighbor</span>
                     <span class="dijkstra-route-chip is-pending">Available</span>
@@ -3161,6 +3494,7 @@
                 return;
             }
             const last = path[path.length - 1];
+            const manualDijkstraMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const nextCandidates = new Set(
                 (adjacency.get(last) || [])
                     .map((entry) => entry.node)
@@ -3172,16 +3506,20 @@
                     const inPath = pathSet.has(node);
                     const isNext = nextCandidates.has(node);
                     const isReachable = reference.reachable.has(node);
-                    const state = inPath ? 'path' : (isNext ? 'next' : (isReachable ? 'pending' : 'locked'));
+                    const state = manualDijkstraMode
+                        ? (inPath ? 'manual-selected' : 'manual-idle')
+                        : (inPath ? 'path' : (isNext ? 'next' : (isReachable ? 'pending' : 'locked')));
                     const stepValue = pathStep.get(node);
-                    const helper = inPath
-                        ? `#${stepValue}`
-                        : (isNext ? 'Next' : (isReachable ? `d* ${formatDistance(reference.distanceMap.get(node))}` : 'Out'));
-                    const badge = node === source ? 'SRC' : (node === target ? 'TGT' : helper);
+                    const helper = manualDijkstraMode
+                        ? (inPath ? `#${stepValue}` : '')
+                        : (inPath ? `#${stepValue}` : (isNext ? 'Next' : (isReachable ? `d* ${formatDistance(reference.distanceMap.get(node))}` : 'Out')));
+                    const badge = manualDijkstraMode
+                        ? (inPath ? `#${stepValue}` : (node === source ? 'SRC' : (node === target ? 'TGT' : '')))
+                        : (node === source ? 'SRC' : (node === target ? 'TGT' : helper));
                     return `
-                        <button type="button" class="btn btn-sm action-value-btn dijkstra-route-node is-${state}" data-node="${node}" data-state="${state}"
+                        <button type="button" class="btn btn-sm action-value-btn dijkstra-route-node ${state} is-${state}" data-node="${node}" data-state="${state}"
                             ${isUnreachable || !isNext ? 'disabled' : ''}
-                            title="${isReachable ? `Reference dist: ${formatDistance(reference.distanceMap.get(node))}` : 'Unreachable from source'}">
+                            title="${manualDijkstraMode ? (isReachable ? `Node ${node}` : 'Unreachable from source') : (isReachable ? `Reference dist: ${formatDistance(reference.distanceMap.get(node))}` : 'Unreachable from source')}">
                             <span class="dijkstra-route-node-main">${node}</span>
                             <span class="dijkstra-route-node-sub">${badge}</span>
                         </button>
@@ -3224,6 +3562,7 @@
 
         function render() {
             renderBoard();
+            const manualDijkstraMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const distance = pathDistance();
             const finished = !isUnreachable && path[path.length - 1] === target && Number.isFinite(distance);
             const optimal = finished && targetReachable && Number(distance) === Number(reference.targetDistance);
@@ -3271,7 +3610,12 @@
 
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (feedback || unreachableWrong) {
+                if (manualDijkstraMode) {
+                    shell.badge.textContent = isUnreachable
+                        ? 'Unreachable'
+                        : (finished ? `Distance ${distance}` : `Path ${path.length}`);
+                    shell.badge.classList.add((isUnreachable || finished) ? 'badge-accent' : 'badge-primary');
+                } else if (feedback || unreachableWrong) {
                     shell.badge.textContent = feedback ? 'Invalid Step' : 'Reachable Graph';
                     shell.badge.classList.add('badge-danger');
                 } else if (isUnreachable) {
@@ -3813,7 +4157,7 @@
                     <div><strong>Tree depth:</strong> ${maxDepth}</div>
                     <div><strong>Start operator:</strong> MIN</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="linearLegend" aria-hidden="true">
                     <span class="binary-search-chip is-window">Current level values</span>
                     <span class="binary-search-chip is-mid">Pair grouping</span>
                     <span class="binary-search-chip is-found">Next folded level</span>
@@ -5659,7 +6003,7 @@
                     <div><strong>Target:</strong> ${formatToken(target)}</div>
                     <div><strong>Length:</strong> ${data.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="hashLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Selected valid pair</span>
                     <span class="binary-search-chip is-mid">Selected wrong pair</span>
                     <span class="binary-search-chip is-window">Needed complement</span>
@@ -5702,6 +6046,7 @@
         let declareNoPair = false;
         let feedback = '';
         const history = [];
+        let hintAutoApplied = false;
 
         function selectedIndicesSorted() {
             return Array.from(selected).sort((a, b) => a - b);
@@ -5733,6 +6078,7 @@
             if (!board) {
                 return;
             }
+            const manualHashMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const selectedIndices = selectedIndicesSorted();
             const hasOne = selectedIndices.length === 1;
             const hasTwo = selectedIndices.length === 2;
@@ -5752,7 +6098,9 @@
             board.innerHTML = data
                 .map((value, idx) => {
                     let stateClass = 'is-discarded';
-                    if (selected.has(idx)) {
+                    if (manualHashMode) {
+                        stateClass = selected.has(idx) ? 'manual-selected' : 'manual-idle';
+                    } else if (selected.has(idx)) {
                         stateClass = isValidPair ? 'is-found' : 'is-mid';
                     } else if (complementCandidates.has(idx)) {
                         stateClass = 'is-window';
@@ -5795,7 +6143,22 @@
         }
 
         function render() {
+            if (derivedAnswersEnabled && !hintAutoApplied) {
+                // Auto-fill after hint: select a valid pair if it exists, otherwise choose No Pair.
+                selected.clear();
+                declareNoPair = false;
+                if (pairExists) {
+                    selected.add(canonicalPair[0]);
+                    selected.add(canonicalPair[1]);
+                    feedback = '';
+                } else {
+                    declareNoPair = true;
+                    feedback = '';
+                }
+                hintAutoApplied = true;
+            }
             renderBoard();
+            const manualHashMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const indices = selectedIndicesSorted();
             const hasPairSelection = indices.length === 2;
             const pairSum = hasPairSelection ? (data[indices[0]] + data[indices[1]]) : null;
@@ -5835,6 +6198,9 @@
                 if (feedback) {
                     hintText.textContent = feedback;
                     hintText.classList.add('error');
+                } else if (manualHashMode) {
+                    hintText.textContent = 'Pick two indices or choose No Pair.';
+                    hintText.classList.remove('error');
                 } else if (declareNoPair) {
                     if (pairExists) {
                         hintText.textContent = 'No Pair chosen, but a valid pair exists. This will submit as false.';
@@ -5859,7 +6225,12 @@
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (declareNoPair) {
+                if (manualHashMode) {
+                    shell.badge.textContent = declareNoPair
+                        ? 'No Pair'
+                        : (indices.length === 0 ? 'Pick 2' : `Selected ${indices.length}`);
+                    shell.badge.classList.add(declareNoPair ? 'badge-accent' : 'badge-primary');
+                } else if (declareNoPair) {
                     shell.badge.textContent = pairExists ? 'No Pair (Wrong)' : 'No Pair';
                     shell.badge.classList.add(pairExists ? 'badge-danger' : 'badge-accent');
                 } else if (!hasPairSelection) {
@@ -5973,7 +6344,7 @@
                         <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="linkedLegend" aria-hidden="true">
                         <span class="binary-search-chip is-mid">Current Node</span>
                         <span class="binary-search-chip is-window">Visited</span>
                         <span class="binary-search-chip is-found">Answer</span>
@@ -6065,10 +6436,15 @@
                 if (!board) {
                     return;
                 }
+                const manualLinkedMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = values
                     .map((value, idx) => {
                         let stateClass = 'is-discarded';
-                        if (finished && answerIndex === idx) {
+                        if (manualLinkedMode) {
+                            stateClass = ((!finished && idx === currentIndex) || (finished && answerIndex === idx && answerIndex >= 0))
+                                ? 'manual-selected'
+                                : 'manual-idle';
+                        } else if (finished && answerIndex === idx) {
                             stateClass = 'is-found';
                         } else if (!finished && idx === currentIndex) {
                             stateClass = 'is-mid';
@@ -6087,6 +6463,7 @@
 
             function render() {
                 renderBoard();
+                const manualLinkedMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const visitedOrder = Array.from(visitedSet).sort((a, b) => a - b);
                 const progress = values.length ? Math.round((visitedSet.size / values.length) * 100) : 100;
                 const expected = expectedAction();
@@ -6147,7 +6524,15 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualLinkedMode) {
+                        if (finished) {
+                            shell.badge.textContent = answerIndex >= 0 ? `Found @ ${answerIndex}` : 'Not Found';
+                            shell.badge.classList.add('badge-accent');
+                        } else {
+                            shell.badge.textContent = `idx ${currentIndex}`;
+                            shell.badge.classList.add('badge-primary');
+                        }
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -6174,11 +6559,12 @@
                 if (finished) {
                     return;
                 }
+                const manualLinkedMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const expected = expectedAction();
                 if (!expected) {
                     return;
                 }
-                if (action !== expected) {
+                if (!manualLinkedMode && action !== expected) {
                     const currentValue = formatToken(values[currentIndex]);
                     if (expected === 'match') {
                         feedback = `Incorrect. ${currentValue} equals target, so Match Node is required.`;
@@ -6191,6 +6577,14 @@
                     return;
                 }
 
+                if (action === 'next') {
+                    const nextIndex = currentIndex + 1;
+                    if (manualLinkedMode && nextIndex >= values.length) {
+                        render();
+                        return;
+                    }
+                }
+
                 undoStack.push(snapshotState());
                 feedback = '';
                 comparisons += 1;
@@ -6200,9 +6594,6 @@
                     finished = true;
                 } else if (action === 'next') {
                     currentIndex += 1;
-                    if (currentIndex >= values.length) {
-                        currentIndex = values.length - 1;
-                    }
                     visitedSet.add(currentIndex);
                 } else {
                     answerIndex = -1;
@@ -6244,6 +6635,7 @@
                 });
             }
 
+            actionModeRerender = render;
             render();
             return true;
         }
@@ -6270,7 +6662,7 @@
                         <div><strong>Target:</strong> ${formatActionNumber(target, 3, false)}</div>
                         <div><strong>Direction:</strong> ${traverseFromTail ? 'tail -> head (prev)' : 'head -> tail (next)'}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="doublyLegend" aria-hidden="true">
                         <span class="binary-search-chip is-mid">Current Node</span>
                         <span class="binary-search-chip is-window">Visited</span>
                         <span class="binary-search-chip is-found">Answer</span>
@@ -6369,10 +6761,15 @@
                 if (!board) {
                     return;
                 }
+                const manualDoublyMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = values
                     .map((value, idx) => {
                         let stateClass = 'is-discarded';
-                        if (finished && answerIndex === idx) {
+                        if (manualDoublyMode) {
+                            stateClass = ((!finished && idx === currentIndex) || (finished && answerIndex === idx && answerIndex >= 0))
+                                ? 'manual-selected'
+                                : 'manual-idle';
+                        } else if (finished && answerIndex === idx) {
                             stateClass = 'is-found';
                         } else if (!finished && idx === currentIndex) {
                             stateClass = 'is-mid';
@@ -6391,6 +6788,7 @@
 
             function render() {
                 renderBoard();
+                const manualDoublyMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const progress = values.length ? Math.round((visitedSet.size / values.length) * 100) : 100;
                 const expected = expectedAction();
                 const currentValue = Number.isInteger(currentIndex) ? values[currentIndex] : null;
@@ -6454,7 +6852,15 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualDoublyMode) {
+                        if (finished) {
+                            shell.badge.textContent = answerIndex >= 0 ? `Found @ ${answerIndex}` : 'Not Found';
+                            shell.badge.classList.add('badge-accent');
+                        } else {
+                            shell.badge.textContent = `idx ${currentIndex}`;
+                            shell.badge.classList.add('badge-primary');
+                        }
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -6482,11 +6888,12 @@
                 if (finished) {
                     return;
                 }
+                const manualDoublyMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const expected = expectedAction();
                 if (!expected) {
                     return;
                 }
-                if (action !== expected) {
+                if (!manualDoublyMode && action !== expected) {
                     const currentValue = formatToken(values[currentIndex]);
                     if (expected === 'match') {
                         feedback = `Incorrect. ${currentValue} equals target, so Match Node is required.`;
@@ -6501,6 +6908,14 @@
                     return;
                 }
 
+                if (action === 'prev' || action === 'next') {
+                    const nextIndex = currentIndex + (action === 'prev' ? -1 : 1);
+                    if (manualDoublyMode && (nextIndex < 0 || nextIndex >= values.length)) {
+                        render();
+                        return;
+                    }
+                }
+
                 undoStack.push(snapshotState());
                 feedback = '';
                 comparisons += 1;
@@ -6509,7 +6924,7 @@
                     answerIndex = currentIndex;
                     finished = true;
                 } else if (action === 'prev' || action === 'next') {
-                    const nextIndex = currentIndex + direction;
+                    const nextIndex = currentIndex + (action === 'prev' ? -1 : 1);
                     currentIndex = nextIndex;
                     if (!visitedSet.has(currentIndex)) {
                         visitedSet.add(currentIndex);
@@ -6900,6 +7315,9 @@
                 });
             }
 
+            actionModeRerender = render;
+            actionModeRerender = render;
+            actionModeRerender = render;
             actionModeRerender = render;
             render();
             return true;
@@ -7815,7 +8233,7 @@
                         <div><strong>Target Order:</strong> Non-decreasing</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="sortingLegend" aria-hidden="true">
                         <span class="binary-search-chip is-found">Fixed Prefix</span>
                         <span class="binary-search-chip is-mid">Current Min</span>
                         <span class="binary-search-chip is-window">Unsorted</span>
@@ -8091,7 +8509,7 @@
                         <div><strong>Target Order:</strong> Non-decreasing</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="sortingLegend" aria-hidden="true">
                         <span class="binary-search-chip is-found">Sorted Prefix</span>
                         <span class="binary-search-chip is-mid">Key</span>
                         <span class="binary-search-chip is-window">Scan</span>
@@ -8201,17 +8619,21 @@
                 if (!board) {
                     return;
                 }
+                const manualInsertionMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const prefixEnd = sortedUntil();
                 board.innerHTML = current
                     .map((value, idx) => {
+                        const isPrefix = idx < prefixEnd;
+                        const isScan = !finished && idx === scan;
+                        const isKey = !finished && idx === pass;
                         let stateClass = 'is-discarded';
-                        if (idx < prefixEnd) {
+                        if (manualInsertionMode) {
+                            stateClass = (isPrefix || isScan || isKey) ? 'manual-selected' : 'manual-idle';
+                        } else if (isPrefix) {
                             stateClass = 'is-found';
-                        }
-                        if (!finished && idx === scan) {
+                        } else if (isScan) {
                             stateClass = 'is-window';
-                        }
-                        if (!finished && idx === pass) {
+                        } else if (isKey) {
                             stateClass = 'is-mid';
                         }
                         return `
@@ -8226,6 +8648,7 @@
 
             function render() {
                 renderBoard();
+                const manualInsertionMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const prefixCount = sortedUntil();
                 const progress = current.length > 0 ? Math.round((prefixCount / current.length) * 100) : 0;
                 const answer = current.map((value) => formatToken(value)).join(' ');
@@ -8275,7 +8698,10 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualInsertionMode) {
+                        shell.badge.textContent = finished ? 'Sorted' : `Pass ${pass}`;
+                        shell.badge.classList.add(finished ? 'badge-accent' : 'badge-primary');
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -8380,6 +8806,7 @@
                 });
             }
 
+            actionModeRerender = render;
             if (!finished) {
                 beginPass();
             }
@@ -9190,7 +9617,7 @@
                         <div><strong>Target Order:</strong> Non-decreasing</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="sortingLegend" aria-hidden="true">
                         <span class="binary-search-chip is-found">Sorted Suffix</span>
                         <span class="binary-search-chip is-mid">Heap Root</span>
                         <span class="binary-search-chip is-window">Best Child</span>
@@ -9383,20 +9810,22 @@
                 if (!board) {
                     return;
                 }
+                const manualHeapMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = current
                     .map((value, idx) => {
-                        let stateClass = 'is-discarded';
                         const inSortedSuffix = finished || idx >= heapSize;
-                        if (inSortedSuffix) {
+                        const isRoot = sift && idx === sift.root;
+                        const isCandidate = sift && idx === sift.candidate;
+                        let stateClass = 'is-discarded';
+                        if (manualHeapMode) {
+                            const shouldHighlight = inSortedSuffix || isRoot || isCandidate;
+                            stateClass = shouldHighlight ? 'manual-selected' : 'manual-idle';
+                        } else if (inSortedSuffix) {
                             stateClass = 'is-found';
-                        } else if (sift) {
-                            if (idx === sift.root) {
-                                stateClass = 'is-mid';
-                            } else if (idx === sift.candidate) {
-                                stateClass = 'is-window';
-                            } else {
-                                stateClass = 'is-discarded';
-                            }
+                        } else if (isRoot) {
+                            stateClass = 'is-mid';
+                        } else if (isCandidate) {
+                            stateClass = 'is-window';
                         }
                         return `
                             <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
@@ -9410,6 +9839,7 @@
 
             function render() {
                 renderBoard();
+                const manualHeapMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
                 const answer = current.map((value) => formatToken(value)).join(' ');
                 const fixedCount = finished ? current.length : Math.max(0, current.length - heapSize);
@@ -9481,7 +9911,10 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualHeapMode) {
+                        shell.badge.textContent = finished ? `Sorted ${current.length}/${current.length}` : phaseLabel;
+                        shell.badge.classList.add(finished ? 'badge-accent' : 'badge-primary');
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -9638,6 +10071,7 @@
                 });
             }
 
+            actionModeRerender = render;
             initializeState();
             render();
             return true;
@@ -9926,6 +10360,7 @@
             const hasSingle = ordered.length === 1;
             const verticalConflict = hasTwo && firstPoint && secondPoint && firstPoint.x === secondPoint.x;
             const progress = hasTwo ? 100 : (hasSingle ? 50 : 0);
+            const manualLinearMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             buttons.forEach((button) => {
                 const idx = Number(button.dataset.index);
@@ -9933,8 +10368,10 @@
                 if (!point) {
                     return;
                 }
-                button.classList.remove('is-found', 'is-window', 'is-mid', 'is-discarded');
-                if (selected.has(idx)) {
+                button.classList.remove('is-found', 'is-window', 'is-mid', 'is-discarded', 'manual-selected', 'manual-idle');
+                if (manualLinearMode) {
+                    button.classList.add(selected.has(idx) ? 'manual-selected' : 'manual-idle');
+                } else if (selected.has(idx)) {
                     button.classList.add(verticalConflict ? 'is-mid' : 'is-found');
                 } else if (hasSingle && firstPoint) {
                     button.classList.add(point.x === firstPoint.x ? 'is-mid' : 'is-window');
@@ -10001,16 +10438,22 @@
                     hintText.textContent = feedback;
                     hintText.classList.add('error');
                 } else {
-                    hintText.textContent = hint;
-                    hintText.classList.toggle('error', badgeDanger);
+                    hintText.textContent = manualLinearMode ? 'Select two points. Guidance returns after Hint.' : hint;
+                    hintText.classList.toggle('error', badgeDanger && !manualLinearMode);
                 }
             }
             if (shell.badge) {
                 shell.badge.textContent = badge;
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                shell.badge.classList.toggle('badge-danger', badgeDanger);
-                shell.badge.classList.toggle('badge-accent', badgeAccent);
-                shell.badge.classList.toggle('badge-primary', !badgeDanger && !badgeAccent);
+                if (badgeDanger) {
+                    shell.badge.classList.add('badge-danger');
+                } else if (manualLinearMode) {
+                    shell.badge.classList.add('badge-primary');
+                } else if (badgeAccent) {
+                    shell.badge.classList.add('badge-accent');
+                } else {
+                    shell.badge.classList.add('badge-primary');
+                }
             }
             if (usePairBtn) {
                 usePairBtn.disabled = !defaultPair;
@@ -10018,7 +10461,8 @@
             if (clearBtn) {
                 clearBtn.disabled = ordered.length === 0;
             }
-            setDerivedAnswer(derivedAnswer);
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && hasTwo && !verticalConflict);
+            setDerivedAnswer(shouldFill ? derivedAnswer : '');
             setActionPayload({ mode: 'linear_regression_line_fit', selected_indices: ordered });
         }
 
@@ -10040,6 +10484,7 @@
             clearBtn.addEventListener('click', () => {
                 selected.clear();
                 feedback = '';
+                setDerivedAnswer('');
                 render();
             });
         }
@@ -10367,6 +10812,7 @@
         markGuidanceControls(nearestBtn, allC1Btn, allC2Btn);
 
         function render() {
+            const manualKMeansMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const groupOne = [];
             const groupTwo = [];
             let changedCount = 0;
@@ -10398,7 +10844,9 @@
                 const d2 = Math.abs(points[idx] - centroids[1]);
                 const sub = button.querySelector('[data-role=\"sub\"]');
                 button.classList.remove('is-found', 'is-window', 'is-mid', 'is-discarded');
-                if (focusedIndex === idx) {
+                if (manualKMeansMode) {
+                    button.classList.add(focusedIndex === idx ? 'manual-selected' : 'manual-idle');
+                } else if (focusedIndex === idx) {
                     button.classList.add('is-mid');
                 } else if (cluster === 0) {
                     button.classList.add('is-window');
@@ -10434,7 +10882,9 @@
                     hintText.textContent = 'One cluster is empty. Centroid fallback uses initial centroid for empty side.';
                     hintText.classList.add('error');
                 } else {
-                    hintText.textContent = 'Toggle points until assignments look correct, then submit the derived centroids.';
+                    hintText.textContent = manualKMeansMode
+                        ? 'Toggle points freely; guidance will return after Hint.'
+                        : 'Toggle points until assignments look correct, then submit the derived centroids.';
                     hintText.classList.remove('error');
                 }
             }
@@ -10443,6 +10893,9 @@
                 if (hasEmptyCluster) {
                     shell.badge.textContent = 'Cluster Empty';
                     shell.badge.classList.add('badge-danger');
+                } else if (manualKMeansMode) {
+                    shell.badge.textContent = 'Manual Split';
+                    shell.badge.classList.add('badge-primary');
                 } else if (changedCount === 0) {
                     shell.badge.textContent = 'Nearest Split';
                     shell.badge.classList.add('badge-accent');
@@ -10455,7 +10908,8 @@
                 }
             }
 
-            setDerivedAnswer(answer);
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && touched.size > 0);
+            setDerivedAnswer(shouldFill ? answer : '');
             setActionPayload({ mode: 'kmeans_assign', assignments: assignments.slice() });
         }
 
@@ -10641,11 +11095,14 @@
                 .map((row) => `idx ${row.index} (x=${formatActionNumber(row.x, 3, false)}, ${row.label}, d=${formatActionNumber(Math.abs(row.x - queryX), 3, false)})`)
                 .join(' | ');
             const selectedPrediction = predictionFromSelected(ordered);
+            const manualKnnMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             buttons.forEach((button) => {
                 const idx = Number(button.dataset.index);
-                button.classList.remove('is-found', 'is-window', 'is-mid', 'is-discarded');
-                if (selected.has(idx)) {
+                button.classList.remove('is-found', 'is-window', 'is-mid', 'is-discarded', 'manual-selected', 'manual-idle');
+                if (manualKnnMode) {
+                    button.classList.add(selected.has(idx) ? 'manual-selected' : 'manual-idle');
+                } else if (selected.has(idx)) {
                     button.classList.add(overSelected ? 'is-mid' : 'is-found');
                 } else if (canonicalSet.has(idx)) {
                     button.classList.add('is-window');
@@ -10688,10 +11145,14 @@
                     hintText.textContent = `Perfect nearest set selected. Submit class ${canonicalLabel}.`;
                     hintText.classList.remove('error');
                 } else if (isValidCount) {
-                    hintText.textContent = 'Count is correct but tie-break/ranking differs from nearest-k.';
-                    hintText.classList.add('error');
+                    hintText.textContent = manualKnnMode
+                        ? 'Count is correct. Guidance and validation will show after Hint.'
+                        : 'Count is correct but tie-break/ranking differs from nearest-k.';
+                    hintText.classList.toggle('error', !manualKnnMode);
                 } else {
-                    hintText.textContent = 'Select neighbors until you reach exactly k.';
+                    hintText.textContent = manualKnnMode
+                        ? 'Select exactly k neighbors. Guidance resumes after Hint.'
+                        : 'Select neighbors until you reach exactly k.';
                     hintText.classList.remove('error');
                 }
             }
@@ -10700,6 +11161,9 @@
                 if (isCanonical) {
                     shell.badge.textContent = `Valid (${canonicalLabel})`;
                     shell.badge.classList.add('badge-accent');
+                } else if (manualKnnMode) {
+                    shell.badge.textContent = `Manual | ${ordered.length}/${k}`;
+                    shell.badge.classList.add('badge-primary');
                 } else if (isValidCount) {
                     shell.badge.textContent = 'Wrong Neighbors';
                     shell.badge.classList.add('badge-danger');
@@ -10708,7 +11172,8 @@
                     shell.badge.classList.add('badge-primary');
                 }
             }
-            setDerivedAnswer(isCanonical ? canonicalLabel : '');
+            const shouldFill = isCanonical;
+            setDerivedAnswer(shouldFill ? canonicalLabel : '');
             setActionPayload({ mode: 'knn_neighbors', selected_indices: ordered });
         }
 

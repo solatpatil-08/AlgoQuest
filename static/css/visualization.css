@@ -1238,6 +1238,10 @@
     fill: var(--exec-ll-label);
 }
 
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-null-label {
+    fill: var(--exec-ll-label);
+}
+
 .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-circular {
     --exec-ll-text: #020617;
     --exec-ll-label: #1e293b;
@@ -1276,9 +1280,94 @@
     font-weight: 800;
 }
 
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly {
+    --exec-ll-text: #020617;
+    --exec-ll-label: #1e293b;
+    --exec-ll-halo: rgba(248, 250, 252, 0.98);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-text {
+    stroke-width: 2.45px;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-label,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-badge {
+    font-weight: 700;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-value,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-index {
+    fill: #0f172a;
+    stroke: rgba(248, 250, 252, 0.98);
+    stroke-width: 1.35px;
+    paint-order: stroke;
+    font-weight: 800;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-null-label {
+    fill: #0f172a;
+    stroke: rgba(248, 250, 252, 0.98);
+    stroke-width: 1.3px;
+    paint-order: stroke;
+    font-weight: 800;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly {
+    --exec-ll-text: #020617;
+    --exec-ll-label: #1e293b;
+    --exec-ll-halo: rgba(248, 250, 252, 0.98);
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-text {
+    stroke-width: 2.45px;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-label,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-badge {
+    font-weight: 700;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-value,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-index,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-null-label {
+    fill: #0f172a;
+    stroke: rgba(248, 250, 252, 0.98);
+    stroke-width: 1.35px;
+    paint-order: stroke;
+    font-weight: 800;
+}
+
 .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-badge {
     fill: var(--exec-ll-badge);
-    stroke-width: 1.8px;
+    stroke: rgba(15, 23, 42, 0.42);
+    stroke-width: 1.15px;
+    paint-order: stroke;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-node-badge-pill {
+    stroke: rgba(255, 255, 255, 0.54);
+    stroke-width: 0.85px;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-node-badge-text {
+    fill: #020617;
+    stroke: rgba(248, 250, 252, 0.82);
+    stroke-width: 0.95px;
+    paint-order: stroke;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-node-badge-pill {
+    stroke: rgba(248, 250, 252, 0.3);
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-node-badge-text {
+    fill: #f8fafc;
+    stroke: rgba(2, 6, 23, 0.74);
+    stroke-width: 1.05px;
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-linked .exec-ll-next-path,
@@ -2914,6 +3003,54 @@
     fill: #020617;
     stroke: rgba(248, 250, 252, 0.99);
     stroke-width: 1.5px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly {
+    --exec-ll-text: #020617;
+    --exec-ll-label: #0f172a;
+    --exec-ll-badge: #020617;
+    --exec-ll-halo: rgba(248, 250, 252, 0.98);
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-text {
+    stroke-width: 3px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-value,
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-index {
+    fill: #020617;
+    stroke: rgba(248, 250, 252, 0.99);
+    stroke-width: 1.5px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-doubly .exec-ll-null-label {
+    fill: #f8fafc;
+    stroke: rgba(2, 6, 23, 0.98);
+    stroke-width: 1.45px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly {
+    --exec-ll-text: #020617;
+    --exec-ll-label: #0f172a;
+    --exec-ll-badge: #020617;
+    --exec-ll-halo: rgba(248, 250, 252, 0.98);
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-text {
+    stroke-width: 3px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-value,
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-index {
+    fill: #020617;
+    stroke: rgba(248, 250, 252, 0.99);
+    stroke-width: 1.5px;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked.exec-3d-linked-singly .exec-ll-null-label {
+    fill: #f8fafc;
+    stroke: rgba(2, 6, 23, 0.98);
+    stroke-width: 1.45px;
 }
 
 [data-theme="dark"] .exec-3d-chrome-head {
