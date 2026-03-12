@@ -186,7 +186,10 @@
     #actionGameHost.aq-manual-mode #knapsackLegend,
     #actionGameHost.aq-manual-mode #knnLegend,
     #actionGameHost.aq-manual-mode #lcsLegend,
-    #actionGameHost.aq-manual-mode #linearLegend {
+    #actionGameHost.aq-manual-mode #linearLegend,
+    #actionGameHost.aq-manual-mode #binaryLegend,
+    #actionGameHost.aq-manual-mode #logisticLegend,
+    #actionGameHost.aq-manual-mode #mathLegend {
         display: none !important;
     }
 
@@ -660,6 +663,123 @@
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
+    #actionGameHost.aq-manual-mode .linear-search-node.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode .linear-search-node.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode .linear-search-node .linear-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode .linear-search-node.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode .linear-search-node.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode .linear-search-node .linear-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #binarySearchBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #binarySearchBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #binarySearchBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #binarySearchBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #binarySearchBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #binarySearchBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    /* Improve legibility for linear search nodes in light mode */
+    #actionGameHost .linear-search-node .linear-search-main {
+        color: #0f172a !important;
+        font-weight: 700;
+    }
+    #actionGameHost .linear-search-node .linear-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+    [data-theme="dark"] #actionGameHost .linear-search-node .linear-search-main {
+        color: #e2e8f0 !important;
+    }
+    [data-theme="dark"] #actionGameHost .linear-search-node .linear-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
     #actionGameHost.aq-manual-mode #circularNodeBoard .binary-search-cell.manual-idle {
         border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
         background: transparent !important;
@@ -935,7 +1055,7 @@
     const actionGameHost = document.getElementById('actionGameHost');
     const actionPayloadInput = document.getElementById('actionPayloadInput');
     const CATEGORY_SEQUENCE_KEY = 'aqCategorySequenceState';
-    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression']);
+    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression', 'linear_search', 'binary_search', 'logistic_regression', 'math_algorithm', 'merge_sort']);
     const manualReadOnlyAnswerAlgorithms = new Set(['bst']);
     let derivedAnswersEnabled = {% if hint_used or not challenge.starter_code %}true{% else %}false{% endif %};
     let pendingDerivedAnswer = '';
@@ -1024,6 +1144,8 @@
         }
         answerInput.value = pendingDerivedAnswer;
         syncAnswerInputLock();
+        applyActionModeGuidanceState();
+        refreshActionMode();
     }
 
     function refreshActionMode() {
@@ -2130,7 +2252,7 @@
                     <div><strong>Target term:</strong> F${n}</div>
                     <div><strong>Formula:</strong> Fi = F(i-1) + F(i-2)</div>
                 </div>
-                <div class="binary-search-legend" id="knnLegend" aria-hidden="true">
+                <div class="binary-search-legend" id="mathLegend" aria-hidden="true">
                     <span class="binary-search-chip is-discarded">Fixed base</span>
                     <span class="binary-search-chip is-window">Pending</span>
                     <span class="binary-search-chip is-found">Valid term</span>
@@ -2671,17 +2793,18 @@
             if (!board) {
                 return;
             }
+            const manualMathMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const done = b === 0;
             board.innerHTML = `
-                <div class="binary-search-cell ${done ? 'is-discarded' : 'is-found'}">
+                <div class="binary-search-cell ${manualMathMode ? 'manual-selected' : (done ? 'is-discarded' : 'is-found')}">
                     <span class="binary-search-main">a = ${formatActionNumber(a, 3, false)}</span>
                     <span class="binary-search-sub">${done ? 'gcd result' : 'current dividend'}</span>
                 </div>
-                <div class="binary-search-cell ${done ? 'is-discarded' : 'is-window'}">
+                <div class="binary-search-cell ${manualMathMode ? 'manual-selected' : (done ? 'is-discarded' : 'is-window')}">
                     <span class="binary-search-main">b = ${formatActionNumber(b, 3, false)}</span>
                     <span class="binary-search-sub">${done ? 'stop condition' : 'current divisor'}</span>
                 </div>
-                <div class="binary-search-cell is-mid">
+                <div class="binary-search-cell ${manualMathMode ? 'manual-idle' : 'is-mid'}">
                     <span class="binary-search-main">r = ${lastR === null ? '-' : formatActionNumber(lastR, 3, false)}</span>
                     <span class="binary-search-sub">last remainder</span>
                 </div>
@@ -2696,6 +2819,7 @@
             const ratio = done
                 ? 100
                 : Math.max(8, Math.min(95, Math.round((1 - (b / ratioBase)) * 100)));
+            const manualMathMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             renderBoard();
 
@@ -2732,8 +2856,10 @@
                     hintText.textContent = `b is zero. gcd = ${a}. Submit this answer.`;
                     hintText.classList.remove('error');
                 } else {
-                    hintText.textContent = `Enter r = ${a} mod ${b}. Use "Fill r" if needed, or "Use Correct Step" for guided mode.`;
-                    hintText.classList.remove('error');
+                    hintText.textContent = manualMathMode
+                        ? 'Compute r = a mod b manually. Use Hint to unlock guided fill.'
+                        : `Enter r = ${a} mod ${b}. Use "Fill r" if needed, or "Use Correct Step" for guided mode.`;
+                    hintText.classList.toggle('error', false);
                 }
             }
             if (shell.badge) {
@@ -2745,7 +2871,7 @@
                     shell.badge.textContent = 'Invalid';
                     shell.badge.classList.add('badge-danger');
                 } else {
-                    shell.badge.textContent = `Step ${stepCount}`;
+                    shell.badge.textContent = manualMathMode ? `Step ${stepCount}` : `Step ${stepCount}`;
                     shell.badge.classList.add('badge-primary');
                 }
             }
@@ -2768,7 +2894,7 @@
                 }
             }
 
-            setDerivedAnswer(done ? a : -1);
+            setDerivedAnswer(done ? a : '');
             setActionPayload({
                 mode: 'euclid_gcd',
                 current_a: a,
@@ -4428,6 +4554,7 @@
             if (!board) {
                 return;
             }
+            const manualLinearSearchMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const done = isDone();
             board.innerHTML = data
                 .map((value, idx) => {
@@ -4443,8 +4570,11 @@
                         : (isPointer
                             ? (isMatchState ? 'Match' : 'Current')
                             : (isInspected ? 'Seen' : `idx ${idx}`));
+                    const manualClass = manualLinearSearchMode
+                        ? ((isAnswer || isPointer || isInspected) ? 'manual-selected' : 'manual-idle')
+                        : '';
                     return `
-                        <button type="button" class="btn btn-sm action-value-btn linear-search-node is-${state}" disabled>
+                        <button type="button" class="btn btn-sm action-value-btn linear-search-node ${manualClass || `is-${state}`}" disabled>
                             <span class="linear-search-main">${formatActionNumber(value, 3, false)}</span>
                             <span class="linear-search-sub">${helper}</span>
                         </button>
@@ -4460,6 +4590,7 @@
             const scannedCount = inspected.length;
             const progress = data.length ? Math.round((scannedCount / data.length) * 100) : 0;
             const inspectedLabel = inspected.length ? inspected.join(', ') : '-';
+            const manualLinearSearchMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             if (foundBtn) {
                 foundBtn.disabled = done || pointer >= data.length;
@@ -4510,8 +4641,8 @@
                         : (pointer >= data.length
                             ? 'End reached. Submit -1 if target was not found.'
                             : (currentMatches()
-                                ? 'Current value matches target. Click Match Found.'
-                                : 'If current value is not target, click Not Equal, Next.')));
+                                ? (manualLinearSearchMode ? 'Current value matches target. Use Hint to unlock guided steps.' : 'Current value matches target. Click Match Found.')
+                                : (manualLinearSearchMode ? 'Advance after Hint unlocks guidance.' : 'If current value is not target, click Not Equal, Next.'))));
                 hintText.classList.toggle('error', Boolean(feedback));
             }
 
@@ -4522,19 +4653,20 @@
                     shell.badge.classList.add('badge-danger');
                 } else if (selectedIndex === null) {
                     shell.badge.textContent = pointer < data.length
-                        ? (currentMatches() ? `Match @ ${pointer}` : `idx ${pointer}`)
+                        ? (currentMatches() && !manualLinearSearchMode ? `Match @ ${pointer}` : `idx ${pointer}`)
                         : 'End reached';
-                    shell.badge.classList.add(currentMatches() ? 'badge-accent' : 'badge-primary');
+                    shell.badge.classList.add(currentMatches() && !manualLinearSearchMode ? 'badge-accent' : 'badge-primary');
                 } else {
                     shell.badge.textContent = selectedIndex === -1 ? 'Not Found' : `Found @ ${selectedIndex}`;
                     shell.badge.classList.add('badge-accent');
                 }
             }
 
-            setDerivedAnswer(selectedIndex === null ? '' : selectedIndex);
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && selectedIndex !== null);
+            setDerivedAnswer(shouldFill ? selectedIndex : '');
             setActionPayload({
-                mode: 'linear_search_trace',
-                selected_index: selectedIndex,
+                        mode: 'linear_search_trace',
+                        selected_index: selectedIndex,
                 pointer,
                 inspected_indices: inspected.slice(),
                 is_complete: done,
@@ -4659,7 +4791,7 @@
                     <div><strong>Target:</strong> ${target}</div>
                     <div><strong>Length:</strong> ${data.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="binaryLegend" aria-hidden="true">
                     <span class="binary-search-chip is-window">Window</span>
                     <span class="binary-search-chip is-mid">Mid</span>
                     <span class="binary-search-chip is-found">Found</span>
@@ -4754,6 +4886,7 @@
             if (!board) {
                 return;
             }
+            const manualBinaryMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const mid = currentMid();
             board.innerHTML = data
                 .map((value, idx) => {
@@ -4765,23 +4898,15 @@
                     const isMiss = finished && selectedIndex === -1;
                     const isDiscarded = !finished && !inWindow;
                     const classTokens = ['binary-search-cell'];
-                    if (inWindow) {
-                        classTokens.push('is-window');
-                    }
-                    if (isDiscarded || isMiss) {
-                        classTokens.push('is-discarded');
-                    }
-                    if (isLow) {
-                        classTokens.push('is-low');
-                    }
-                    if (isHigh) {
-                        classTokens.push('is-high');
-                    }
-                    if (isMid) {
-                        classTokens.push('is-mid');
-                    }
-                    if (isFound) {
-                        classTokens.push('is-found');
+                    if (manualBinaryMode) {
+                        classTokens.push(inWindow ? 'manual-selected' : 'manual-idle');
+                    } else {
+                        if (inWindow) classTokens.push('is-window');
+                        if (isDiscarded || isMiss) classTokens.push('is-discarded');
+                        if (isLow) classTokens.push('is-low');
+                        if (isHigh) classTokens.push('is-high');
+                        if (isMid) classTokens.push('is-mid');
+                        if (isFound) classTokens.push('is-found');
                     }
                     const tags = [];
                     if (isLow) {
@@ -4823,6 +4948,7 @@
                 finalizeNotFound();
             }
             renderBoard();
+            const manualBinaryMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const mid = currentMid();
             const done = selectedIndex !== null;
             const canAct = isSorted && !done && mid !== null;
@@ -4887,7 +5013,7 @@
                     hintText.textContent = feedback;
                 } else if (selectedIndex === null) {
                     hintText.textContent = Number.isInteger(mid)
-                        ? `Choose comparison for target ${target} vs arr[${mid}] = ${midValue}. Expected: ${decisionLabel(expected)}`
+                        ? (manualBinaryMode ? 'Choose comparison. Guidance unlocks after Hint.' : `Choose comparison for target ${target} vs arr[${mid}] = ${midValue}. Expected: ${decisionLabel(expected)}`)
                         : 'Window exhausted.';
                 } else if (selectedIndex === -1) {
                     hintText.textContent = 'No matching value exists in the array.';
@@ -4904,14 +5030,15 @@
                     shell.badge.classList.add('badge-danger');
                 } else if (selectedIndex === null) {
                     shell.badge.textContent = mid === null ? 'Not Found' : `mid=${mid}`;
-                    shell.badge.classList.add('badge-primary');
+                    shell.badge.classList.add(manualBinaryMode ? 'badge-primary' : 'badge-primary');
                 } else {
                     shell.badge.textContent = selectedIndex === -1 ? 'Not Found' : `Found @ ${selectedIndex}`;
                     shell.badge.classList.add('badge-accent');
                 }
             }
 
-            setDerivedAnswer(selectedIndex === null ? '' : selectedIndex);
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && selectedIndex !== null);
+            setDerivedAnswer(shouldFill ? selectedIndex : '');
             setActionPayload({
                 mode: 'binary_search_trace',
                 selected_index: selectedIndex,
@@ -5346,7 +5473,7 @@
                     <div><strong>Words:</strong> ${words.length}</div>
                     <div><strong>Longest prefix length:</strong> <span id="stringMaxLen">-</span></div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="logisticLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Word matches candidate</span>
                     <span class="binary-search-chip is-window">No candidate yet</span>
                     <span class="binary-search-chip is-mid">Partial / mismatch</span>
@@ -8986,6 +9113,7 @@
                     return;
                 }
                 const task = activeTask();
+                const manualMergeMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = current
                     .map((value, idx) => {
                         let stateClass = 'is-discarded';
@@ -9000,7 +9128,9 @@
                             const rightHeadIdx = ri < rightBuf.length ? (task.mid + ri) : null;
                             const isHead = idx === leftHeadIdx || idx === rightHeadIdx;
 
-                            if (isMerged) {
+                            if (manualMergeMode) {
+                                stateClass = (isMerged || isHead || inLeft || inRight) ? 'manual-selected' : 'manual-idle';
+                            } else if (isMerged) {
                                 stateClass = 'is-found';
                             } else if (isHead) {
                                 stateClass = 'is-mid';
@@ -9027,6 +9157,7 @@
                 const answer = current.map((value) => formatToken(value)).join(' ');
                 const leftHead = li < leftBuf.length ? leftBuf[li] : null;
                 const rightHead = ri < rightBuf.length ? rightBuf[ri] : null;
+                const manualMergeMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
                 if (metaPrimary) {
                     metaPrimary.textContent = finished
@@ -9053,13 +9184,15 @@
                         hint.textContent = 'Merge Sort state complete. Submit your answer.';
                         hint.classList.remove('error');
                     } else {
-                        const expected = expectedSide();
-                        hint.textContent = expected === 'left'
-                            ? 'Next value should come from LEFT head.'
-                            : 'Next value should come from RIGHT head.';
-                        hint.classList.remove('error');
-                    }
+                const expected = expectedSide();
+                hint.textContent = manualMergeMode
+                    ? 'Pick heads manually. Use Hint to see guided side.'
+                    : expected === 'left'
+                        ? 'Next value should come from LEFT head.'
+                        : 'Next value should come from RIGHT head.';
+                hint.classList.toggle('error', false);
                 }
+            }
 
                 if (pickLeftBtn) {
                     pickLeftBtn.disabled = finished;
@@ -9085,7 +9218,8 @@
                     }
                 }
 
-                setDerivedAnswer(finished ? answer : '');
+                const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && finished);
+                setDerivedAnswer(shouldFill ? answer : '');
                 setActionPayload({
                     mode: 'sorting_swap',
                     algorithm: algo,
@@ -10591,6 +10725,7 @@
         const progressText = shell.body.querySelector('#logisticProgressText');
         const hintText = shell.body.querySelector('#logisticHint');
         markGuidanceControls(useExpectedBtn, setHalfBtn);
+        let touched = false;
 
         function clampProbability(value) {
             if (!Number.isFinite(value)) {
@@ -10624,6 +10759,7 @@
             const exact = formatted === expectedFormatted;
             const near = !exact && error <= 0.02;
             const confidence = exact ? 100 : Math.max(0, Math.round((1 - (error / 0.5)) * 100));
+            const manualLogisticMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             if (label) {
                 label.textContent = formatted;
@@ -10651,11 +10787,15 @@
                     hintText.textContent = 'Exact 3-decimal match achieved. Submit now.';
                     hintText.classList.remove('error');
                 } else if (near) {
-                    hintText.textContent = 'Close to expected value. Fine-tune slider/input for exact 3dp match.';
-                    hintText.classList.remove('error');
+                    hintText.textContent = manualLogisticMode
+                        ? 'Close to expected value. Use Hint to unlock guided tuning.'
+                        : 'Close to expected value. Fine-tune slider/input for exact 3dp match.';
+                    hintText.classList.toggle('error', !manualLogisticMode);
                 } else {
-                    hintText.textContent = 'Far from expected value. Use "Use Expected" or adjust toward expected sigma(z).';
-                    hintText.classList.add('error');
+                    hintText.textContent = manualLogisticMode
+                        ? 'Adjust probability manually. Guidance appears after Hint.'
+                        : 'Far from expected value. Use "Use Expected" or adjust toward expected sigma(z).';
+                    hintText.classList.toggle('error', !manualLogisticMode);
                 }
             }
             if (shell.badge) {
@@ -10667,11 +10807,12 @@
                     shell.badge.textContent = `Near ${formatted}`;
                     shell.badge.classList.add('badge-primary');
                 } else {
-                    shell.badge.textContent = `Tune ${formatted}`;
-                    shell.badge.classList.add('badge-danger');
+                    shell.badge.textContent = manualLogisticMode ? 'Manual Tuning' : `Tune ${formatted}`;
+                    shell.badge.classList.add(manualLogisticMode ? 'badge-primary' : 'badge-danger');
                 }
             }
-            setDerivedAnswer(formatted);
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && touched);
+            setDerivedAnswer(shouldFill ? formatted : '');
             setActionPayload({ mode: 'logistic_meter', probability: Number(formatted) });
         }
 
@@ -10680,6 +10821,7 @@
                 if (input) {
                     input.value = Number(slider.value).toFixed(3);
                 }
+                touched = true;
                 render();
             });
         }
@@ -10689,6 +10831,7 @@
                 if (slider) {
                     slider.value = value.toFixed(3);
                 }
+                touched = true;
                 render();
             });
             input.addEventListener('keydown', (event) => {
@@ -10702,24 +10845,28 @@
             syncBtn.addEventListener('click', () => {
                 const value = input ? Number(input.value) : 0.5;
                 setProbability(value);
+                touched = true;
                 render();
             });
         }
         if (useExpectedBtn) {
             useExpectedBtn.addEventListener('click', () => {
                 setProbability(expectedProbability);
+                touched = true;
                 render();
             });
         }
         if (setHalfBtn) {
             setHalfBtn.addEventListener('click', () => {
                 setProbability(0.5);
+                touched = true;
                 render();
             });
         }
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 setProbability(0.5);
+                touched = false;
                 render();
             });
         }

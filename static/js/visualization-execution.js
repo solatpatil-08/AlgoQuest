@@ -1235,9 +1235,9 @@
                 ? { front: '#bbf7d0', top: '#dcfce7', side: '#16a34a', stroke: '#166534', tag: 'MATCH', tagColor: '#16a34a' }
                 : isCurrent
                     ? { front: '#fde68a', top: '#fef3c7', side: '#ca8a04', stroke: '#92400e', tag: 'CHECK', tagColor: '#f59e0b' }
-                    : isVisited
-                        ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'SEEN', tagColor: '#2563eb' }
-                        : { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: '', tagColor: '#64748b' };
+                : isVisited
+                    ? { front: '#dbeafe', top: '#eff6ff', side: '#2563eb', stroke: '#1e3a8a', tag: 'SEEN', tagColor: '#2563eb' }
+                    : { front: '#e2e8f0', top: '#f8fafc', side: '#64748b', stroke: '#475569', tag: '', tagColor: '#64748b' };
             return `
                 <g filter="url(#${uniqueId}SoftShadow)">
                     <ellipse cx="${x + (cellWidth / 2) + (depth / 2)}" cy="${baseY + cellHeight + 12}" rx="${(cellWidth / 2) + 8}" ry="5.8" fill="rgba(15,23,42,0.24)"></ellipse>
@@ -1245,9 +1245,9 @@
                     <polygon points="${x + cellWidth},${baseY} ${x + cellWidth + depth},${baseY - depth} ${x + cellWidth + depth},${baseY + cellHeight - depth} ${x + cellWidth},${baseY + cellHeight}" fill="${palette.side}" opacity="0.9"></polygon>
                     <rect x="${x}" y="${baseY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${palette.front}" stroke="${palette.stroke}" stroke-width="${isCurrent || isMatch ? '2.8' : '1.8'}"></rect>
                     ${palette.tag ? `<rect x="${x + 6}" y="${baseY - 12}" width="${cellWidth - 12}" height="11" rx="5" fill="${palette.tagColor}"></rect>` : ''}
-                    ${palette.tag ? `<text x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
-                    <text x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
-                    <text x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
+                    ${palette.tag ? `<text class="exec-3d-linear-search-tag" x="${x + (cellWidth / 2)}" y="${baseY - 4}" text-anchor="middle" font-size="8.8" font-weight="700" fill="#ffffff">${palette.tag}</text>` : ''}
+                    <text class="exec-3d-value-text" x="${x + (cellWidth / 2)}" y="${baseY + Math.round(cellHeight * 0.62)}" text-anchor="middle" font-size="${compact ? '12' : '13.2'}" font-weight="700" fill="#0f172a">${escapeHtml(formatNumber(value))}</text>
+                    <text class="exec-3d-index-text" x="${x + (cellWidth / 2)}" y="${baseY + cellHeight + 17}" text-anchor="middle" font-size="10.2" fill="#475569">idx ${idx}</text>
                 </g>
             `;
         }).join('');
@@ -1266,7 +1266,7 @@
             </g>
         `;
 
-        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D linear search visualization', 'exec-3d-bst');
+        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D linear search visualization', 'exec-3d-bst exec-3d-linear-search');
     }
 
     function renderBinarySearchTrack3D(values, options = {}) {

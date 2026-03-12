@@ -1139,6 +1139,35 @@
     text-rendering: geometricPrecision;
 }
 
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-value-text,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    stroke: none;
+}
+
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-value-text,
+.exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    stroke-linejoin: round;
+    stroke-width: 1.4px !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-value-text {
+    fill: #0f172a !important;
+    stroke: rgba(248, 250, 252, 0.9) !important;
+}
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    fill: #0f172a !important;
+    stroke: rgba(255, 255, 255, 0.95) !important;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-value-text {
+    fill: #e2e8f0 !important;
+    stroke: rgba(11, 17, 30, 0.78) !important;
+}
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linear-search .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    fill: #e2e8f0 !important;
+    stroke: rgba(8, 13, 24, 0.82) !important;
+}
+
 .exec-diagram-wrap.exec-3d-scene.exec-3d-strip {
     border-color: rgba(56, 189, 248, 0.5);
     background:
@@ -4168,4 +4197,7 @@
     border-color: rgba(125, 211, 252, 0.42);
     background: rgba(37, 99, 235, 0.2);
     color: #bfdbfe;
+}
+[data-theme="light"] .exec-3d-linear-search-tag {
+    fill: #0f172a !important;
 }
