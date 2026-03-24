@@ -477,6 +477,67 @@
 .category-sequence-status {
     margin-left: auto;
     font-size: 0.78rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.category-sequence-status-badge {
+    color: var(--aq-text);
+    border: 1px solid var(--aq-border);
+    font-weight: 600;
+}
+
+.category-sequence-status-badge .status-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+    color: currentColor;
+}
+
+.category-sequence-status-badge.is-solved {
+    background: #ecfdf3;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.category-sequence-status-badge.is-unlocked {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+.category-sequence-status-badge.is-locked {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #b45309;
+}
+
+.category-sequence-status-text {
+    color: var(--aq-text-secondary);
+}
+
+[data-theme="dark"] .category-sequence-status-badge {
+    border-color: rgba(148, 163, 184, 0.32);
+}
+
+[data-theme="dark"] .category-sequence-status-badge.is-solved {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: rgba(134, 239, 172, 0.38);
+    color: #86efac;
+}
+
+[data-theme="dark"] .category-sequence-status-badge.is-unlocked {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(147, 197, 253, 0.36);
+    color: #93c5fd;
+}
+
+[data-theme="dark"] .category-sequence-status-badge.is-locked {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(252, 211, 77, 0.38);
+    color: #fcd34d;
 }
 
 /* ============================================
@@ -1180,6 +1241,31 @@
     filter: none;
 }
 
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene .exec-svg.exec-svg-3d text.exec-3d-window-focus-label {
+    fill: #0f172a !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-recursion .exec-svg.exec-svg-3d text {
+    stroke: rgba(15, 23, 42, 0.42) !important;
+    stroke-width: 0.95px !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-recursion .exec-svg.exec-svg-3d text[fill="#334155"] {
+    fill: #cbd5e1 !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-recursion .exec-svg.exec-svg-3d text[fill="#475569"] {
+    fill: #94a3b8 !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-recursion .exec-svg.exec-svg-3d text[fill="#64748b"] {
+    fill: #94a3b8 !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-recursion .exec-svg.exec-svg-3d text[fill="#0f172a"] {
+    fill: #0f172a !important;
+}
+
 .exec-diagram-wrap.exec-3d-scene.exec-3d-bst {
     border-color: rgba(74, 222, 128, 0.48);
     background:
@@ -1190,6 +1276,25 @@
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-bst .exec-svg.exec-svg-3d {
     filter: none;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-quick-sort .exec-svg.exec-svg-3d text {
+    stroke: rgba(15, 23, 42, 0.42);
+    stroke-width: 0.95px;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-quick-sort .exec-svg.exec-svg-3d text.exec-3d-index-text {
+    fill: #dbeafe !important;
+    stroke: rgba(2, 6, 23, 0.72);
+    stroke-width: 1px;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-quick-sort .exec-svg.exec-svg-3d text[fill="#334155"] {
+    fill: #cbd5e1 !important;
+}
+
+[data-theme="light"] .exec-diagram-wrap.exec-3d-scene.exec-3d-quick-sort .exec-svg.exec-svg-3d text[fill="#475569"] {
+    fill: #94a3b8 !important;
 }
 
 .exec-diagram-wrap.exec-3d-scene.exec-3d-ml {
@@ -2999,6 +3104,54 @@
     --exec-ml-text-positive: #bbf7d0;
     --exec-ml-text-negative: #fed7aa;
     --exec-ml-halo: rgba(2, 6, 23, 0.96);
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-neural {
+    --exec-ml-text: #0f172a;
+    --exec-ml-text-muted: #f8fafc;
+    --exec-ml-text-axis: #f8fafc;
+    --exec-ml-text-query: #f8fafc;
+    --exec-ml-text-positive: #0f172a;
+    --exec-ml-text-negative: #0f172a;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-neural .exec-ml-text-muted {
+    fill: #0f172a;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text,
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text-muted,
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text-axis,
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text-query {
+    paint-order: stroke;
+    stroke: rgba(255, 255, 255, 0.98);
+    stroke-width: 1.7px;
+    stroke-linejoin: round;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text {
+    fill: #0f172a;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text-muted {
+    fill: #ffffff;
+    stroke: #000000;
+    stroke-width: 2.2px;
+    font-weight: 700;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text-axis {
+    fill: #ffffff;
+    stroke: #000000;
+    stroke-width: 2.4px;
+    font-weight: 700;
+}
+
+[data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-minimax .exec-ml-text-query {
+    fill: #ffffff;
+    stroke: #000000;
+    stroke-width: 2.4px;
+    font-weight: 700;
 }
 
 [data-theme="dark"] .exec-diagram-wrap.exec-3d-scene.exec-3d-linked {

@@ -187,9 +187,14 @@
     #actionGameHost.aq-manual-mode #knnLegend,
     #actionGameHost.aq-manual-mode #lcsLegend,
     #actionGameHost.aq-manual-mode #linearLegend,
+    #actionGameHost.aq-manual-mode #minimaxLegend,
+    #actionGameHost.aq-manual-mode #naiveLegend,
+    #actionGameHost.aq-manual-mode #neuralLegend,
+    #actionGameHost.aq-manual-mode #queueLegend,
     #actionGameHost.aq-manual-mode #binaryLegend,
     #actionGameHost.aq-manual-mode #logisticLegend,
-    #actionGameHost.aq-manual-mode #mathLegend {
+    #actionGameHost.aq-manual-mode #mathLegend,
+    #actionGameHost.aq-manual-mode #recursionLegend {
         display: none !important;
     }
 
@@ -258,6 +263,46 @@
     }
 
     [data-theme="dark"] #actionGameHost.aq-manual-mode #arrayRangeBoard .action-value-btn .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #minimaxLevelBoard .binary-search-cell.manual-idle,
+    #actionGameHost.aq-manual-mode #minimaxPreviewBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #minimaxLevelBoard .binary-search-cell.manual-selected,
+    #actionGameHost.aq-manual-mode #minimaxPreviewBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #minimaxLevelBoard .binary-search-cell .binary-search-sub,
+    #actionGameHost.aq-manual-mode #minimaxPreviewBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #minimaxLevelBoard .binary-search-cell.manual-idle,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #minimaxPreviewBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #minimaxLevelBoard .binary-search-cell.manual-selected,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #minimaxPreviewBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #minimaxLevelBoard .binary-search-cell .binary-search-sub,
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #minimaxPreviewBoard .binary-search-cell .binary-search-sub {
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
@@ -731,6 +776,74 @@
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
+    #actionGameHost.aq-manual-mode #naiveBayesBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #naiveBayesBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #naiveBayesBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #naiveBayesBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #naiveBayesBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #naiveBayesBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #queueBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #queueBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #queueBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #queueBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #queueBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #queueBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
     #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell.manual-idle {
         border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
         background: transparent !important;
@@ -762,6 +875,40 @@
     }
 
     [data-theme="dark"] #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #recursionBoard .recursion-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #recursionBoard .recursion-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #recursionBoard .recursion-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #recursionBoard .recursion-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #recursionBoard .recursion-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #recursionBoard .recursion-cell .binary-search-sub {
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
@@ -1055,7 +1202,7 @@
     const actionGameHost = document.getElementById('actionGameHost');
     const actionPayloadInput = document.getElementById('actionPayloadInput');
     const CATEGORY_SEQUENCE_KEY = 'aqCategorySequenceState';
-    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression', 'linear_search', 'binary_search', 'logistic_regression', 'math_algorithm', 'merge_sort']);
+    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression', 'linear_search', 'binary_search', 'logistic_regression', 'math_algorithm', 'merge_sort', 'minimax', 'naive_bayes', 'neural_network', 'queue', 'quick_sort', 'recursion']);
     const manualReadOnlyAnswerAlgorithms = new Set(['bst']);
     let derivedAnswersEnabled = {% if hint_used or not challenge.starter_code %}true{% else %}false{% endif %};
     let pendingDerivedAnswer = '';
@@ -2252,7 +2399,7 @@
                     <div><strong>Target term:</strong> F${n}</div>
                     <div><strong>Formula:</strong> Fi = F(i-1) + F(i-2)</div>
                 </div>
-                <div class="binary-search-legend" id="mathLegend" aria-hidden="true">
+                <div class="binary-search-legend" id="recursionLegend" aria-hidden="true">
                     <span class="binary-search-chip is-discarded">Fixed base</span>
                     <span class="binary-search-chip is-window">Pending</span>
                     <span class="binary-search-chip is-found">Valid term</span>
@@ -2291,7 +2438,25 @@
         const clearBtn = shell.body.querySelector('#recursionClearBtn');
         const history = [];
 
+        function fibonacciAt(index) {
+            if (index <= 0) {
+                return 0;
+            }
+            if (index === 1) {
+                return 1;
+            }
+            let prevTwo = 0;
+            let prevOne = 1;
+            for (let step = 2; step <= index; step += 1) {
+                const next = prevOne + prevTwo;
+                prevTwo = prevOne;
+                prevOne = next;
+            }
+            return prevOne;
+        }
+
         function render() {
+            const manualRecursionMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const sequence = new Array(n + 1).fill(null);
             sequence[0] = 0;
             if (n >= 1) {
@@ -2309,7 +2474,10 @@
                 const raw = input ? input.value.trim() : '';
                 if (!raw.length) {
                     complete = false;
-                    cellState.set(idx, { state: 'is-window', note: 'enter integer' });
+                    cellState.set(idx, {
+                        state: manualRecursionMode ? 'manual-idle' : 'is-window',
+                        note: 'enter integer',
+                    });
                     continue;
                 }
                 const value = Number(raw);
@@ -2318,12 +2486,18 @@
                     if (firstInvalidIndex === -1) {
                         firstInvalidIndex = idx;
                     }
-                    cellState.set(idx, { state: 'is-mid', note: 'integer only' });
+                    cellState.set(idx, {
+                        state: manualRecursionMode ? 'manual-selected' : 'is-mid',
+                        note: manualRecursionMode ? 'value entered' : 'integer only',
+                    });
                     continue;
                 }
                 sequence[idx] = value;
                 filledTerms += 1;
-                cellState.set(idx, { state: 'is-found', note: 'check recurrence' });
+                cellState.set(idx, {
+                    state: manualRecursionMode ? 'manual-selected' : 'is-found',
+                    note: manualRecursionMode ? 'value entered' : 'check recurrence',
+                });
             }
 
             for (let idx = 2; idx <= n; idx += 1) {
@@ -2339,8 +2513,8 @@
                     if (firstInvalidIndex === -1) {
                         firstInvalidIndex = idx;
                     }
-                    state.state = 'is-mid';
-                    state.note = 'fill previous terms';
+                    state.state = manualRecursionMode ? 'manual-selected' : 'is-mid';
+                    state.note = manualRecursionMode ? 'value entered' : 'fill previous terms';
                     continue;
                 }
                 const expected = prevOne + prevTwo;
@@ -2349,20 +2523,33 @@
                     if (firstInvalidIndex === -1) {
                         firstInvalidIndex = idx;
                     }
-                    state.state = 'is-mid';
-                    state.note = `expected ${expected}`;
+                    state.state = manualRecursionMode ? 'manual-selected' : 'is-mid';
+                    state.note = manualRecursionMode ? 'value entered' : `expected ${expected}`;
                 } else {
-                    state.state = 'is-found';
-                    state.note = `ok = ${expected}`;
+                    state.state = manualRecursionMode ? 'manual-selected' : 'is-found';
+                    state.note = manualRecursionMode ? 'value entered' : `ok = ${expected}`;
+                }
+            }
+
+            if (board) {
+                for (let idx = 0; idx < 2 && idx <= n; idx += 1) {
+                    const baseCell = board.querySelector(`.recursion-cell[data-index="${idx}"]`);
+                    if (baseCell) {
+                        baseCell.classList.remove('is-window', 'is-mid', 'is-found', 'is-discarded', 'manual-idle', 'manual-selected');
+                        baseCell.classList.add(manualRecursionMode ? 'manual-selected' : 'is-discarded');
+                    }
                 }
             }
 
             for (let idx = 2; idx <= n; idx += 1) {
                 const cell = board ? board.querySelector(`.recursion-cell[data-index="${idx}"]`) : null;
                 const note = board ? board.querySelector(`.recursion-note[data-note-index="${idx}"]`) : null;
-                const state = cellState.get(idx) || { state: 'is-window', note: 'enter integer' };
+                const state = cellState.get(idx) || {
+                    state: manualRecursionMode ? 'manual-idle' : 'is-window',
+                    note: 'enter integer',
+                };
                 if (cell) {
-                    cell.classList.remove('is-window', 'is-mid', 'is-found', 'is-discarded');
+                    cell.classList.remove('is-window', 'is-mid', 'is-found', 'is-discarded', 'manual-idle', 'manual-selected');
                     cell.classList.add(state.state);
                 }
                 if (note) {
@@ -2394,23 +2581,32 @@
                 progressFill.style.width = `${coverage}%`;
             }
             if (progressText) {
-                progressText.textContent = `Sequence coverage ${coverage}%`;
+                progressText.textContent = manualRecursionMode
+                    ? `Manual sequence coverage ${coverage}%`
+                    : `Sequence coverage ${coverage}%`;
             }
             if (hintText) {
                 if (solved) {
                     hintText.textContent = `Sequence is valid. Submit answer F${n} = ${formatActionNumber(sequence[n], 3, false)}.`;
                     hintText.classList.remove('error');
                 } else if (firstInvalidIndex !== -1) {
-                    hintText.textContent = `F${firstInvalidIndex} does not match recurrence. Fix this term first.`;
-                    hintText.classList.add('error');
+                    hintText.textContent = manualRecursionMode
+                        ? 'Fill terms manually. Use Hint to reveal recurrence guidance.'
+                        : `F${firstInvalidIndex} does not match recurrence. Fix this term first.`;
+                    hintText.classList.toggle('error', !manualRecursionMode);
                 } else {
-                    hintText.textContent = 'Enter integer values term-by-term using Fibonacci recurrence.';
+                    hintText.textContent = manualRecursionMode
+                        ? 'Enter Fibonacci terms manually. Hint unlocks guided recurrence checks.'
+                        : 'Click a term card to auto-fill that Fibonacci value, or type it directly.';
                     hintText.classList.remove('error');
                 }
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (solved) {
+                if (manualRecursionMode) {
+                    shell.badge.textContent = solved ? `Manual F${n}` : 'Manual Sequence';
+                    shell.badge.classList.add('badge-primary');
+                } else if (solved) {
                     shell.badge.textContent = 'Valid';
                     shell.badge.classList.add('badge-accent');
                 } else if (firstInvalidIndex !== -1) {
@@ -2434,7 +2630,7 @@
                 }
             }
 
-            setDerivedAnswer(solved ? sequence[n] : -1);
+            setDerivedAnswer(solved ? sequence[n] : '');
             setActionPayload({ mode: 'recursion_sequence', sequence: payloadSequence });
         }
 
@@ -2453,6 +2649,38 @@
                 render();
             });
         });
+
+        if (board) {
+            board.querySelectorAll('.recursion-cell[data-index]').forEach((cell) => {
+                cell.addEventListener('click', (event) => {
+                    if (!derivedAnswersEnabled) {
+                        return;
+                    }
+                    const idx = Number(cell.dataset.index);
+                    if (!Number.isInteger(idx) || idx < 2) {
+                        return;
+                    }
+                    const input = inputByIndex.get(idx);
+                    if (!input) {
+                        return;
+                    }
+                    if (event.target instanceof HTMLElement && event.target.closest('input')) {
+                        return;
+                    }
+                    const nextValue = String(fibonacciAt(idx));
+                    const prev = input.value;
+                    if (prev !== nextValue) {
+                        history.push({ idx, prev });
+                        if (history.length > 400) {
+                            history.shift();
+                        }
+                    }
+                    input.value = nextValue;
+                    input.dataset.prevValue = nextValue;
+                    render();
+                });
+            });
+        }
 
         if (undoBtn) {
             undoBtn.addEventListener('click', () => {
@@ -4283,7 +4511,7 @@
                     <div><strong>Tree depth:</strong> ${maxDepth}</div>
                     <div><strong>Start operator:</strong> MIN</div>
                 </div>
-                <div class="binary-search-legend" id="linearLegend" aria-hidden="true">
+                <div class="binary-search-legend" id="minimaxLegend" aria-hidden="true">
                     <span class="binary-search-chip is-window">Current level values</span>
                     <span class="binary-search-chip is-mid">Pair grouping</span>
                     <span class="binary-search-chip is-found">Next folded level</span>
@@ -4337,12 +4565,15 @@
             const preview = done ? [level[0]] : previewLevel(level, isMax);
             const depthDone = Math.max(0, maxDepth - Math.log2(level.length));
             const progress = Math.max(0, Math.min(100, Math.round((depthDone / maxDepth) * 100)));
+            const manualMinimaxMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             if (board) {
                 board.innerHTML = level.map((value, idx) => {
-                    const stateClass = done
-                        ? 'is-found'
-                        : (Math.floor(idx / 2) % 2 === 0 ? 'is-window' : 'is-mid');
+                    const stateClass = manualMinimaxMode
+                        ? 'manual-selected'
+                        : done
+                            ? 'is-found'
+                            : (Math.floor(idx / 2) % 2 === 0 ? 'is-window' : 'is-mid');
                     return `
                         <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${stateClass}" disabled>
                             <span class="binary-search-main">${formatActionNumber(value, 3, false)}</span>
@@ -4353,7 +4584,7 @@
             }
             if (previewBoard) {
                 previewBoard.innerHTML = preview.map((value, idx) => `
-                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell is-found" disabled>
+                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${manualMinimaxMode ? 'manual-idle' : 'is-found'}" disabled>
                         <span class="binary-search-main">${formatActionNumber(value, 3, false)}</span>
                         <span class="binary-search-sub">n${idx}</span>
                     </button>
@@ -4362,7 +4593,9 @@
             if (opLabel) {
                 opLabel.textContent = done
                     ? 'Root value ready (all folds complete).'
-                    : `Current operator: ${operator}. Pair every two adjacent values and fold.`;
+                    : manualMinimaxMode
+                        ? 'Manual fold active. Use Apply Fold to collapse the current level.'
+                        : `Current operator: ${operator}. Pair every two adjacent values and fold.`;
             }
             if (metaPrimary) {
                 metaPrimary.textContent = `Current level size: ${level.length} | Next level size: ${preview.length} | Depth: ${depthDone}/${maxDepth}`;
@@ -4373,13 +4606,17 @@
             if (metaTertiary) {
                 metaTertiary.textContent = done
                     ? `Final root value = ${level[0]}`
-                    : `Rule: ${operator}(a, b) for each pair -> next level.`;
+                    : manualMinimaxMode
+                        ? `Current values ready to fold. Hint restores guided operator help.`
+                        : `Rule: ${operator}(a, b) for each pair -> next level.`;
             }
             if (progressFill) {
                 progressFill.style.width = `${progress}%`;
             }
             if (progressText) {
-                progressText.textContent = `Minimax folding progress ${progress}%`;
+                progressText.textContent = manualMinimaxMode
+                    ? `Manual fold progress ${progress}%`
+                    : `Minimax folding progress ${progress}%`;
             }
             if (hintText) {
                 if (feedback) {
@@ -4389,7 +4626,9 @@
                     hintText.textContent = 'Root value is ready. Submit your answer.';
                     hintText.classList.remove('error');
                 } else {
-                    hintText.textContent = `Click Apply Fold to compute ${operator} for every pair.`;
+                    hintText.textContent = manualMinimaxMode
+                        ? 'Fold pairs manually. Use Hint to unlock guided fold state.'
+                        : `Click Apply Fold to compute ${operator} for every pair.`;
                     hintText.classList.remove('error');
                 }
             }
@@ -4400,10 +4639,17 @@
                 undoBtn.disabled = history.length === 0;
             }
             if (shell.badge) {
-                shell.badge.textContent = done ? `Root ${level[0]}` : `${operator} Fold`;
-                shell.badge.classList.toggle('badge-accent', done);
-                shell.badge.classList.toggle('badge-primary', !done);
-                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
+                if (done) {
+                    shell.badge.textContent = `Root ${level[0]}`;
+                    shell.badge.classList.add('badge-accent');
+                } else if (manualMinimaxMode) {
+                    shell.badge.textContent = 'Manual Fold';
+                    shell.badge.classList.add('badge-primary');
+                } else {
+                    shell.badge.textContent = `${operator} Fold`;
+                    shell.badge.classList.add('badge-primary');
+                }
             }
             setDerivedAnswer(done ? level[0] : '');
             setActionPayload({
@@ -7577,7 +7823,7 @@
                     <div><strong>Operations:</strong> ${operations.length}</div>
                     <div><strong>Initial size:</strong> ${initial.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="queueLegend" aria-hidden="true">
                     <span class="binary-search-chip is-mid">Top</span>
                     <span class="binary-search-chip is-window">Stack Body</span>
                     <span class="binary-search-chip is-found">Final Top</span>
@@ -7806,7 +8052,7 @@
                     <div><strong>Operations:</strong> ${operations.length}</div>
                     <div><strong>Initial size:</strong> ${initial.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="queueLegend" aria-hidden="true">
                     <span class="binary-search-chip is-mid">Front</span>
                     <span class="binary-search-chip is-window">Queue Body</span>
                     <span class="binary-search-chip is-low">Rear</span>
@@ -7899,9 +8145,10 @@
             if (!board) {
                 return;
             }
+            const manualQueueMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             if (!queue.length) {
                 board.innerHTML = `
-                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell is-discarded" disabled>
+                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${manualQueueMode ? 'manual-idle' : 'is-discarded'}" disabled>
                         <span class="binary-search-main">empty</span>
                         <span class="binary-search-sub">queue has no nodes</span>
                     </button>
@@ -7912,8 +8159,8 @@
                 .map((value, idx) => {
                     const isFront = idx === 0;
                     const isRear = idx === queue.length - 1;
-                    let stateClass = isFront ? 'is-mid' : 'is-window';
-                    if (isComplete && isFront) {
+                    let stateClass = manualQueueMode ? 'manual-selected' : (isFront ? 'is-mid' : 'is-window');
+                    if (!manualQueueMode && isComplete && isFront) {
                         stateClass = 'is-found';
                     }
                     const extraClass = isRear && !isFront ? ' is-low' : '';
@@ -7934,6 +8181,7 @@
             const snapshot = computeState(applied);
             const queue = snapshot.queue;
             const isComplete = applied >= operations.length;
+            const manualQueueMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const front = queue.length ? formatActionNumber(queue[0], 3, false) : 'empty';
             const rear = queue.length ? formatActionNumber(queue[queue.length - 1], 3, false) : 'empty';
             const next = operations[applied];
@@ -7954,22 +8202,31 @@
                 progressFill.style.width = `${progress}%`;
             }
             if (progressText) {
-                progressText.textContent = `Progress ${progress}%`;
+                progressText.textContent = manualQueueMode
+                    ? `Manual queue progress ${progress}%`
+                    : `Progress ${progress}%`;
             }
             if (hint) {
                 if (isComplete) {
                     hint.textContent = `Queue simulation complete. Final front is ${front}. Submit your answer.`;
                     hint.classList.remove('error');
                 } else {
-                    hint.textContent = `Last applied: ${snapshot.lastAction}. Continue with ${opText(next)}.`;
+                    hint.textContent = manualQueueMode
+                        ? `Apply operations manually. Current step ${applied}/${operations.length}.`
+                        : `Last applied: ${snapshot.lastAction}. Continue with ${opText(next)}.`;
                     hint.classList.remove('error');
                 }
             }
             if (shell.badge) {
-                shell.badge.textContent = isComplete ? `Front ${front}` : `Step ${applied}/${operations.length}`;
-                shell.badge.classList.toggle('badge-accent', isComplete);
-                shell.badge.classList.toggle('badge-primary', !isComplete);
-                shell.badge.classList.remove('badge-danger');
+                shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
+                if (manualQueueMode) {
+                    shell.badge.textContent = isComplete ? `Manual Front ${front}` : 'Manual Queue';
+                    shell.badge.classList.add('badge-primary');
+                } else {
+                    shell.badge.textContent = isComplete ? `Front ${front}` : `Step ${applied}/${operations.length}`;
+                    shell.badge.classList.toggle('badge-accent', isComplete);
+                    shell.badge.classList.toggle('badge-primary', !isComplete);
+                }
             }
             if (applyBtn) applyBtn.disabled = isComplete;
             if (undoBtn) undoBtn.disabled = applied === 0;
@@ -8956,7 +9213,7 @@
                         <div><strong>Target Order:</strong> Non-decreasing</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="sortingLegend" aria-hidden="true">
                         <span class="binary-search-chip is-window">Left Run</span>
                         <span class="binary-search-chip is-discarded">Right Run</span>
                         <span class="binary-search-chip is-mid">Heads</span>
@@ -9331,7 +9588,7 @@
                         <div><strong>Target Order:</strong> Non-decreasing</div>
                         <div><strong>Length:</strong> ${values.length}</div>
                     </div>
-                    <div class="binary-search-legend" aria-hidden="true">
+                    <div class="binary-search-legend" id="sortingLegend" aria-hidden="true">
                         <span class="binary-search-chip is-found">Fixed Pivot</span>
                         <span class="binary-search-chip is-window">Left Zone (<= pivot)</span>
                         <span class="binary-search-chip is-mid">Scan / Pivot</span>
@@ -9478,18 +9735,21 @@
                 if (!board) {
                     return;
                 }
+                const manualQuickMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = current
                     .map((value, idx) => {
                         let stateClass = 'is-discarded';
                         if (finished || fixedIndices.has(idx)) {
-                            stateClass = 'is-found';
+                            stateClass = manualQuickMode ? 'manual-selected' : 'is-found';
                         } else if (partition) {
                             const inSegment = idx >= partition.low && idx <= partition.high;
                             const inLeftZone = idx >= partition.low && idx <= partition.boundary;
                             const isPivot = idx === partition.pivotIndex;
                             const isScan = partition.scan < partition.high && idx === partition.scan;
 
-                            if (isPivot || isScan) {
+                            if (manualQuickMode) {
+                                stateClass = (finished || isPivot || isScan) ? 'manual-selected' : 'manual-idle';
+                            } else if (isPivot || isScan) {
                                 stateClass = 'is-mid';
                             } else if (inLeftZone) {
                                 stateClass = 'is-window';
@@ -9511,6 +9771,7 @@
                 renderBoard();
                 const answer = current.map((value) => formatToken(value)).join(' ');
                 const progress = current.length ? Math.round((fixedIndices.size / current.length) * 100) : 100;
+                const manualQuickMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
                 if (metaPrimary) {
                     metaPrimary.textContent = finished
@@ -9536,24 +9797,30 @@
                     progressFill.style.width = `${progress}%`;
                 }
                 if (progressText) {
-                    progressText.textContent = `Fixed pivots: ${fixedIndices.size}/${current.length}`;
+                    progressText.textContent = manualQuickMode
+                        ? `Manual quick-sort progress ${progress}%`
+                        : `Fixed pivots: ${fixedIndices.size}/${current.length}`;
                 }
                 if (hint) {
                     if (feedback) {
                         hint.textContent = feedback;
-                        hint.classList.add('error');
+                        hint.classList.toggle('error', !manualQuickMode);
                     } else if (finished) {
                         hint.textContent = 'Quick Sort state complete. Submit your answer.';
                         hint.classList.remove('error');
                     } else if (partition.scan < partition.high) {
                         const expected = expectedMoveLeft();
                         const token = formatToken(current[partition.scan]);
-                        hint.textContent = expected
-                            ? `${token} <= pivot. Click Move To Left (<= Pivot).`
-                            : `${token} > pivot. Click Keep On Right (> Pivot).`;
+                        hint.textContent = manualQuickMode
+                            ? 'Partition manually. Use Hint to reveal the guided move.'
+                            : expected
+                                ? `${token} <= pivot. Click Move To Left (<= Pivot).`
+                                : `${token} > pivot. Click Keep On Right (> Pivot).`;
                         hint.classList.remove('error');
                     } else {
-                        hint.textContent = 'Segment scan complete. Click Place Pivot.';
+                        hint.textContent = manualQuickMode
+                            ? 'Scan complete. Place pivot when ready.'
+                            : 'Segment scan complete. Click Place Pivot.';
                         hint.classList.remove('error');
                     }
                 }
@@ -9574,7 +9841,10 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualQuickMode) {
+                        shell.badge.textContent = finished ? 'Manual Sorted' : 'Manual Partition';
+                        shell.badge.classList.add('badge-primary');
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Step';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -9732,6 +10002,7 @@
             if (!finished) {
                 startNextPartition();
             }
+            actionModeRerender = render;
             render();
             return true;
         }
@@ -10442,7 +10713,7 @@
                     <div><strong>Query x:</strong> ${formatToken(queryX)}</div>
                     <div><strong>Points:</strong> ${points.length}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="neuralLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Selected point</span>
                     <span class="binary-search-chip is-window">Compatible x (usable)</span>
                     <span class="binary-search-chip is-mid">Vertical-line conflict</span>
@@ -10672,7 +10943,7 @@
                     <div><strong>Given z:</strong> ${formatActionNumber(z, 4, true)}</div>
                     <div><strong>Expected sigma(z):</strong> ${formatProb(expectedProbability)}</div>
                 </div>
-                <div class="binary-search-legend" aria-hidden="true">
+                <div class="binary-search-legend" id="neuralLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Exact (3dp) match</span>
                     <span class="binary-search-chip is-window">Near expected</span>
                     <span class="binary-search-chip is-mid">Large error</span>
@@ -11687,22 +11958,28 @@
             const hasSelection = selectedLabel === 'spam' || selectedLabel === 'ham';
             const isCorrect = hasSelection && selectedLabel === expectedLabel;
             const confidence = totalScore > 0 ? Math.round((Math.max(spamShare, hamShare)) * 100) : 50;
+            const manualNaiveMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             buttons.forEach((button) => {
                 const label = String(button.dataset.label || '');
                 button.classList.remove('is-found', 'is-window', 'is-mid', 'is-discarded');
-                if (label === selectedLabel) {
-                    button.classList.add('is-found');
-                    return;
-                }
-                if (isTie) {
-                    button.classList.add(hasSelection ? 'is-discarded' : 'is-window');
-                    return;
-                }
-                if (label === expectedLabel) {
-                    button.classList.add('is-window');
+                button.classList.remove('manual-idle', 'manual-selected');
+                if (manualNaiveMode) {
+                    button.classList.add(label === selectedLabel ? 'manual-selected' : 'manual-idle');
                 } else {
-                    button.classList.add('is-mid');
+                    if (label === selectedLabel) {
+                        button.classList.add('is-found');
+                        return;
+                    }
+                    if (isTie) {
+                        button.classList.add(hasSelection ? 'is-discarded' : 'is-window');
+                        return;
+                    }
+                    if (label === expectedLabel) {
+                        button.classList.add('is-window');
+                    } else {
+                        button.classList.add('is-mid');
+                    }
                 }
             });
 
@@ -11728,20 +12005,29 @@
                     hintText.textContent = feedback;
                     hintText.classList.add('error');
                 } else if (!hasSelection) {
-                    hintText.textContent = 'Pick spam or ham based on which score is larger.';
+                    hintText.textContent = manualNaiveMode
+                        ? 'Choose spam or ham manually. Hint unlocks the guided pick.'
+                        : 'Pick spam or ham based on which score is larger.';
                     hintText.classList.remove('error');
                 } else if (isCorrect) {
-                    hintText.textContent = `Selection aligns with comparison rule (${expectedLabel}).`;
+                    hintText.textContent = manualNaiveMode
+                        ? `Selected ${selectedLabel}. Submit if this is your final pick.`
+                        : `Selection aligns with comparison rule (${expectedLabel}).`;
                     hintText.classList.remove('error');
                 } else {
-                    hintText.textContent = `Selected label has lower score than ${expectedLabel}.`;
-                    hintText.classList.add('error');
+                    hintText.textContent = manualNaiveMode
+                        ? `Selected ${selectedLabel}. Change it or submit your choice.`
+                        : `Selected label has lower score than ${expectedLabel}.`;
+                    hintText.classList.toggle('error', !manualNaiveMode);
                 }
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
                 if (!hasSelection) {
                     shell.badge.textContent = 'Pick Label';
+                    shell.badge.classList.add('badge-primary');
+                } else if (manualNaiveMode) {
+                    shell.badge.textContent = `Selected (${selectedLabel})`;
                     shell.badge.classList.add('badge-primary');
                 } else if (isCorrect) {
                     shell.badge.textContent = `Valid (${selectedLabel})`;
@@ -11913,8 +12199,10 @@
         const hintText = shell.body.querySelector('#neuralHint');
         markGuidanceControls(setZBtn, autoBtn, autoAllBtn);
         let feedback = '';
+        let touched = false;
 
         function render() {
+            const manualNeuralMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const linear = Number(linearInput ? linearInput.value : Number.NaN);
             const linearValid = Number.isFinite(linear);
             const output = setOutputValue(Number(outputSlider ? outputSlider.value : 0.5));
@@ -11947,7 +12235,9 @@
                 const progress = Math.round(((linearScore + outputScore) / 2) * 100);
                 progressFill.style.width = `${progress}%`;
                 if (progressText) {
-                    progressText.textContent = `Forward-pass alignment ${progress}%`;
+                    progressText.textContent = manualNeuralMode
+                        ? `Manual forward-pass progress ${progress}%`
+                        : `Forward-pass alignment ${progress}%`;
                 }
             }
             if (hintText) {
@@ -11955,16 +12245,22 @@
                     hintText.textContent = feedback;
                     hintText.classList.add('error');
                 } else if (!linearValid) {
-                    hintText.textContent = 'Enter z, then adjust output to match sigma(z).';
+                    hintText.textContent = manualNeuralMode
+                        ? 'Enter z and output manually. Hint unlocks guided values.'
+                        : 'Enter z, then adjust output to match sigma(z).';
                     hintText.classList.remove('error');
                 } else if (!linearOk) {
-                    hintText.textContent = 'z is not correct yet. Recompute z = w1*x1 + w2*x2 + b.';
-                    hintText.classList.add('error');
+                    hintText.textContent = manualNeuralMode
+                        ? 'z entered. Adjust it or continue manually.'
+                        : 'z is not correct yet. Recompute z = w1*x1 + w2*x2 + b.';
+                    hintText.classList.toggle('error', !manualNeuralMode);
                 } else if (outputExact) {
                     hintText.textContent = 'z and output both aligned. Submit now.';
                     hintText.classList.remove('error');
                 } else {
-                    hintText.textContent = 'z is valid. Tune output to expected sigma(z) at 3 decimals.';
+                    hintText.textContent = manualNeuralMode
+                        ? 'z entered. Tune output manually or submit your current result.'
+                        : 'z is valid. Tune output to expected sigma(z) at 3 decimals.';
                     hintText.classList.remove('error');
                 }
             }
@@ -11973,6 +12269,9 @@
                 shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
                 if (!linearValid) {
                     shell.badge.textContent = 'Enter z';
+                    shell.badge.classList.add('badge-primary');
+                } else if (manualNeuralMode) {
+                    shell.badge.textContent = 'Manual Forward';
                     shell.badge.classList.add('badge-primary');
                 } else if (!linearOk) {
                     shell.badge.textContent = 'z mismatch';
@@ -11985,7 +12284,8 @@
                     shell.badge.classList.add('badge-primary');
                 }
             }
-            setDerivedAnswer(linearValid ? outputFormatted : '');
+            const shouldFill = derivedAnswersEnabled || (allowsManualDerivedAnswer() && touched && linearValid);
+            setDerivedAnswer(shouldFill ? outputFormatted : '');
             setActionPayload({
                 mode: 'neural_forward',
                 linear_sum: linearValid ? roundTo(linear, 3) : null,
@@ -11994,16 +12294,21 @@
         }
 
         if (linearInput) {
-            linearInput.addEventListener('input', render);
+            linearInput.addEventListener('input', () => {
+                touched = true;
+                render();
+            });
             linearInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
+                    touched = true;
                     render();
                 }
             });
         }
         if (outputSlider) {
             outputSlider.addEventListener('input', () => {
+                touched = true;
                 if (outputInput) {
                     outputInput.value = formatActionNumber(Number(outputSlider.value), 3, true);
                 }
@@ -12012,6 +12317,7 @@
         }
         if (outputInput) {
             outputInput.addEventListener('input', () => {
+                touched = true;
                 const next = clampUnit(Number(outputInput.value));
                 if (outputSlider) {
                     outputSlider.value = formatActionNumber(next, 3, true);
@@ -12021,12 +12327,14 @@
             outputInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
+                    touched = true;
                     render();
                 }
             });
         }
         if (setZBtn) {
             setZBtn.addEventListener('click', () => {
+                touched = true;
                 if (linearInput) {
                     linearInput.value = formatActionNumber(expectedLinear, 3, true);
                 }
@@ -12036,6 +12344,7 @@
         }
         if (autoBtn) {
             autoBtn.addEventListener('click', () => {
+                touched = true;
                 const linear = Number(linearInput ? linearInput.value : Number.NaN);
                 if (!Number.isFinite(linear)) {
                     feedback = 'Enter valid z before auto-setting sigma(z).';
@@ -12049,6 +12358,7 @@
         }
         if (autoAllBtn) {
             autoAllBtn.addEventListener('click', () => {
+                touched = true;
                 if (linearInput) {
                     linearInput.value = formatActionNumber(expectedLinear, 3, true);
                 }
@@ -12059,6 +12369,7 @@
         }
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
+                touched = false;
                 if (linearInput) {
                     linearInput.value = '';
                 }
@@ -12391,6 +12702,37 @@
         return Boolean(entry && entry.url);
     }
 
+    function getSequenceEntryStatus(entry) {
+        if (!entry) {
+            return null;
+        }
+        const state = entry.progressState || (entry.isUnlocked === false ? 'locked' : '');
+        if (!state) {
+            return null;
+        }
+        if (state === 'solved') {
+            return { state: 'solved', label: 'Solved', icon: 'bi-check-circle-fill' };
+        }
+        if (state === 'locked') {
+            return { state: 'locked', label: 'Locked', icon: 'bi-lock' };
+        }
+        return { state: 'unlocked', label: 'Unlocked', icon: 'bi-unlock' };
+    }
+
+    function renderSequenceStatus(entry, index, total, suffix = '') {
+        const meta = getSequenceEntryStatus(entry);
+        const safeLabel = entry && entry.label ? escapeHtml(entry.label) : 'Algorithm Type';
+        const safeSuffix = suffix ? ` ${escapeHtml(suffix)}` : '';
+        return `
+            ${meta ? `
+                <span class="badge badge-secondary category-sequence-status-badge is-${meta.state}">
+                    <i class="bi ${meta.icon} status-icon"></i> ${meta.label}
+                </span>
+            ` : ''}
+            <span class="category-sequence-status-text">${index + 1}/${total} - ${safeLabel}${safeSuffix}</span>
+        `;
+    }
+
     function findSequenceIndex(entries, startIndex, direction) {
         if (!Array.isArray(entries) || !entries.length) {
             return -1;
@@ -12452,7 +12794,8 @@
             const currentEntry = state.entries[state.index];
             const prevIndex = findSequenceIndex(state.entries, state.index - 1, -1);
             const nextIndex = findSequenceIndex(state.entries, state.index + 1, 1);
-            statusNode.textContent = `${state.index + 1}/${state.entries.length} - ${currentEntry.label}`;
+            const statusSuffix = currentEntry && currentEntry.isUnlocked === false ? '(locked; will skip)' : '';
+            statusNode.innerHTML = renderSequenceStatus(currentEntry, state.index, state.entries.length, statusSuffix);
             prevBtn.disabled = prevIndex < 0;
             nextBtn.disabled = nextIndex < 0;
             playBtn.disabled = state.entries.length < 2;

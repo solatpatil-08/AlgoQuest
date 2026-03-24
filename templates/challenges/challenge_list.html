@@ -177,15 +177,15 @@
                                             </a>
                                             {% if request.user.is_authenticated %}
                                                 {% if challenge.id in solved_ids %}
-                                                    <span class="badge badge-secondary challenge-status-badge is-solved">
+                                                    <span class="badge badge-secondary challenge-status-badge is-solved" data-progress-state="solved">
                                                         <i class="bi bi-check-circle-fill status-icon status-icon-solved"></i> Solved
                                                     </span>
                                                 {% elif challenge.id in unlocked_ids %}
-                                                    <span class="badge badge-secondary challenge-status-badge is-unlocked">
+                                                    <span class="badge badge-secondary challenge-status-badge is-unlocked" data-progress-state="unlocked">
                                                         <i class="bi bi-unlock status-icon status-icon-unlocked"></i> Unlocked
                                                     </span>
                                                 {% else %}
-                                                    <span class="badge badge-secondary challenge-status-badge is-locked">
+                                                    <span class="badge badge-secondary challenge-status-badge is-locked" data-progress-state="locked">
                                                         <i class="bi bi-lock status-icon status-icon-locked"></i> Locked
                                                     </span>
                                                 {% endif %}

@@ -189,9 +189,9 @@
                 <rect x="${width - 186}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"></rect>
                 <text x="${width - 172}" y="${topPad - 5}" font-size="9.5" fill="#334155">Node</text>
                 <rect x="${width - 126}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#86efac" stroke="#166534" stroke-width="1"></rect>
-                <text x="${width - 112}" y="${topPad - 5}" font-size="9.5" fill="#334155">Window</text>
+                <text class="exec-3d-window-focus-label" x="${width - 112}" y="${topPad - 5}" font-size="9.5" fill="#334155">Window</text>
                 <rect x="${width - 62}" y="${topPad - 14}" width="10" height="10" rx="2" fill="#fde047" stroke="#92400e" stroke-width="1"></rect>
-                <text x="${width - 48}" y="${topPad - 5}" font-size="9.5" fill="#334155">Focus</text>
+                <text class="exec-3d-window-focus-label" x="${width - 48}" y="${topPad - 5}" font-size="9.5" fill="#334155">Focus</text>
             </g>
         `;
 
@@ -371,7 +371,7 @@
                 ? `<text x="${left + (cardWidth / 2)}" y="${baseY - 18}" text-anchor="middle" font-size="12" fill="#64748b">EMPTY STACK</text>`
                 : ''}
         `;
-        return render3DScene(`${frame}${cards}${labels}`, width, height, '3D stack state', 'exec-3d-strip');
+        return render3DScene(`${frame}${cards}${labels}`, width, height, '3D stack state', 'exec-3d-strip exec-3d-recursion');
     }
 
     function renderQueueState3D(state, activeIndex = null) {
@@ -1959,7 +1959,7 @@
             </g>
         `;
 
-        return render3DScene(`${defs}${floor}${segmentOverlay}${legend}${cells}`, width, height, '3D quick sort visualization', 'exec-3d-bst');
+        return render3DScene(`${defs}${floor}${segmentOverlay}${legend}${cells}`, width, height, '3D quick sort visualization', 'exec-3d-bst exec-3d-quick-sort');
     }
 
     function renderHeapSortTrack3D(values, options = {}) {
@@ -2726,7 +2726,7 @@
             ${metricPill(166, 70, `w1=${formatNumber(w1, 3, true)}`, '#60a5fa', isW1Active)}
             ${metricPill(166, 168, `w2=${formatNumber(w2, 3, true)}`, '#34d399', isW2Active)}
             ${metricPill(258, 58, `b=${formatNumber(b, 3, true)}`, '#fb923c', isLinearActive)}
-        `, width, height, '3D single neuron network', 'exec-3d-ml');
+        `, width, height, '3D single neuron network', 'exec-3d-ml exec-3d-neural');
     }
 
     function buildVisualizationPrompt(algorithmType, payload) {
@@ -7035,7 +7035,7 @@
                             fill="${inActivePair ? '#bfdbfe' : '#e2e8f0'}"></polygon>
                         <rect x="${x}" y="${topRowY}" width="${cellWidth}" height="${cellHeight}" rx="9" fill="${fill}" stroke="${stroke}" stroke-width="${inActivePair ? '2.1' : '1.3'}"></rect>
                         <text x="${x + (cellWidth / 2)}" y="${topRowY + 22}" text-anchor="middle" font-size="13.2" class="exec-ml-text">${formatNumber(value)}</text>
-                        <text x="${x + (cellWidth / 2)}" y="${topRowY - 7}" text-anchor="middle" font-size="9.8" class="exec-ml-text exec-ml-text-muted">i${idx}</text>
+                        <text x="${x + (cellWidth / 2)}" y="${topRowY - 16}" text-anchor="middle" font-size="9.8" class="exec-ml-text exec-ml-text-muted">i${idx}</text>
                     </g>
                 `;
             }).join('');
@@ -7050,7 +7050,7 @@
                             fill="${isFocus ? '#bbf7d0' : '#dbeafe'}"></polygon>
                         <rect x="${x}" y="${bottomRowY}" width="${nextCellWidth}" height="${cellHeight}" rx="9" fill="${isFocus ? '#dcfce7' : '#eff6ff'}" stroke="${isFocus ? '#16a34a' : '#3b82f6'}" stroke-width="${isFocus ? '2.1' : '1.3'}"></rect>
                         <text x="${x + (nextCellWidth / 2)}" y="${bottomRowY + 22}" text-anchor="middle" font-size="13.2" class="exec-ml-text">${formatNumber(value)}</text>
-                        <text x="${x + (nextCellWidth / 2)}" y="${bottomRowY - 7}" text-anchor="middle" font-size="9.8" class="exec-ml-text exec-ml-text-muted">n${idx}</text>
+                        <text x="${x + (nextCellWidth / 2)}" y="${bottomRowY - 16}" text-anchor="middle" font-size="9.8" class="exec-ml-text exec-ml-text-muted">n${idx}</text>
                     </g>
                 `;
             }).join('');
@@ -7078,14 +7078,14 @@
                     </linearGradient>
                 </defs>
                 <rect x="12" y="30" width="${width - 24}" height="${height - 44}" rx="16" fill="url(#${uniqueId}Bg)" stroke="var(--exec-ml-floor-stroke)" stroke-width="1.1"></rect>
-                <text x="24" y="20" font-size="10.8" class="exec-ml-text exec-ml-text-axis">Current Level (${operator})</text>
-                <text x="24" y="146" font-size="10.8" class="exec-ml-text exec-ml-text-axis">Next Fold Level</text>
+                <text x="24" y="18" font-size="10.8" class="exec-ml-text exec-ml-text-axis">Current Level (${operator})</text>
+                <text x="24" y="138" font-size="10.8" class="exec-ml-text exec-ml-text-axis">Next Fold Level</text>
                 <rect x="${width - 154}" y="10" width="132" height="22" rx="11" fill="${operator === 'MAX' ? 'rgba(147,51,234,0.16)' : 'rgba(59,130,246,0.16)'}" stroke="${operator === 'MAX' ? '#9333ea' : '#2563eb'}" stroke-width="1.2"></rect>
                 <text x="${width - 88}" y="25" text-anchor="middle" font-size="11" class="exec-ml-text ${operator === 'MAX' ? 'exec-ml-text-query' : 'exec-ml-text-axis'}">${operator} fold</text>
                 ${topCells}
                 ${connectors}
                 ${bottomCells}
-            `, width, height, '3D minimax fold state', 'exec-3d-bst');
+            `, width, height, '3D minimax fold state', 'exec-3d-bst exec-3d-ml exec-3d-minimax');
         }
 
         function renderMinimaxStatus(stepLabel, detailLabel, options = {}) {

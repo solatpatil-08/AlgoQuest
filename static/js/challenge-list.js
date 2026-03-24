@@ -147,6 +147,45 @@ document.addEventListener('DOMContentLoaded', function () {
         return !icon.classList.contains('bi-lock');
     }
 
+    function extractProgressState(cardEl) {
+        if (!cardEl) {
+            return null;
+        }
+        var statusBadge = cardEl.querySelector('.challenge-status-badge');
+        if (!statusBadge) {
+            return null;
+        }
+        var explicitState = statusBadge.getAttribute('data-progress-state');
+        if (explicitState === 'solved' || explicitState === 'unlocked' || explicitState === 'locked') {
+            return explicitState;
+        }
+        if (statusBadge.classList.contains('is-solved')) {
+            return 'solved';
+        }
+        if (statusBadge.classList.contains('is-locked')) {
+            return 'locked';
+        }
+        if (statusBadge.classList.contains('is-unlocked')) {
+            return 'unlocked';
+        }
+        return null;
+    }
+
+    function buildSequenceStatusBadge(entry) {
+        if (!entry) {
+            return '';
+        }
+        var state = entry.progressState || (entry.isUnlocked === false ? 'locked' : '');
+        if (!state) {
+            return '';
+        }
+        var label = state === 'solved' ? 'Solved' : (state === 'locked' ? 'Locked' : 'Unlocked');
+        var icon = state === 'solved' ? 'bi-check-circle-fill' : (state === 'locked' ? 'bi-lock' : 'bi-unlock');
+        return '<span class="badge badge-secondary challenge-status-badge is-' + state + '">'
+            + '<i class="bi ' + icon + ' status-icon"></i> ' + label
+            + '</span>';
+    }
+
     function collectCategoryEntries(category) {
         var sections = document.querySelectorAll('.category-section');
         var unique = {};
@@ -194,6 +233,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     url: href,
                     algorithmType: algorithmType,
                     isUnlocked: extractUnlockState(card),
+                    progressState: extractProgressState(card),
                 });
             });
         });
@@ -326,7 +366,8 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (!supportsExecution(entry)) {
                 playableLabel = ' (no execution model; will skip)';
             }
-            statusNode.textContent = (state.index + 1) + '/' + entries.length + ' - ' + entry.label + playableLabel;
+            statusNode.innerHTML = buildSequenceStatusBadge(entry)
+                + '<span>' + (state.index + 1) + '/' + entries.length + ' - ' + entry.label + playableLabel + '</span>';
             prevBtn.disabled = findPlayableIndex(entries, state.index - 1, -1) < 0;
             nextBtn.disabled = findPlayableIndex(entries, state.index + 1, 1) < 0;
             playBtn.disabled = entries.length < 2;
