@@ -320,7 +320,7 @@
             </g>
         `;
 
-        return render3DScene(`${ruler}${rows}${prefixBadge}${axes}`, width, height, 'Word comparison rail');
+        return render3DScene(`${ruler}${rows}${prefixBadge}${axes}`, width, height, 'Word comparison rail', 'exec-3d-string-algorithm');
     }
 
     function renderStackState3D(state, activeIndex = null) {
@@ -1606,7 +1606,7 @@
             </g>
         `;
 
-        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D selection sort visualization', 'exec-3d-bst');
+        return render3DScene(`${defs}${floor}${legend}${cells}`, width, height, '3D selection sort visualization', 'exec-3d-bst exec-3d-selection-sort');
     }
 
     function renderInsertionSortTrack3D(values, options = {}) {

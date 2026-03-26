@@ -191,10 +191,12 @@
     #actionGameHost.aq-manual-mode #naiveLegend,
     #actionGameHost.aq-manual-mode #neuralLegend,
     #actionGameHost.aq-manual-mode #queueLegend,
+    #actionGameHost.aq-manual-mode #stackLegend,
     #actionGameHost.aq-manual-mode #binaryLegend,
     #actionGameHost.aq-manual-mode #logisticLegend,
     #actionGameHost.aq-manual-mode #mathLegend,
-    #actionGameHost.aq-manual-mode #recursionLegend {
+    #actionGameHost.aq-manual-mode #recursionLegend,
+    #actionGameHost.aq-manual-mode #stringLegend {
         display: none !important;
     }
 
@@ -844,6 +846,74 @@
         color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
     }
 
+    #actionGameHost.aq-manual-mode #stackBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #stackBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #stackBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #stackBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #stackBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #stackBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
+    #actionGameHost.aq-manual-mode #stringWordBoard .binary-search-cell.manual-idle {
+        border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
+        background: transparent !important;
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #stringWordBoard .binary-search-cell.manual-selected {
+        border-color: color-mix(in srgb, #0ea5e9 48%, var(--aq-border) 52%) !important;
+        background: color-mix(in srgb, #e0f2fe 74%, var(--aq-card) 26%) !important;
+        color: #0c4a6e !important;
+        box-shadow: none !important;
+    }
+
+    #actionGameHost.aq-manual-mode #stringWordBoard .binary-search-cell .binary-search-sub {
+        color: rgba(51, 65, 85, 0.82) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #stringWordBoard .binary-search-cell.manual-idle {
+        color: #e2e8f0 !important;
+        border-color: rgba(100, 116, 139, 0.42) !important;
+        background: transparent !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #stringWordBoard .binary-search-cell.manual-selected {
+        color: #7dd3fc !important;
+        border-color: rgba(14, 165, 233, 0.48) !important;
+        background: color-mix(in srgb, rgba(14, 165, 233, 0.24) 76%, var(--aq-card) 24%) !important;
+    }
+
+    [data-theme="dark"] #actionGameHost.aq-manual-mode #stringWordBoard .binary-search-cell .binary-search-sub {
+        color: color-mix(in srgb, #7dd3fc 82%, #cbd5e1 18%) !important;
+    }
+
     #actionGameHost.aq-manual-mode #mathBoard .binary-search-cell.manual-idle {
         border-color: color-mix(in srgb, #cbd5e1 56%, var(--aq-border) 44%) !important;
         background: transparent !important;
@@ -1202,7 +1272,7 @@
     const actionGameHost = document.getElementById('actionGameHost');
     const actionPayloadInput = document.getElementById('actionPayloadInput');
     const CATEGORY_SEQUENCE_KEY = 'aqCategorySequenceState';
-    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression', 'linear_search', 'binary_search', 'logistic_regression', 'math_algorithm', 'merge_sort', 'minimax', 'naive_bayes', 'neural_network', 'queue', 'quick_sort', 'recursion']);
+    const manualDerivedAnswerAlgorithms = new Set(['activity_selection', 'array_algorithm', 'astar', 'backtracking', 'bfs', 'bit_conversion', 'bubble_sort', 'circular_linked_list', 'decision_tree', 'dfs', 'dijkstra', 'doubly_linked_list', 'linked_list', 'hashing_algorithm', 'heap_sort', 'insertion_sort', 'kmeans', 'knapsack', 'knn', 'lcs', 'linear_regression', 'linear_search', 'binary_search', 'logistic_regression', 'math_algorithm', 'merge_sort', 'minimax', 'naive_bayes', 'neural_network', 'queue', 'quick_sort', 'recursion', 'selection_sort', 'stack', 'string_algorithm']);
     const manualReadOnlyAnswerAlgorithms = new Set(['bst']);
     let derivedAnswersEnabled = {% if hint_used or not challenge.starter_code %}true{% else %}false{% endif %};
     let pendingDerivedAnswer = '';
@@ -5719,7 +5789,7 @@
                     <div><strong>Words:</strong> ${words.length}</div>
                     <div><strong>Longest prefix length:</strong> <span id="stringMaxLen">-</span></div>
                 </div>
-                <div class="binary-search-legend" id="logisticLegend" aria-hidden="true">
+                <div class="binary-search-legend" id="stringLegend" aria-hidden="true">
                     <span class="binary-search-chip is-found">Word matches candidate</span>
                     <span class="binary-search-chip is-window">No candidate yet</span>
                     <span class="binary-search-chip is-mid">Partial / mismatch</span>
@@ -5826,11 +5896,14 @@
             if (!board) {
                 return;
             }
+            const manualStringMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             board.innerHTML = words.map((word, idx) => {
                 const matchLen = sharedPrefixLength(word, candidate);
                 const fullMatch = candidate.length > 0 && matchLen === candidate.length;
                 let stateClass = 'is-window';
-                if (candidate.length === 0) {
+                if (manualStringMode) {
+                    stateClass = candidate.length === 0 ? 'manual-idle' : (matchLen > 0 ? 'manual-selected' : 'manual-idle');
+                } else if (candidate.length === 0) {
                     stateClass = 'is-window';
                 } else if (fullMatch) {
                     stateClass = 'is-found';
@@ -5893,6 +5966,7 @@
         function render() {
             renderBoard();
             renderChoices();
+            const manualStringMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             const valid = isCommonPrefix(candidate);
             const canExtend = valid && candidate.length < maxPrefix.length;
             const complete = valid && candidate === maxPrefix;
@@ -5918,20 +5992,26 @@
                 progressFill.style.width = `${progress}%`;
             }
             if (progressText) {
-                progressText.textContent = `Prefix coverage ${progress}%`;
+                progressText.textContent = manualStringMode
+                    ? `Manual prefix coverage ${progress}%`
+                    : `Prefix coverage ${progress}%`;
             }
             if (hintText) {
                 if (feedback) {
                     hintText.textContent = feedback;
-                    hintText.classList.add('error');
+                    hintText.classList.toggle('error', !manualStringMode);
                 } else if (!valid) {
-                    hintText.textContent = 'Candidate is not a common prefix. Use Backspace, Clear, or Use Max Prefix.';
-                    hintText.classList.add('error');
+                    hintText.textContent = manualStringMode
+                        ? 'Adjust the prefix manually. Hint unlocks the guided prefix helpers.'
+                        : 'Candidate is not a common prefix. Use Backspace, Clear, or Use Max Prefix.';
+                    hintText.classList.toggle('error', !manualStringMode);
                 } else if (complete) {
                     hintText.textContent = 'Longest common prefix reached. Submit now.';
                     hintText.classList.remove('error');
                 } else if (canExtend) {
-                    hintText.textContent = `Valid prefix. Extend with ${formatCharLabel(expectedChar)} or test another character.`;
+                    hintText.textContent = manualStringMode
+                        ? 'Valid prefix. Continue building manually or use Hint for guided extension.'
+                        : `Valid prefix. Extend with ${formatCharLabel(expectedChar)} or test another character.`;
                     hintText.classList.remove('error');
                 } else {
                     hintText.textContent = 'No further extension available. Submit current candidate.';
@@ -5940,7 +6020,10 @@
             }
             if (shell.badge) {
                 shell.badge.classList.remove('badge-primary', 'badge-accent', 'badge-danger');
-                if (!valid) {
+                if (manualStringMode) {
+                    shell.badge.textContent = `Manual Len ${candidate.length}`;
+                    shell.badge.classList.add('badge-primary');
+                } else if (!valid) {
                     shell.badge.textContent = 'Invalid';
                     shell.badge.classList.add('badge-danger');
                 } else if (complete) {
@@ -7823,7 +7906,7 @@
                     <div><strong>Operations:</strong> ${operations.length}</div>
                     <div><strong>Initial size:</strong> ${initial.length}</div>
                 </div>
-                <div class="binary-search-legend" id="queueLegend" aria-hidden="true">
+                <div class="binary-search-legend" id="stackLegend" aria-hidden="true">
                     <span class="binary-search-chip is-mid">Top</span>
                     <span class="binary-search-chip is-window">Stack Body</span>
                     <span class="binary-search-chip is-found">Final Top</span>
@@ -7860,6 +7943,7 @@
         const resetBtn = shell.body.querySelector('#stackResetBtn');
 
         let applied = 0;
+        let hintAutoApplied = false;
 
         function computeState(count) {
             const stack = initial.slice();
@@ -7915,9 +7999,10 @@
             if (!board) {
                 return;
             }
+            const manualStackMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
             if (!stack.length) {
                 board.innerHTML = `
-                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell is-discarded" disabled>
+                    <button type="button" class="btn btn-sm action-value-btn binary-search-cell ${manualStackMode ? 'manual-idle' : 'is-discarded'}" disabled>
                         <span class="binary-search-main">empty</span>
                         <span class="binary-search-sub">stack has no nodes</span>
                     </button>
@@ -7930,7 +8015,9 @@
                 const value = stack[idx];
                 const isTop = offset === 0;
                 let stateClass = isTop ? 'is-mid' : 'is-window';
-                if (isComplete && isTop) {
+                if (manualStackMode) {
+                    stateClass = 'manual-selected';
+                } else if (isComplete && isTop) {
                     stateClass = 'is-found';
                 }
                 rows.push(`
@@ -7944,12 +8031,17 @@
         }
 
         function render() {
+            if (derivedAnswersEnabled && !hintAutoApplied) {
+                applied = operations.length;
+                hintAutoApplied = true;
+            }
             const snapshot = computeState(applied);
             const stack = snapshot.stack;
             const isComplete = applied >= operations.length;
             const top = stack.length ? formatActionNumber(stack[stack.length - 1], 3, false) : 'empty';
             const next = operations[applied];
             const progress = operations.length ? Math.round((applied / operations.length) * 100) : 100;
+            const manualStackMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
 
             renderBoard(stack, isComplete);
 
@@ -7966,21 +8058,27 @@
                 progressFill.style.width = `${progress}%`;
             }
             if (progressText) {
-                progressText.textContent = `Progress ${progress}%`;
+                progressText.textContent = manualStackMode
+                    ? `Manual stack progress ${progress}%`
+                    : `Progress ${progress}%`;
             }
             if (hint) {
                 if (isComplete) {
                     hint.textContent = `Stack simulation complete. Final top is ${top}. Submit your answer.`;
                     hint.classList.remove('error');
                 } else {
-                    hint.textContent = `Last applied: ${snapshot.lastAction}. Continue with ${opText(next)}.`;
+                    hint.textContent = manualStackMode
+                        ? `Apply operations manually. Current step ${applied}/${operations.length}.`
+                        : `Last applied: ${snapshot.lastAction}. Continue with ${opText(next)}.`;
                     hint.classList.remove('error');
                 }
             }
             if (shell.badge) {
-                shell.badge.textContent = isComplete ? `Top ${top}` : `Step ${applied}/${operations.length}`;
-                shell.badge.classList.toggle('badge-accent', isComplete);
-                shell.badge.classList.toggle('badge-primary', !isComplete);
+                shell.badge.textContent = manualStackMode
+                    ? (isComplete ? `Manual Top ${top}` : 'Manual Stack')
+                    : (isComplete ? `Top ${top}` : `Step ${applied}/${operations.length}`);
+                shell.badge.classList.toggle('badge-accent', isComplete && !manualStackMode);
+                shell.badge.classList.toggle('badge-primary', !isComplete || manualStackMode);
                 shell.badge.classList.remove('badge-danger');
             }
             if (applyBtn) applyBtn.disabled = isComplete;
@@ -8703,15 +8801,28 @@
                 return minIdx;
             }
 
+            function peekMinIndexForPass() {
+                let minIdx = pass;
+                for (let idx = pass + 1; idx < current.length; idx += 1) {
+                    if (current[idx] < current[minIdx]) {
+                        minIdx = idx;
+                    }
+                }
+                return minIdx;
+            }
+
             function renderBoard() {
                 if (!board) {
                     return;
                 }
+                const manualSelectionMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 board.innerHTML = current
                     .map((value, idx) => {
                         let stateClass = 'is-window';
                         let disabled = finished || idx < pass;
-                        if (idx < pass) {
+                        if (manualSelectionMode) {
+                            stateClass = (finished || idx < pass || idx === candidateMin || idx === pass) ? 'manual-selected' : 'manual-idle';
+                        } else if (idx < pass) {
                             stateClass = 'is-found';
                         } else if (!finished && idx === candidateMin) {
                             stateClass = 'is-mid';
@@ -8738,6 +8849,10 @@
                         }
                         candidateMin = idx;
                         feedback = '';
+                        if (derivedAnswersEnabled && idx === peekMinIndexForPass()) {
+                            placeMin();
+                            return;
+                        }
                         render();
                     });
                 });
@@ -8745,6 +8860,7 @@
 
             function render() {
                 renderBoard();
+                const manualSelectionMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                 const fixedCount = pass;
                 const progress = current.length > 0 ? Math.round((fixedCount / current.length) * 100) : 0;
                 const answer = current.map((value) => formatToken(value)).join(' ');
@@ -8764,17 +8880,21 @@
                     progressFill.style.width = `${progress}%`;
                 }
                 if (progressText) {
-                    progressText.textContent = `Fixed prefix: ${fixedCount}/${current.length}`;
+                    progressText.textContent = manualSelectionMode
+                        ? `Manual selection progress ${progress}%`
+                        : `Fixed prefix: ${fixedCount}/${current.length}`;
                 }
                 if (hint) {
                     if (feedback) {
                         hint.textContent = feedback;
-                        hint.classList.add('error');
+                        hint.classList.toggle('error', !manualSelectionMode);
                     } else if (finished) {
                         hint.textContent = 'Selection Sort state complete. Submit your answer.';
                         hint.classList.remove('error');
                     } else {
-                        hint.textContent = 'Select minimum from unsorted suffix, then click "Place Min At Slot".';
+                        hint.textContent = manualSelectionMode
+                            ? 'Select a minimum manually, then place it at the current slot. Use Hint to unlock guided help.'
+                            : 'Select minimum from unsorted suffix, then click "Place Min At Slot".';
                         hint.classList.remove('error');
                     }
                 }
@@ -8787,7 +8907,10 @@
 
                 if (shell.badge) {
                     shell.badge.classList.remove('badge-accent', 'badge-primary', 'badge-danger');
-                    if (feedback) {
+                    if (manualSelectionMode) {
+                        shell.badge.textContent = finished ? 'Manual Sorted' : `Manual Pass ${pass + 1}`;
+                        shell.badge.classList.add(finished ? 'badge-accent' : 'badge-primary');
+                    } else if (feedback) {
                         shell.badge.textContent = 'Wrong Min';
                         shell.badge.classList.add('badge-danger');
                     } else if (finished) {
@@ -8821,9 +8944,12 @@
                 const compareBefore = comparisons;
                 const expectedMin = expectedMinIndexForPass();
                 if (candidateMin !== expectedMin) {
+                    const manualSelectionMode = !derivedAnswersEnabled && allowsManualDerivedAnswer();
                     comparisons = compareBefore;
                     undoStack.pop();
-                    feedback = `Incorrect minimum. For pass ${pass + 1}, expected idx ${expectedMin} (${formatToken(current[expectedMin])}).`;
+                    feedback = manualSelectionMode
+                        ? 'Selected minimum is not correct for this pass.'
+                        : `Incorrect minimum. For pass ${pass + 1}, expected idx ${expectedMin} (${formatToken(current[expectedMin])}).`;
                     render();
                     return;
                 }
@@ -10002,6 +10128,7 @@
             if (!finished) {
                 startNextPartition();
             }
+            actionModeRerender = render;
             actionModeRerender = render;
             render();
             return true;
