@@ -105,9 +105,15 @@
         <div class="col-lg-4">
             <div class="card border-0 mb-4 fade-in-up">
                 <div class="card-body">
-                    <h2 class="h5 mb-3"><i class="bi bi-award me-2" style="color: var(--aq-accent);"></i>Badges</h2>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <h2 class="h5 mb-0"><i class="bi bi-award me-2" style="color: var(--aq-accent);"></i>Badges</h2>
+                        <span class="badge badge-accent dashboard-badge-total">
+                            {% if profile.badges %}{{ profile.badges|length }} earned{% else %}0 earned{% endif %}
+                        </span>
+                    </div>
                     {% if profile.badges %}
-                        <div class="dashboard-achievements-grid">
+                        <div class="dashboard-achievements-panel">
+                            <div class="dashboard-achievements-grid">
                             {% for badge in profile.badges %}
                                 <span class="dashboard-achievement-chip" title="{{ badge }}">
                                     <span class="dashboard-achievement-icon" aria-hidden="true">
@@ -116,6 +122,7 @@
                                     <span class="dashboard-achievement-text">{{ badge }}</span>
                                 </span>
                             {% endfor %}
+                            </div>
                         </div>
                     {% else %}
                         <div class="empty-state">

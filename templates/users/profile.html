@@ -1,108 +1,323 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="fade-in-up">
-    <div class="row justify-content-center">
-        <div class="col-lg-7 col-xl-6">
-            <div class="card auth-card border-0">
-                <div class="card-body p-4">
-                    <!-- Profile Header -->
-                    <div class="d-flex align-items-center gap-3 mb-4">
-                        <div class="avatar-placeholder">
-                            {{ user.username|make_list|first|upper }}
+<div class="fade-in-up profile-dashboard-page">
+    <div class="profile-dashboard-grid">
+        <section class="card border-0 profile-hero-card profile-static-frame">
+            <div class="card-body">
+                <div class="profile-static-header">
+                    <div>
+                        <div class="profile-section-kicker">View Profile</div>
+                        <h1 class="h3 mb-1">Your Current Profile</h1>
+                        <p class="text-muted mb-0">Everything in this frame is read-only, so you can quickly review your latest saved details.</p>
+                    </div>
+                </div>
+                <div class="profile-static-grid">
+                    <div class="profile-static-main">
+                        <div class="profile-hero-main">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar-placeholder profile-avatar-xl">
+                                    {{ user.username|make_list|first|upper }}
+                                </div>
+                                <div class="profile-hero-copy">
+                                    <div class="profile-section-kicker">Main Profile</div>
+                                    <h2 class="h3 mb-1">Profile &amp; Settings</h2>
+                                    <button
+                                        type="button"
+                                        class="profile-hero-subtitle profile-copy-trigger profile-copy-inline mb-2"
+                                        data-copy-text="{{ user.get_full_name|default:user.username }}"
+                                        data-copy-label="Full name"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-placement="top"
+                                        title="Click to copy full name"
+                                    >
+                                        {{ user.get_full_name|default:user.username }}
+                                    </button>
+                                    <p class="profile-hero-description mb-0">
+                                        {% if profile.bio %}
+                                            {{ profile.bio }}
+                                        {% else %}
+                                            This is your main identity card. Update your coding bio, preferences, and account details in the edit frame below.
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="profile-hero-badges">
+                                <button
+                                    type="button"
+                                    class="badge badge-primary profile-hero-chip profile-copy-trigger"
+                                    data-copy-text="@{{ user.username }}"
+                                    data-copy-label="Username"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top"
+                                    title="Click to copy username"
+                                >
+                                    @{{ user.username }}
+                                </button>
+                                <button
+                                    type="button"
+                                    class="badge text-bg-light profile-hero-chip profile-copy-trigger"
+                                    data-copy-text="{{ user.email|default:'No email added' }}"
+                                    data-copy-label="Email"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top"
+                                    title="Click to copy email"
+                                >
+                                    {{ user.email|default:"No email added" }}
+                                </button>
+                                <span class="badge badge-level profile-hero-chip">Level {{ profile.level }}</span>
+                            </div>
                         </div>
-                        <div>
-                            <h2 class="h4 mb-1">Profile &amp; Settings</h2>
-                            <p class="text-muted mb-0">Manage your account and coding identity</p>
+                        <div class="profile-hero-stats">
+                            <div class="profile-stat-card">
+                                <span class="profile-stat-label">XP</span>
+                                <strong class="profile-stat-value">{{ profile.xp }}</strong>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="profile-stat-label">Experience</span>
+                                <strong class="profile-stat-value">{{ profile.get_experience_level_display|default:"Not set" }}</strong>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="profile-stat-label">Preferred Language</span>
+                                <strong class="profile-stat-value">{{ profile.preferred_language|default:"Not set" }}</strong>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="profile-stat-label">Badges</span>
+                                <strong class="profile-stat-value">{% if profile.badges %}{{ profile.badges|length }}{% else %}0{% endif %}</strong>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Stats -->
-                    <div class="row g-3 mb-4">
-                        <div class="col-4">
-                            <div class="stat-card text-center p-3">
-                                <div class="stat-label">Username</div>
-                                <div class="fw-bold" style="color: var(--aq-text);">{{ user.username }}</div>
+                    <section class="profile-static-side">
+                        <div class="profile-panel-header">
+                            <div>
+                                <div class="profile-section-kicker">Snapshot</div>
+                                <h2 class="h5 mb-1">Saved Info</h2>
+                                <p class="text-muted mb-0">A quick static summary of the latest values in your profile.</p>
                             </div>
                         </div>
-                        <div class="col-4">
-                            <div class="stat-card text-center p-3">
-                                <div class="stat-label">Level</div>
-                                <div class="fw-bold"><span class="badge badge-level">{{ profile.level }}</span></div>
+                        <div class="profile-snapshot-grid">
+                            <div class="meta-chip">
+                                <span class="meta-chip-label">Username</span>
+                                <button
+                                    type="button"
+                                    class="meta-chip-value profile-copy-trigger profile-copy-inline"
+                                    data-copy-text="{{ user.username }}"
+                                    data-copy-label="Username"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top"
+                                    title="Click to copy username"
+                                >
+                                    {{ user.username }}
+                                </button>
+                            </div>
+                            <div class="meta-chip">
+                                <span class="meta-chip-label">Full Name</span>
+                                <button
+                                    type="button"
+                                    class="meta-chip-value profile-copy-trigger profile-copy-inline"
+                                    data-copy-text="{{ user.get_full_name|default:'Not set' }}"
+                                    data-copy-label="Full name"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top"
+                                    title="Click to copy full name"
+                                >
+                                    {{ user.get_full_name|default:"Not set" }}
+                                </button>
+                            </div>
+                            <div class="meta-chip">
+                                <span class="meta-chip-label">Email</span>
+                                <button
+                                    type="button"
+                                    class="meta-chip-value profile-copy-trigger profile-copy-inline"
+                                    data-copy-text="{{ user.email|default:'Not set' }}"
+                                    data-copy-label="Email"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-placement="top"
+                                    title="Click to copy email"
+                                >
+                                    {{ user.email|default:"Not set" }}
+                                </button>
+                            </div>
+                            <div class="meta-chip">
+                                <span class="meta-chip-label">Interests</span>
+                                <span class="meta-chip-value">{{ profile.coding_interests|default:"Not set" }}</span>
                             </div>
                         </div>
-                        <div class="col-4">
-                            <div class="stat-card text-center p-3">
-                                <div class="stat-label">XP</div>
-                                <div class="fw-bold"><span class="badge badge-xp">{{ profile.xp }}</span></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Divider -->
-                    <hr class="divider-gradient">
-
-                    <div class="coding-summary p-3 p-md-4 mb-3">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <h3 class="h6 mb-0">Coding Identity</h3>
-                            <span class="badge text-bg-light border">Local Profile</span>
-                        </div>
-                        <p class="text-muted mb-3">
-                            {% if profile.bio %}
-                                {{ profile.bio }}
-                            {% else %}
-                                Add a short bio and coding preferences to complete your profile.
-                            {% endif %}
-                        </p>
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <div class="meta-chip">
-                                    <span class="meta-chip-label">Experience</span>
-                                    <span class="meta-chip-value">{{ profile.get_experience_level_display|default:"Not set" }}</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="meta-chip">
-                                    <span class="meta-chip-label">Language</span>
-                                    <span class="meta-chip-value">{{ profile.preferred_language|default:"Not set" }}</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="meta-chip">
-                                    <span class="meta-chip-label">Badges</span>
-                                    <span class="meta-chip-value">{% if profile.badges %}{{ profile.badges|length }}{% else %}0{% endif %}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <span class="text-muted small">Interests:</span>
-                            <span class="small fw-medium">{{ profile.coding_interests|default:"Not set" }}</span>
-                        </div>
-                    </div>
-
-                    <!-- Form -->
-                    <form method="post" class="mt-4">
-                        {% csrf_token %}
-                        <div class="profile-section p-3 p-md-4 mb-3">
-                            <h3 class="h6 mb-3">Account Details</h3>
-                            {{ form.as_p }}
-                        </div>
-
-                        <div class="profile-section p-3 p-md-4 mb-3">
-                            <h3 class="h6 mb-3">Coding Profile Setup</h3>
-                            {{ profile_form.as_p }}
-                            <p class="text-muted small mb-0">
-                                Keep this section focused on your local coding identity and preferences.
-                            </p>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary px-4 py-2">
-                            <i class="bi bi-check-lg me-1"></i>Save Changes
-                        </button>
-                    </form>
+                    </section>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <section class="card border-0 profile-panel-card profile-edit-frame">
+            <div class="card-body">
+                <div class="profile-panel-header profile-edit-header">
+                    <div>
+                        <div class="profile-section-kicker">Edit Profile</div>
+                        <h2 class="h4 mb-1">Update Your Details</h2>
+                        <p class="text-muted mb-0">This lower frame is for changes only. Update the fields here, then save to refresh the profile frame above.</p>
+                    </div>
+                </div>
+                <form method="post" class="profile-settings-form">
+                {% csrf_token %}
+                {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+                {% for field in profile_form.hidden_fields %}{{ field }}{% endfor %}
+
+                {% if form.non_field_errors or profile_form.non_field_errors %}
+                    <div class="alert alert-danger mb-3">
+                        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                        {% for error in profile_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                    </div>
+                {% endif %}
+
+                <div class="profile-form-grid">
+                    <section class="profile-editor-section">
+                        <div class="profile-editor-card">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-section-kicker">Account</div>
+                                    <h2 class="h5 mb-1">Account Details</h2>
+                                    <p class="text-muted mb-0">Keep your basic account information up to date.</p>
+                                </div>
+                            </div>
+                            <div class="profile-field-grid profile-field-grid-account">
+                                <div class="profile-field-card profile-field-card-wide">
+                                    {{ form.email.label_tag }}
+                                    {{ form.email }}
+                                    {% if form.email.value %}
+                                        <div class="profile-field-note">Current email: {{ form.email.value }}</div>
+                                    {% endif %}
+                                    {% if form.email.help_text %}<div class="helptext">{{ form.email.help_text|safe }}</div>{% endif %}
+                                    {{ form.email.errors }}
+                                </div>
+                                <div class="profile-field-card">
+                                    {{ form.first_name.label_tag }}
+                                    {{ form.first_name }}
+                                    {% if form.first_name.help_text %}<div class="helptext">{{ form.first_name.help_text|safe }}</div>{% endif %}
+                                    {{ form.first_name.errors }}
+                                </div>
+                                <div class="profile-field-card">
+                                    {{ form.last_name.label_tag }}
+                                    {{ form.last_name }}
+                                    {% if form.last_name.help_text %}<div class="helptext">{{ form.last_name.help_text|safe }}</div>{% endif %}
+                                    {{ form.last_name.errors }}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="profile-editor-section">
+                        <div class="profile-editor-card">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-section-kicker">Identity</div>
+                                    <h2 class="h5 mb-1">Coding Identity</h2>
+                                    <p class="text-muted mb-0">Describe how you code and what topics matter most to you.</p>
+                                </div>
+                            </div>
+                            <div class="profile-field-stack">
+                                <div class="profile-field-card">
+                                    {{ profile_form.bio.label_tag }}
+                                    {{ profile_form.bio }}
+                                    {% if profile_form.bio.help_text %}<div class="helptext">{{ profile_form.bio.help_text|safe }}</div>{% endif %}
+                                    {{ profile_form.bio.errors }}
+                                </div>
+                                <div class="profile-field-card">
+                                    {{ profile_form.coding_interests.label_tag }}
+                                    {{ profile_form.coding_interests }}
+                                    {% if profile_form.coding_interests.help_text %}<div class="helptext">{{ profile_form.coding_interests.help_text|safe }}</div>{% endif %}
+                                    {{ profile_form.coding_interests.errors }}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="profile-editor-section">
+                        <div class="profile-editor-card">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-section-kicker">Preferences</div>
+                                    <h2 class="h5 mb-1">Coding Preferences</h2>
+                                    <p class="text-muted mb-0">Set the language and experience context that matches you best.</p>
+                                </div>
+                            </div>
+                            <div class="profile-field-grid profile-field-grid-two">
+                                <div class="profile-field-card">
+                                    {{ profile_form.preferred_language.label_tag }}
+                                    {{ profile_form.preferred_language }}
+                                    {% if profile_form.preferred_language.help_text %}<div class="helptext">{{ profile_form.preferred_language.help_text|safe }}</div>{% endif %}
+                                    {{ profile_form.preferred_language.errors }}
+                                </div>
+                                <div class="profile-field-card">
+                                    {{ profile_form.experience_level.label_tag }}
+                                    {{ profile_form.experience_level }}
+                                    {% if profile_form.experience_level.help_text %}<div class="helptext">{{ profile_form.experience_level.help_text|safe }}</div>{% endif %}
+                                    {{ profile_form.experience_level.errors }}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="profile-save-bar">
+                    <div>
+                        <strong>Ready to update?</strong>
+                        <span>Your main card and profile sections will refresh with the latest saved info.</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary px-4 py-2">
+                        <i class="bi bi-check-lg me-1"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+            </div>
+        </section>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const copyTriggers = document.querySelectorAll('.profile-copy-trigger[data-copy-text]');
+    if (!copyTriggers.length || typeof bootstrap === 'undefined') {
+        return;
+    }
+
+    copyTriggers.forEach(function (trigger) {
+        const defaultTitle = trigger.getAttribute('title') || 'Click to copy';
+        const label = trigger.dataset.copyLabel || 'Value';
+        const tooltip = bootstrap.Tooltip.getOrCreateInstance(trigger, {
+            trigger: 'hover focus',
+        });
+        let resetTimer = null;
+
+        async function copyValue() {
+            const value = trigger.dataset.copyText || '';
+            if (!value) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(value);
+                trigger.setAttribute('data-bs-original-title', label + ' copied');
+                tooltip.show();
+            } catch (error) {
+                trigger.setAttribute('data-bs-original-title', 'Copy failed');
+                tooltip.show();
+            }
+
+            window.clearTimeout(resetTimer);
+            resetTimer = window.setTimeout(function () {
+                tooltip.hide();
+                trigger.setAttribute('data-bs-original-title', defaultTitle);
+            }, 1400);
+        }
+
+        trigger.addEventListener('click', function () {
+            copyValue();
+        });
+    });
+});
+</script>
 {% endblock %}

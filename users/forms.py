@@ -96,6 +96,7 @@ class UserSettingsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['email'].label = 'Email'
         self.fields['email'].widget.attrs.update({'class': 'form-control', 'placeholder': 'name@example.com'})
         self.fields['first_name'].widget.attrs.update({'class': 'form-control', 'placeholder': 'First name'})
         self.fields['last_name'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Last name'})
