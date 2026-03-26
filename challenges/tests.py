@@ -3181,3 +3181,57 @@ class BattleLiveContextTests(TestCase):
         payload = response.json()
         self.assertTrue(payload['is_correct'])
         self.assertIn('battle_score_token', payload)
+
+    def test_submit_attempt_from_live_battle_bypasses_normal_lock_gate(self):
+        from battle.models import BattleMatch
+
+        self.match.challenge = self.challenge
+        self.match.status = BattleMatch.Status.LIVE
+        self.match.save(update_fields=['challenge', 'status'])
+        UserChallengeProg.objects.update_or_create(
+            user=self.user,
+            challenge=self.challenge,
+            defaults={'is_unlocked': False, 'is_solved': False},
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': 'answer',
+                'battle_room_code': self.match.room_code,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+
+    def test_submit_attempt_in_bot_battle_requires_started_round(self):
+        from battle.models import BattleMatch
+
+        self.match.player_two = None
+        self.match.mode = BattleMatch.Mode.BOT
+        self.match.challenge = self.challenge
+        self.match.status = BattleMatch.Status.LIVE
+        self.match.bot_round_status = BattleMatch.BotRoundStatus.READY
+        self.match.save(update_fields=['player_two', 'mode', 'challenge', 'status', 'bot_round_status'])
+        UserChallengeProg.objects.update_or_create(
+            user=self.user,
+            challenge=self.challenge,
+            defaults={'is_unlocked': False, 'is_solved': False},
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': 'answer',
+                'battle_room_code': self.match.room_code,
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.json()
+        self.assertFalse(payload['is_correct'])
+        self.assertIn('Start Round', payload['error'])

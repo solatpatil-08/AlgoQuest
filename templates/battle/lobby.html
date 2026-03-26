@@ -25,9 +25,12 @@
                     <p class="text-muted">Get paired with an opponent of similar skill level and battle it out in real-time coding challenges.</p>
                     {% if user.is_authenticated %}
                         {% csrf_token %}
-                        <div class="mt-auto">
+                        <div class="mt-auto d-flex flex-wrap gap-2">
                             <button id="matchmakeBtn" class="btn btn-primary px-4 py-2">
-                                <i class="bi bi-search me-2"></i>Find Match
+                                <i class="bi bi-search me-2"></i>Battle Online
+                            </button>
+                            <button id="battleComputerBtn" class="btn btn-outline-primary px-4 py-2">
+                                <i class="bi bi-cpu me-2"></i>Computer Marathon
                             </button>
                         </div>
                     {% else %}
@@ -145,9 +148,14 @@
                                     </div>
                                 </div>
                                 
-                                <button type="button" class="btn btn-primary mt-auto battle-topic-btn" data-topic-id="{{ item.topic.stable_id }}">
-                                    <i class="bi bi-lightning me-1"></i>Battle This Topic
-                                </button>
+                                <div class="mt-auto d-grid gap-2">
+                                    <button type="button" class="btn btn-primary battle-topic-btn" data-topic-id="{{ item.topic.stable_id }}">
+                                        <i class="bi bi-wifi me-1"></i>Battle Online
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary battle-topic-bot-btn" data-topic-id="{{ item.topic.stable_id }}">
+                                        <i class="bi bi-cpu me-1"></i>Computer Marathon
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -162,8 +170,10 @@
 <script>
 const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
     const matchmakeBtn = document.getElementById('matchmakeBtn');
+    const battleComputerBtn = document.getElementById('battleComputerBtn');
     const matchStatus = document.getElementById('matchStatus');
     const topicBattleButtons = document.querySelectorAll('.battle-topic-btn');
+    const topicBattleBotButtons = document.querySelectorAll('.battle-topic-bot-btn');
     let waitingPollTimer = null;
     let waitingRoomCode = '';
 
@@ -235,7 +245,7 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
         }
     }
 
-    async function startMatchmaking(topicId = null, triggerButton = null) {
+    async function startMatchmaking(mode = 'pvp', topicId = null, triggerButton = null) {
         if (!isAuthenticated) {
             setStatus('<i class="bi bi-shield-lock me-1"></i>Please log in to start matchmaking.', 'error');
             return;
@@ -247,12 +257,21 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
             return;
         }
 
-        const mainButtonIdleHtml = '<i class="bi bi-search me-2"></i>Find Match';
-        setLoadingState(matchmakeBtn, true, 'Searching...', mainButtonIdleHtml);
+        stopWaitingPoll();
+
+        const mainButtonIdleHtml = '<i class="bi bi-search me-2"></i>Battle Online';
+        const botButtonIdleHtml = '<i class="bi bi-cpu me-2"></i>Computer Marathon';
+        setLoadingState(matchmakeBtn, true, mode === 'bot' ? 'Preparing...' : 'Searching...', mainButtonIdleHtml);
+        setLoadingState(battleComputerBtn, true, mode === 'bot' ? 'Preparing...' : 'Searching...', botButtonIdleHtml);
         if (triggerButton && triggerButton !== matchmakeBtn) {
-            setLoadingState(triggerButton, true, 'Starting...', triggerButton.innerHTML);
+            setLoadingState(triggerButton, true, mode === 'bot' ? 'Preparing...' : 'Starting...', triggerButton.innerHTML);
         }
-        setStatus('<i class="bi bi-hourglass-split me-1"></i>Finding a suitable battle room...', 'info');
+        setStatus(
+            mode === 'bot'
+                ? '<i class="bi bi-cpu me-1"></i>Preparing your battle against the computer...'
+                : '<i class="bi bi-hourglass-split me-1"></i>Finding a suitable battle room...',
+            'info'
+        );
 
         try {
             const response = await fetch('/api/battle/', {
@@ -261,7 +280,10 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
                     'X-CSRFToken': csrfToken,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(topicId ? { topic_preference: topicId } : {}),
+                body: JSON.stringify({
+                    battle_mode: mode,
+                    ...(topicId ? { topic_preference: topicId } : {}),
+                }),
             });
 
             let data = null;
@@ -294,7 +316,12 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
                 pollWaitingRoom();
             } else {
                 stopWaitingPoll();
-                setStatus('<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...', 'success');
+                setStatus(
+                    mode === 'bot'
+                        ? '<i class="bi bi-check-circle me-1"></i>Computer battle ready. Redirecting to live battle...'
+                        : '<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...',
+                    'success'
+                );
                 window.setTimeout(() => {
                     window.location.href = `/battle/live/${data.room_code}/`;
                 }, 800);
@@ -304,6 +331,7 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
             setStatus('<i class="bi bi-wifi-off me-1"></i>Network error while finding a match. Please retry.', 'error');
         } finally {
             setLoadingState(matchmakeBtn, false, 'Searching...', mainButtonIdleHtml);
+            setLoadingState(battleComputerBtn, false, 'Preparing...', botButtonIdleHtml);
             if (triggerButton && triggerButton !== matchmakeBtn) {
                 setLoadingState(triggerButton, false, 'Starting...', triggerButton.innerHTML);
             }
@@ -315,7 +343,14 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
     if (matchmakeBtn) {
         matchmakeBtn.addEventListener('click', function (event) {
             event.preventDefault();
-            startMatchmaking(null, matchmakeBtn);
+            startMatchmaking('pvp', null, matchmakeBtn);
+        });
+    }
+
+    if (battleComputerBtn) {
+        battleComputerBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            startMatchmaking('bot', null, battleComputerBtn);
         });
     }
 
@@ -327,7 +362,19 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
                 setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Topic id is missing.', 'error');
                 return;
             }
-            startMatchmaking(topicId, this);
+            startMatchmaking('pvp', topicId, this);
+        });
+    });
+
+    topicBattleBotButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const topicId = this.getAttribute('data-topic-id');
+            if (!topicId) {
+                setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Topic id is missing.', 'error');
+                return;
+            }
+            startMatchmaking('bot', topicId, this);
         });
     });
 

@@ -3,6 +3,581 @@
 
 {% block content %}
 <div class="fade-in-up">
+    <style>
+        .battle-live-page {
+            --battle-question-width: 58%;
+            --battle-splitter-width: 12px;
+        }
+
+        .battle-live-page .battle-mode-pill {
+            border-radius: 999px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .battle-live-page .battle-guide-grid {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-top: 1rem;
+        }
+
+        .battle-live-page .battle-guide-card {
+            padding: 0.9rem 1rem;
+            border: 1px solid color-mix(in srgb, var(--aq-border) 88%, #cbd5e1 12%);
+            border-radius: 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            box-shadow: 0 10px 22px -24px rgba(15, 23, 42, 0.45);
+        }
+
+        .battle-live-page .battle-guide-step {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            margin-bottom: 0.6rem;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--aq-primary-soft-bg) 82%, #ffffff 18%);
+            color: var(--aq-primary-dark);
+            font-size: 0.85rem;
+            font-weight: 800;
+        }
+
+        .battle-live-page .battle-guide-card h3 {
+            margin-bottom: 0.35rem;
+            font-size: 0.96rem;
+        }
+
+        .battle-live-page .battle-guide-card p {
+            margin-bottom: 0;
+            color: var(--aq-text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.55;
+        }
+
+        .battle-live-page .battle-layout-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .battle-live-page .battle-layout-copy {
+            color: var(--aq-text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .battle-live-page .battle-layout-copy strong {
+            color: var(--aq-text);
+        }
+
+        .battle-live-page .battle-layout-presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .battle-live-page .battle-layout-preset {
+            border: 1px solid color-mix(in srgb, var(--aq-border) 84%, #cbd5e1 16%);
+            border-radius: 999px;
+            background: #fff;
+            color: var(--aq-text-secondary);
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0.45rem 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .battle-live-page .battle-layout-preset:hover,
+        .battle-live-page .battle-layout-preset.is-active {
+            border-color: color-mix(in srgb, var(--aq-primary) 52%, var(--aq-border) 48%);
+            background: color-mix(in srgb, var(--aq-primary-soft-bg) 68%, #ffffff 32%);
+            color: var(--aq-primary-dark);
+        }
+
+        .battle-live-page .battle-layout-shell {
+            display: grid;
+            gap: 0;
+            grid-template-columns: minmax(320px, var(--battle-question-width)) var(--battle-splitter-width) minmax(320px, calc(100% - var(--battle-question-width)));
+            align-items: start;
+        }
+
+        .battle-live-page .battle-panel {
+            min-width: 0;
+        }
+
+        .battle-live-page .battle-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .battle-live-page .battle-panel-kicker {
+            margin-bottom: 0.2rem;
+            color: var(--aq-text-secondary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .battle-live-page .battle-panel-title {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: var(--aq-text);
+        }
+
+        .battle-live-page .battle-panel-note {
+            color: var(--aq-text-secondary);
+            font-size: 0.82rem;
+            text-align: right;
+        }
+
+        .battle-live-page .battle-splitter {
+            position: relative;
+            min-height: 100%;
+            cursor: col-resize;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .battle-live-page .battle-splitter::before {
+            content: "";
+            position: absolute;
+            top: 0.75rem;
+            bottom: 0.75rem;
+            left: 50%;
+            width: 2px;
+            transform: translateX(-50%);
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(14, 165, 233, 0.14), rgba(148, 163, 184, 0.5), rgba(14, 165, 233, 0.14));
+        }
+
+        .battle-live-page .battle-splitter::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 28px;
+            height: 56px;
+            transform: translate(-50%, -50%);
+            border: 1px solid color-mix(in srgb, var(--aq-border) 86%, #cbd5e1 14%);
+            border-radius: 999px;
+            background:
+                radial-gradient(circle at center, rgba(14, 165, 233, 0.55) 0 1.5px, transparent 2px),
+                linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+            background-size: 8px 8px, auto;
+            background-position: center, center;
+            box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.45);
+        }
+
+        .battle-live-page .battle-workbench-stack {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .battle-live-page .battle-workbench-card,
+        .battle-live-page .battle-problem-card {
+            border: 1px solid color-mix(in srgb, var(--aq-border) 88%, #cbd5e1 12%);
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.45);
+        }
+
+        .battle-live-page .battle-problem-card .problem-copy {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid color-mix(in srgb, var(--aq-border) 90%, #cbd5e1 10%);
+            border-left: 4px solid var(--aq-primary);
+            border-radius: 14px;
+            padding: 1.1rem 1.15rem;
+        }
+
+        .battle-live-page .battle-helper-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .battle-live-page .battle-helper-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.55rem 0.8rem;
+            border: 1px solid color-mix(in srgb, var(--aq-border) 88%, #cbd5e1 12%);
+            border-radius: 999px;
+            background: #fff;
+            color: var(--aq-text-secondary);
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+
+        .battle-live-page .battle-helper-chip strong {
+            color: var(--aq-text);
+        }
+
+        .battle-live-page .battle-panel-scroll {
+            max-height: calc(100vh - 11rem);
+            overflow: auto;
+            padding-right: 0.35rem;
+        }
+
+        .battle-live-page .battle-panel-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .battle-live-page .battle-panel-scroll::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.45);
+            border-radius: 999px;
+        }
+
+        .battle-live-page .battle-answer-card {
+            position: sticky;
+            top: 1rem;
+            z-index: 2;
+        }
+
+        .battle-live-page .battle-answer-card-body {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .battle-live-page .battle-answer-header p {
+            margin-bottom: 0;
+            color: var(--aq-text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .battle-live-page .battle-round-card {
+            border: 1px solid color-mix(in srgb, var(--aq-border) 86%, #cbd5e1 14%);
+            border-radius: 16px;
+            padding: 1rem;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+        }
+
+        .battle-live-page .battle-round-kicker {
+            margin-bottom: 0.25rem;
+            color: var(--aq-text-secondary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .battle-live-page .battle-round-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--aq-text);
+        }
+
+        .battle-live-page .battle-round-copy {
+            margin-bottom: 0.9rem;
+        }
+
+        .battle-live-page .battle-round-copy p {
+            margin: 0.45rem 0 0;
+            color: var(--aq-text-secondary);
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .battle-live-page .battle-round-statusline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.9rem;
+        }
+
+        .battle-live-page .battle-round-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.45rem 0.8rem;
+            font-size: 0.8rem;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            background: #e0f2fe;
+            color: #0f172a;
+        }
+
+        .battle-live-page .battle-round-pill.is-running {
+            background: #dcfce7;
+            color: #14532d;
+        }
+
+        .battle-live-page .battle-round-pill.is-waiting {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .battle-live-page .battle-round-help {
+            color: var(--aq-text-secondary);
+            font-size: 0.84rem;
+        }
+
+        .battle-live-page .battle-round-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        .battle-live-page .battle-answer-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+
+        .battle-live-page .battle-answer-meta .battle-helper-chip {
+            margin-top: 0;
+        }
+
+        .battle-live-page .battle-round-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.9rem;
+            margin-bottom: 1rem;
+            padding: 0.95rem 1rem;
+            border: 1px solid color-mix(in srgb, var(--aq-border) 88%, #cbd5e1 12%);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.45);
+        }
+
+        .battle-live-page .battle-round-toolbar-copy {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.7rem;
+            min-width: 0;
+            flex: 1 1 360px;
+        }
+
+        .battle-live-page .battle-round-toolbar-text {
+            min-width: 0;
+        }
+
+        .battle-live-page .battle-round-toolbar-text strong {
+            display: block;
+            color: var(--aq-text);
+            font-size: 0.96rem;
+            font-weight: 800;
+            line-height: 1.35;
+        }
+
+        .battle-live-page .battle-round-toolbar-text span {
+            color: var(--aq-text-secondary);
+            font-size: 0.84rem;
+            line-height: 1.55;
+        }
+
+        .battle-live-page .battle-round-toolbar-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.6rem;
+            flex: 0 1 auto;
+        }
+
+        .battle-live-page .battle-round-toolbar-actions .btn {
+            white-space: nowrap;
+        }
+
+        .battle-live-page .battle-match-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.45rem 0.8rem;
+            font-size: 0.8rem;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            background: color-mix(in srgb, var(--aq-primary-soft-bg) 72%, #ffffff 28%);
+            color: var(--aq-primary-dark);
+        }
+
+        .battle-live-page .battle-match-pill.is-finished {
+            background: color-mix(in srgb, #dcfce7 76%, var(--aq-card) 24%);
+            color: #166534;
+        }
+
+        .battle-live-page .battle-round-toolbar-meta {
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .battle-confirm-modal .modal-content {
+            border: 1px solid color-mix(in srgb, var(--aq-border) 86%, #cbd5e1 14%);
+            border-radius: 20px;
+            background: linear-gradient(180deg, color-mix(in srgb, var(--aq-card) 94%, #f8fbff 6%), var(--aq-card));
+        }
+
+        .battle-confirm-modal .modal-header {
+            align-items: flex-start;
+        }
+
+        .battle-confirm-title {
+            color: var(--aq-text);
+            font-weight: 800;
+            line-height: 1.3;
+        }
+
+        .battle-confirm-message {
+            color: var(--aq-text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        .battle-confirm-note {
+            margin-top: 0.9rem;
+            padding: 0.8rem 0.95rem;
+            border: 1px solid color-mix(in srgb, #f59e0b 42%, var(--aq-border) 58%);
+            border-radius: 14px;
+            background: color-mix(in srgb, #fef3c7 76%, var(--aq-card) 24%);
+            color: color-mix(in srgb, #92400e 74%, var(--aq-text) 26%);
+            font-size: 0.88rem;
+            line-height: 1.55;
+        }
+
+        .battle-live-page textarea#answerInput {
+            min-height: clamp(280px, 42vh, 460px);
+            line-height: 1.65;
+        }
+
+        body.battle-resizing,
+        body.battle-resizing * {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+
+        @media (max-width: 991.98px) {
+            .battle-live-page .battle-guide-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .battle-live-page .battle-layout-shell {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .battle-live-page .battle-splitter {
+                display: none;
+            }
+
+            .battle-live-page .battle-panel-note {
+                text-align: left;
+            }
+
+            .battle-live-page .battle-panel-scroll {
+                max-height: none;
+                overflow: visible;
+                padding-right: 0;
+            }
+
+            .battle-live-page .battle-answer-card {
+                position: static;
+            }
+
+            .battle-live-page .battle-round-toolbar {
+                align-items: flex-start;
+            }
+
+            .battle-live-page .battle-round-toolbar-actions {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .battle-live-page .battle-layout-toolbar {
+                align-items: flex-start;
+            }
+
+            .battle-live-page .battle-layout-copy {
+                font-size: 0.84rem;
+            }
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-guide-card,
+        [data-theme="dark"] .battle-live-page .battle-workbench-card,
+        [data-theme="dark"] .battle-live-page .battle-problem-card,
+        [data-theme="dark"] .battle-live-page .battle-layout-preset,
+        [data-theme="dark"] .battle-live-page .battle-helper-chip,
+        [data-theme="dark"] .battle-live-page .battle-round-card,
+        [data-theme="dark"] .battle-live-page .battle-round-toolbar {
+            background: #0f172a;
+            border-color: rgba(71, 85, 105, 0.7);
+            box-shadow: 0 12px 26px -22px rgba(2, 6, 23, 0.8);
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-problem-card .problem-copy {
+            background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+            border-color: rgba(71, 85, 105, 0.72);
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-layout-preset:hover,
+        [data-theme="dark"] .battle-live-page .battle-layout-preset.is-active {
+            color: #bfdbfe;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-guide-step {
+            color: #bfdbfe;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-round-pill {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-match-pill {
+            background: color-mix(in srgb, #1d4ed8 28%, var(--aq-card) 72%);
+            color: #dbeafe;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-match-pill.is-finished {
+            background: color-mix(in srgb, #14532d 78%, var(--aq-card) 22%);
+            color: #dcfce7;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-round-pill.is-running {
+            background: #14532d;
+            color: #dcfce7;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-round-pill.is-waiting {
+            background: #78350f;
+            color: #fef3c7;
+        }
+
+        [data-theme="dark"] .battle-confirm-modal .modal-content {
+            background: linear-gradient(180deg, color-mix(in srgb, var(--aq-card) 92%, #0f172a 8%), var(--aq-card));
+        }
+
+        [data-theme="dark"] .battle-confirm-note {
+            border-color: color-mix(in srgb, #f59e0b 38%, var(--aq-border) 62%);
+            background: color-mix(in srgb, #78350f 72%, var(--aq-card) 28%);
+            color: #fde68a;
+        }
+
+        [data-theme="dark"] .battle-live-page .battle-splitter::after {
+            border-color: rgba(96, 165, 250, 0.32);
+            background:
+                radial-gradient(circle at center, rgba(125, 211, 252, 0.65) 0 1.5px, transparent 2px),
+                linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+        }
+    </style>
+    <div class="battle-live-page">
     <div class="card border-0 mb-4">
         <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
@@ -11,10 +586,15 @@
                     <p class="text-muted mb-0">Match ID: <strong>#{{ match.id }}</strong></p>
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <span class="badge battle-mode-pill {% if battle_mode == 'bot' %}bg-info{% else %}badge-primary{% endif %}">
+                        {% if battle_mode == 'bot' %}Computer Battle{% else %}Online Battle{% endif %}
+                    </span>
                     <span id="battleConnectionBadge" class="badge badge-accent">Connecting...</span>
-                    <button id="endBattleBtn" class="btn btn-outline-danger btn-sm" {% if match.status == 'finished' %}disabled{% endif %}>
-                        <i class="bi bi-stop-circle me-1"></i>End Battle
-                    </button>
+                    {% if battle_mode == 'bot' %}
+                        <button id="endBattleBtn" data-battle-end-btn class="btn btn-outline-danger btn-sm" {% if match.status == 'finished' %}disabled{% endif %}>
+                            <i class="bi bi-stop-circle me-1"></i>End Battle
+                        </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -32,7 +612,7 @@
                 <div class="col-12 col-md-5">
                     <div class="p-3 rounded border h-100">
                         <div class="text-muted small">Player Two</div>
-                        <div class="fw-semibold" id="playerTwoName">{{ match.player_two.username|default:"Waiting..." }}</div>
+                        <div class="fw-semibold" id="playerTwoName">{{ opponent_display_name }}</div>
                         <div class="display-6 mb-0" id="playerTwoScore">{{ match.player_two_score }}</div>
                     </div>
                 </div>
@@ -40,22 +620,145 @@
             <div id="battleStatus" class="mt-3">
                 {% if match.status == 'finished' %}
                     <div class="alert alert-success mb-0">
-                        <i class="bi bi-trophy-fill me-2"></i>Battle finished. Winner: <strong>{{ match.winner.username|default:"Draw" }}</strong>
+                        <i class="bi bi-trophy-fill me-2"></i>Battle finished. Winner: <strong>{{ winner_display_name }}</strong>
                     </div>
                 {% else %}
                     <div class="alert alert-info mb-0">
-                        <i class="bi bi-broadcast me-2"></i>Battle status: <strong>{{ match.status|title }}</strong>
+                        <i class="bi {% if battle_mode == 'bot' %}bi-cpu{% else %}bi-broadcast{% endif %} me-2"></i>
+                        Battle status: <strong>{{ match.status|title }}</strong>
                     </div>
                 {% endif %}
+            </div>
+            {% if battle_mode == 'bot' %}
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-shuffle"></i>
+                        <span>Marathon Pool: <strong id="botPoolCount">{{ bot_challenge_pool_count }}</strong> challenges</span>
+                    </span>
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-flag"></i>
+                        <span>Rounds Played: <strong id="botUsedCount">{{ used_challenge_count }}</strong></span>
+                    </span>
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-hourglass-split"></i>
+                        <span>Remaining: <strong id="botRemainingCount">{{ remaining_challenge_count }}</strong></span>
+                    </span>
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-joystick"></i>
+                        <span>Round State: <strong id="botRoundSummaryLabel">{% if bot_round_status == 'running' %}Running{% else %}Ready{% endif %}</strong></span>
+                    </span>
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-stopwatch"></i>
+                        <span>Computer timer: <strong id="botCountdownLabel">--:--</strong></span>
+                    </span>
+                </div>
+            {% endif %}
+
+            <div class="battle-guide-grid" aria-label="How this battle works">
+                <div class="battle-guide-card">
+                    <span class="battle-guide-step">1</span>
+                    <h3>Read The Challenge</h3>
+                    <p>Keep the full problem statement open on the left so you can understand the target before answering.</p>
+                </div>
+                <div class="battle-guide-card">
+                    <span class="battle-guide-step">2</span>
+                    <h3>Use The Workbench</h3>
+                    <p>Use the right side for visualization, thinking, and writing your answer. Drag the divider to give yourself more space.</p>
+                </div>
+                <div class="battle-guide-card">
+                    <span class="battle-guide-step">3</span>
+                    <h3>Submit And Score</h3>
+                    <p>{% if battle_mode == 'bot' %}Each time you or the computer solves, that side gets 1 point and the battle moves to a new random challenge with no repeats.{% else %}Correct first-attempt answers increase your battle score. End the room when you are ready to lock the result.{% endif %}</p>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-4">
-        <div class="col-lg-7 col-xl-7" id="question-section">
+    <div class="battle-layout-toolbar">
+        <div class="battle-layout-copy">
+            <strong>Layout:</strong> Drag the center divider to resize the question and workbench panels.
+        </div>
+        <div class="battle-layout-presets" aria-label="Battle layout presets">
+            <button type="button" class="battle-layout-preset" data-width="48">Focus Workbench</button>
+            <button type="button" class="battle-layout-preset is-active" data-width="58">Balanced</button>
+            <button type="button" class="battle-layout-preset" data-width="68">Focus Question</button>
+        </div>
+    </div>
+
+    <div class="battle-round-toolbar" aria-label="{% if battle_mode == 'bot' %}Computer battle controls{% else %}Online battle controls{% endif %}">
+        <div class="battle-round-toolbar-copy">
+            {% if battle_mode == 'bot' %}
+                <span id="botRoundStateLabel" class="battle-round-pill {% if bot_round_status == 'running' %}is-running{% else %}is-waiting{% endif %}">
+                    {% if bot_round_status == 'running' %}Round Running{% else %}Ready To Start{% endif %}
+                </span>
+                <div class="battle-round-toolbar-text">
+                    <strong>Round controls</strong>
+                    <span id="botRoundStateHelp">
+                        {% if bot_round_status == 'running' %}
+                            Finish before the timer ends or the computer takes the point.
+                        {% else %}
+                            Review the challenge first, then start when you are ready.
+                        {% endif %}
+                    </span>
+                </div>
+            {% else %}
+                <span class="battle-match-pill {% if match.status == 'finished' %}is-finished{% endif %}">
+                    {% if match.status == 'finished' %}Battle Finished{% else %}Live Opponent Match{% endif %}
+                </span>
+                <div class="battle-round-toolbar-text">
+                    <strong>Opponent battle controls</strong>
+                    <span>
+                        {% if match.status == 'finished' %}
+                            This room is complete and the result is locked.
+                        {% else %}
+                            Solve faster than your opponent to grow your score. End the room when both sides are done.
+                        {% endif %}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+        <div class="battle-round-toolbar-actions">
+            {% if battle_mode == 'bot' %}
+                <button type="button" class="btn btn-success fw-600" id="botStartBtn">
+                    <i class="bi bi-play-fill me-1"></i>Start Round
+                </button>
+                <button type="button" class="btn btn-outline-warning fw-600" id="botStopBtn" {% if bot_round_status != 'running' %}disabled{% endif %}>
+                    <i class="bi bi-stop-fill me-1"></i>Stop Round
+                </button>
+                <button type="button" class="btn btn-outline-secondary fw-600" id="botRestartBtn">
+                    <i class="bi bi-arrow-repeat me-1"></i>Restart Marathon
+                </button>
+            {% else %}
+                <div class="battle-round-toolbar-meta">
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-people"></i>
+                        <span>Opponent: <strong>{{ opponent_display_name }}</strong></span>
+                    </span>
+                    <span class="battle-helper-chip">
+                        <i class="bi bi-lightning-charge"></i>
+                        <span>Scoring: <strong>First correct attempts</strong></span>
+                    </span>
+                </div>
+                <button type="button" class="btn btn-outline-danger fw-600" data-battle-end-btn {% if match.status == 'finished' %}disabled{% endif %}>
+                    <i class="bi bi-stop-circle me-1"></i>{% if match.status == 'finished' %}Battle Ended{% else %}End Battle{% endif %}
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="battle-layout-shell" id="battleLayoutShell">
+        <section class="battle-panel" id="question-section">
+            <div class="battle-panel-header">
+                <div>
+                    <div class="battle-panel-kicker">Left Panel</div>
+                    <h2 class="battle-panel-title">Challenge Question</h2>
+                </div>
+                <div class="battle-panel-note">Read here first</div>
+            </div>
+            <div class="battle-panel-scroll">
             {% if challenge %}
                 <!-- Challenge Header: Title + Metadata + Prompt -->
-                <div class="card border-0 mb-4">
+                <div class="card border-0 mb-4 battle-problem-card">
                     <div class="card-body">
                         <!-- Metadata Badges -->
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -73,9 +776,9 @@
                         <h2 class="h2 mb-3" style="color: var(--aq-text); font-weight: 700; line-height: 1.3;">{{ challenge.title }}</h2>
                         
                         <!-- Problem Statement -->
-                        <div style="background: var(--aq-surface); border: 1px solid var(--aq-border); border-left: 4px solid var(--aq-primary); border-radius: var(--aq-radius-md); padding: 1.25rem;">
+                        <div class="problem-copy">
                             <h5 class="h6 mb-2" style="color: var(--aq-text-secondary); text-transform: uppercase; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.05em;">Problem Statement</h5>
-                            <p class="mb-0" style="color: var(--aq-text); line-height: 1.8; font-size: 1rem;">{{ challenge.prompt }}</p>
+                            <p class="mb-0" style="color: var(--aq-text); line-height: 1.8; font-size: 1rem;">{{ challenge.prompt|linebreaksbr }}</p>
                         </div>
                         
                         <!-- Starter Code Info -->
@@ -86,6 +789,23 @@
                                 </p>
                             </div>
                         {% endif %}
+
+                        <div class="battle-helper-row">
+                            <div class="battle-helper-chip">
+                                <i class="bi bi-arrows-angle-expand"></i>
+                                <span>Need more reading room? <strong>Drag the divider</strong></span>
+                            </div>
+                            <div class="battle-helper-chip">
+                                <i class="bi bi-lightning-charge"></i>
+                                <span>Mode: <strong>{% if battle_mode == 'bot' %}Computer{% else %}Online Opponent{% endif %}</strong></span>
+                            </div>
+                            {% if battle_mode == 'bot' %}
+                                <div class="battle-helper-chip">
+                                    <i class="bi bi-shuffle"></i>
+                                    <span>Challenge order: <strong>Random, no repeats</strong></span>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             {% else %}
@@ -93,13 +813,66 @@
                     <i class="bi bi-exclamation-triangle me-2"></i>No challenge is currently available for this battle.
                 </div>
             {% endif %}
-        </div>
+            </div>
+        </section>
+
+        <div class="battle-splitter" id="battleLayoutDivider" role="separator" aria-orientation="vertical" aria-label="Resize question and workbench panels"></div>
 
         <!-- Sticky Right Panel: Visualization + Answer -->
-        <div class="col-lg-5 col-xl-5 challenge-viz-column" id="visualization-section">
+        <section class="battle-panel challenge-viz-column" id="visualization-section">
+            <div class="battle-panel-header">
+                <div>
+                    <div class="battle-panel-kicker">Right Panel</div>
+                    <h2 class="battle-panel-title">Workbench</h2>
+                </div>
+                <div class="battle-panel-note">Think, inspect, and answer here</div>
+            </div>
+            <div class="battle-panel-scroll">
+            <div class="battle-workbench-stack">
             {% if challenge %}
-                <!-- Visualization Player (Sticky on Desktop) -->
-                <div class="card border-0 mb-4 challenge-viz-card">
+                <div id="answer-section">
+                {% if user.is_authenticated %}
+                    <div class="card border-0 challenge-answer-card battle-workbench-card battle-answer-card">
+                        <div class="card-body battle-answer-card-body">
+                            <div class="battle-answer-header">
+                                <h3 class="h5 mb-2" style="font-weight: 700;">
+                                <i class="bi bi-pencil-square me-2" style="color: var(--aq-accent);"></i>Answer Pad
+                                </h3>
+                                <p>Keep your final answer here while the question stays open on the left. This should feel closer to a file editor and prompt side-by-side.</p>
+                            </div>
+                            <div class="battle-answer-meta">
+                                <span class="battle-helper-chip">
+                                    <i class="bi bi-layout-text-sidebar-reverse"></i>
+                                    <span>Answer stays in view while the question remains open on the left.</span>
+                                </span>
+                                {% if battle_mode == 'bot' %}
+                                    <span class="battle-helper-chip">
+                                        <i class="bi bi-exclamation-diamond"></i>
+                                        <span>No pause mode. <strong>Stop Round</strong> forfeits the current challenge.</span>
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="battle_room_code" value="{{ match.room_code }}">
+                                
+                                <div class="mb-3">
+                                    <label for="answerInput" class="form-label text-muted small">Enter your solution:</label>
+                                    <textarea id="answerInput" class="form-control" name="answer" rows="10" placeholder="Type your final answer here, then press Submit Answer." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-success px-4 fw-600" id="submitAnswerBtn">
+                                    <i class="bi bi-check2-circle me-1"></i>Submit Answer
+                                </button>
+                            </form>
+                            <div class="mt-3" id="attemptResult"></div>
+                        </div>
+                    </div>
+                {% endif %}
+                </div>
+
+                <!-- Visualization Player -->
+                <div class="card border-0 challenge-viz-card battle-workbench-card">
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between mb-3">
                             <h3 class="h5 mb-0" style="font-weight: 700;">
@@ -133,35 +906,30 @@
                         <div id="visualizationOutput"></div>
                     </div>
                 </div>
-
-                <!-- Answer Submission -->
-                <div id="answer-section">
-                {% if user.is_authenticated %}
-                    <div class="card border-0 challenge-answer-card">
-                        <div class="card-body">
-                            <h3 class="h5 mb-3" style="font-weight: 700;">
-                                <i class="bi bi-pencil-square me-2" style="color: var(--aq-accent);"></i>Your Answer
-                            </h3>
-                            <form id="attemptForm" method="post" action="{% url 'challenge-submit' challenge.slug %}">
-                                {% csrf_token %}
-                                <input type="hidden" name="battle_room_code" value="{{ match.room_code }}">
-                                
-                                <div class="mb-3">
-                                    <label for="answerInput" class="form-label text-muted small">Enter your solution:</label>
-                                    <textarea id="answerInput" class="form-control" name="answer" rows="4" placeholder="You will see your answer here. If correct, click Submit. If not, reattempt." style="font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; resize: vertical;" required></textarea>
-                                </div>
-                                
-                                <button type="submit" class="btn btn-success px-4 fw-600" id="submitAnswerBtn">
-                                    <i class="bi bi-check2-circle me-1"></i>Submit Answer
-                                </button>
-                            </form>
-                            <div class="mt-3" id="attemptResult"></div>
-                        </div>
-                    </div>
-                {% endif %}
-                </div>
             {% endif %}
+            </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="modal fade battle-confirm-modal" id="battleConfirmModal" tabindex="-1" aria-labelledby="battleConfirmTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <h2 class="modal-title h5 mb-0 battle-confirm-title" id="battleConfirmTitle">Confirm Action</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <p class="mb-0 battle-confirm-message" id="battleConfirmMessage">Please confirm this action.</p>
+                    <div class="battle-confirm-note" id="battleConfirmNote">This action will update the current battle room immediately.</div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="battleConfirmCancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="battleConfirmAcceptBtn">Confirm</button>
+                </div>
+            </div>
         </div>
+    </div>
     </div>
 </div>
 {% endblock %}
@@ -179,12 +947,94 @@
 <script>
     window.BATTLE_ROOM_CODE = "{{ match.room_code }}";
     window.BATTLE_INITIAL_STATE = {
+        mode: "{{ battle_mode }}",
         status: "{{ match.status }}",
-        winner: "{{ match.winner.username|default:'Draw' }}"
+        winner: "{{ winner_display_name }}",
+        startedAt: "{{ match.started_at|date:'c' }}",
+        endedAt: "{{ match.ended_at|date:'c' }}",
+        challengeId: {{ challenge.id|default:'null' }},
+        usedChallengeCount: {{ used_challenge_count|default:0 }},
+        botTotalChallengeCount: {{ bot_challenge_pool_count|default:0 }},
+        botRoundStatus: "{{ bot_round_status }}",
+        botScoreIntervalSeconds: {{ bot_score_interval_seconds|default:'null' }},
+        botNextSolveAt: "{{ match.bot_next_solve_at|date:'c' }}",
+        playerOneScore: {{ match.player_one_score|default:0 }},
+        playerTwoScore: {{ match.player_two_score|default:0 }}
     };
 </script>
 <script src="{% static 'js/battle-client.js' %}"></script>
 <script>
+    const battleLayoutShell = document.getElementById('battleLayoutShell');
+    const battleLayoutDivider = document.getElementById('battleLayoutDivider');
+    const layoutPresetButtons = document.querySelectorAll('.battle-layout-preset');
+    const battleLayoutStorageKey = 'aq-battle-layout-width';
+
+    function clampQuestionWidth(width) {
+        return Math.max(38, Math.min(72, width));
+    }
+
+    function applyBattleLayoutWidth(width, persist = false) {
+        if (!battleLayoutShell) return;
+        const clampedWidth = clampQuestionWidth(width);
+        battleLayoutShell.style.setProperty('--battle-question-width', `${clampedWidth}%`);
+        layoutPresetButtons.forEach((button) => {
+            const presetWidth = parseFloat(button.dataset.width || '');
+            const isActive = Math.abs(presetWidth - clampedWidth) < 0.6;
+            button.classList.toggle('is-active', isActive);
+        });
+        if (persist) {
+            window.localStorage.setItem(battleLayoutStorageKey, String(clampedWidth));
+        }
+    }
+
+    function initializeBattleLayoutControls() {
+        if (!battleLayoutShell) return;
+
+        const savedWidth = parseFloat(window.localStorage.getItem(battleLayoutStorageKey) || '');
+        if (!Number.isNaN(savedWidth)) {
+            applyBattleLayoutWidth(savedWidth);
+        }
+
+        layoutPresetButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const presetWidth = parseFloat(button.dataset.width || '');
+                if (Number.isNaN(presetWidth)) return;
+                applyBattleLayoutWidth(presetWidth, true);
+            });
+        });
+
+        if (!battleLayoutDivider || window.matchMedia('(max-width: 991.98px)').matches) {
+            return;
+        }
+
+        const onPointerMove = (event) => {
+            const rect = battleLayoutShell.getBoundingClientRect();
+            if (!rect.width) return;
+            const pointerX = event.clientX - rect.left;
+            const percent = (pointerX / rect.width) * 100;
+            applyBattleLayoutWidth(percent);
+        };
+
+        const stopDragging = () => {
+            document.body.classList.remove('battle-resizing');
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', stopDragging);
+            const computedWidth = parseFloat(getComputedStyle(battleLayoutShell).getPropertyValue('--battle-question-width'));
+            if (!Number.isNaN(computedWidth)) {
+                window.localStorage.setItem(battleLayoutStorageKey, String(clampQuestionWidth(computedWidth)));
+            }
+        };
+
+        battleLayoutDivider.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            document.body.classList.add('battle-resizing');
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', stopDragging);
+        });
+    }
+
+    initializeBattleLayoutControls();
+
     const attemptForm = document.getElementById('attemptForm');
     const attemptResult = document.getElementById('attemptResult');
     const submitBtn = document.getElementById('submitAnswerBtn');
@@ -228,7 +1078,7 @@
                 if (data.current_level !== undefined) {
                     messageContent += ` &middot; Level: <strong>${data.current_level}</strong>`;
                 }
-                if (data.is_score_eligible === false && !/first-attempt|first attempt/i.test(String(data.message || ''))) {
+                if (data.is_score_eligible === false && !data.battle_reload_required && !/first-attempt|first attempt/i.test(String(data.message || ''))) {
                     messageContent += ' &middot; <strong>First-attempt scoring already consumed</strong>';
                 }
 
@@ -239,13 +1089,40 @@
                     </div>
                 </div>`;
 
-                if (data.is_correct && data.battle_score_token && window.BattleClient && typeof window.BattleClient.sendScoreIncrement === 'function') {
+                if (data.is_correct && data.battle_reload_required) {
+                    if (data.battle_player_one_score !== undefined) {
+                        const playerOneScoreEl = document.getElementById('playerOneScore');
+                        if (playerOneScoreEl) {
+                            playerOneScoreEl.textContent = String(data.battle_player_one_score);
+                        }
+                    }
+                    if (data.battle_used_challenge_count !== undefined) {
+                        const usedCountEl = document.getElementById('botUsedCount');
+                        if (usedCountEl) {
+                            usedCountEl.textContent = String(data.battle_used_challenge_count);
+                        }
+                    }
+                    attemptResult.innerHTML += `<div class="alert alert-info mt-2 mb-0">
+                        <i class="bi bi-arrow-repeat me-2"></i>Point awarded. Loading next challenge: <strong>${data.battle_next_challenge_title || 'Next challenge'}</strong>
+                    </div>`;
+                    window.setTimeout(() => {
+                        window.location.reload();
+                    }, 900);
+                } else if (data.is_correct && data.battle_score_token && window.BattleClient && typeof window.BattleClient.sendScoreIncrement === 'function') {
                     const sent = window.BattleClient.sendScoreIncrement(data.battle_score_token);
                     if (!sent) {
                         attemptResult.innerHTML += `<div class="alert alert-warning mt-2 mb-0">
                             <i class="bi bi-wifi-off me-2"></i>Answer is saved, but realtime score sync failed because battle socket is disconnected.
                         </div>`;
                     }
+                } else if (data.is_correct && !data.battle_score_token) {
+                    let reason = 'This correct answer did not increase the battle score.';
+                    if (data.is_score_eligible === false) {
+                        reason = 'This challenge was already solved earlier, so the answer is saved but no new battle point was awarded.';
+                    }
+                    attemptResult.innerHTML += `<div class="alert alert-info mt-2 mb-0">
+                        <i class="bi bi-info-circle me-2"></i>${reason}
+                    </div>`;
                 }
             } catch (error) {
                 attemptResult.innerHTML = `<div class="alert alert-danger fade-in">

@@ -14,6 +14,7 @@ class BattleMatchSerializer(serializers.ModelSerializer):
         fields = (
             'id',
             'room_code',
+            'mode',
             'player_one',
             'player_one_name',
             'player_two',
@@ -32,6 +33,7 @@ class BattleMatchSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             'room_code',
+            'mode',
             'preferred_topic',
             'challenge',
             'player_one_score',

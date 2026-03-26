@@ -686,6 +686,23 @@ def _is_challenge_unlocked(user, challenge):
     return prog.is_unlocked if prog else False
 
 
+def _get_valid_battle_match_for_submission(user, challenge, battle_room_code):
+    if not battle_room_code or not user or not user.is_authenticated:
+        return None
+
+    from battle.models import BattleMatch
+
+    return (
+        BattleMatch.objects.filter(
+            room_code=battle_room_code,
+            status=BattleMatch.Status.LIVE,
+            challenge_id=challenge.id,
+        )
+        .filter(Q(player_one=user) | Q(player_two=user))
+        .first()
+    )
+
+
 def _build_topic_unlock_metadata(topic_ids):
     """Return topic-first and challenge-prev maps for active challenges in topics."""
     if not topic_ids:
@@ -3303,11 +3320,21 @@ def submit_attempt_view(request, slug):
     """Submit attempt with unlock enforcement and progression tracking."""
     challenge = get_object_or_404(Challenge, slug=slug, is_active=True)
     raw_action_payload = request.POST.get('action_payload', '').strip()
+    battle_room_code = request.POST.get('battle_room_code', '').strip()
+    battle_match = _get_valid_battle_match_for_submission(request.user, challenge, battle_room_code)
 
-    if not _is_challenge_unlocked(request.user, challenge):
+    if not battle_match and not _is_challenge_unlocked(request.user, challenge):
         return JsonResponse(
             {'error': 'This challenge is locked', 'is_correct': False},
             status=403,
+        )
+    if battle_match and battle_match.is_bot_match and not battle_match.bot_round_is_running:
+        return JsonResponse(
+            {
+                'error': 'Press Start Round to begin this computer challenge.',
+                'is_correct': False,
+            },
+            status=409,
         )
 
     answer = request.POST.get('answer', '').strip()
@@ -3398,26 +3425,35 @@ def submit_attempt_view(request, slug):
     if action_eval and action_eval.get('diagnostics'):
         response_data.update(action_eval['diagnostics'])
 
-    battle_room_code = request.POST.get('battle_room_code', '').strip()
-    if battle_room_code and is_correct and is_score_eligible:
-        from battle.models import BattleMatch
+    if battle_room_code and is_correct:
+        from battle.bot_matches import bot_challenge_count, register_bot_player_solve
         from battle.score_tokens import build_score_token
 
-        battle_match = (
-            BattleMatch.objects.filter(
-                room_code=battle_room_code,
-                status=BattleMatch.Status.LIVE,
-                challenge_id=challenge.id,
-            )
-            .filter(Q(player_one=request.user) | Q(player_two=request.user))
-            .first()
-        )
         if battle_match:
-            response_data['battle_score_token'] = build_score_token(
-                room_code=battle_match.room_code,
-                attempt_id=attempt.id,
-                user_id=request.user.id,
-            )
+            if battle_match.is_bot_match:
+                with transaction.atomic():
+                    locked_match = (
+                        battle_match.__class__.objects.select_for_update()
+                        .select_related('player_one', 'player_two', 'winner', 'challenge')
+                        .get(id=battle_match.id)
+                    )
+                    locked_match, challenge_advanced = register_bot_player_solve(locked_match, attempt)
+                response_data.update({
+                    'battle_challenge_advanced': challenge_advanced,
+                    'battle_reload_required': challenge_advanced,
+                    'battle_player_one_score': locked_match.player_one_score,
+                    'battle_player_two_score': locked_match.player_two_score,
+                    'battle_used_challenge_count': locked_match.used_challenge_count,
+                    'battle_total_challenge_count': bot_challenge_count(),
+                })
+                if challenge_advanced and locked_match.challenge:
+                    response_data['battle_next_challenge_title'] = locked_match.challenge.title
+            elif is_score_eligible:
+                response_data['battle_score_token'] = build_score_token(
+                    room_code=battle_match.room_code,
+                    attempt_id=attempt.id,
+                    user_id=request.user.id,
+                )
 
     if is_correct and challenge.topic:
         next_challenge = (

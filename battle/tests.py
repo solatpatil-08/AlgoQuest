@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from pathlib import Path
 
 from asgiref.sync import async_to_sync
@@ -8,13 +9,15 @@ from django.db import connection
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
-from challenges.models import Challenge, ChallengeAttempt, Topic
+from challenges.models import Challenge, ChallengeAttempt, Topic, UserChallengeProg
 from leaderboard.models import Leaderboard, Reward
 from leaderboard.services import finalize_battle_rewards
 
+from .bot_matches import forfeit_bot_round, reconcile_bot_match, register_bot_player_solve, restart_bot_match, start_bot_round
 from .consumers import BattleConsumer
-from .matchmaking import find_or_create_match
+from .matchmaking import create_bot_match, find_or_create_match, select_challenge_for_match
 from .models import BattleMatch
 from .score_tokens import build_score_token
 
@@ -140,6 +143,65 @@ class MatchmakingTests(TestCase):
         first_match.refresh_from_db()
         self.assertEqual(first_match.preferred_topic, self.topic_graphs)
 
+    def test_select_challenge_for_match_prefers_unsolved_challenge_for_participant(self):
+        user = User.objects.create_user(username='solver', password='StrongPass123!')
+        second_array_challenge = Challenge.objects.create(
+            title='Array Battle Two',
+            topic=self.topic_arrays,
+            order_index=1,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Array challenge 2',
+            prompt='Array prompt 2',
+            expected_answer='b',
+        )
+        user.challenge_progress.create(
+            challenge=self.array_challenge,
+            is_solved=True,
+            is_unlocked=True,
+        )
+
+        selected = select_challenge_for_match(topic=self.topic_arrays, participants=[user])
+
+        self.assertEqual(selected, second_array_challenge)
+
+    def test_create_bot_match_initializes_random_marathon_state(self):
+        user = User.objects.create_user(username='bot_runner', password='StrongPass123!')
+
+        match, waiting = create_bot_match(user)
+
+        self.assertFalse(waiting)
+        self.assertEqual(match.mode, BattleMatch.Mode.BOT)
+        self.assertEqual(match.status, BattleMatch.Status.LIVE)
+        self.assertIsNotNone(match.challenge)
+        self.assertEqual(match.used_challenge_ids, [match.challenge_id])
+        self.assertEqual(match.bot_round_status, BattleMatch.BotRoundStatus.READY)
+        self.assertIsNone(match.bot_next_solve_at)
+
+    def test_create_bot_match_honors_topic_preference(self):
+        user = User.objects.create_user(username='topic_bot_runner', password='StrongPass123!')
+
+        match, waiting = create_bot_match(user, topic_preference='graphs')
+
+        self.assertFalse(waiting)
+        self.assertEqual(match.mode, BattleMatch.Mode.BOT)
+        self.assertEqual(match.preferred_topic, self.topic_graphs)
+        self.assertEqual(match.challenge.topic, self.topic_graphs)
+
+    def test_existing_live_bot_match_can_switch_to_requested_topic(self):
+        user = User.objects.create_user(username='switch_bot_runner', password='StrongPass123!')
+        existing_match, _ = create_bot_match(user, topic_preference='arrays')
+
+        switched_match, waiting = create_bot_match(user, topic_preference='graphs')
+        existing_match.refresh_from_db()
+
+        self.assertFalse(waiting)
+        self.assertEqual(switched_match.id, existing_match.id)
+        self.assertEqual(switched_match.preferred_topic, self.topic_graphs)
+        self.assertEqual(switched_match.challenge.topic, self.topic_graphs)
+        self.assertEqual(switched_match.player_one_score, 0)
+        self.assertEqual(switched_match.player_two_score, 0)
+
 
 class BattleApiAndAccessTests(TestCase):
     def setUp(self):
@@ -187,6 +249,135 @@ class BattleApiAndAccessTests(TestCase):
         self.assertEqual(match.status, BattleMatch.Status.LIVE)
         self.assertEqual(match.challenge, self.challenge)
 
+    def test_battle_api_post_can_start_bot_battle_immediately(self):
+        self.client.force_login(self.first)
+        response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({
+                'battle_mode': BattleMatch.Mode.BOT,
+                'topic_preference': self.topic.stable_id,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload['is_waiting'])
+        self.assertEqual(payload['mode'], BattleMatch.Mode.BOT)
+
+        match = BattleMatch.objects.get(room_code=payload['room_code'])
+        self.assertEqual(match.status, BattleMatch.Status.LIVE)
+        self.assertEqual(match.mode, BattleMatch.Mode.BOT)
+        self.assertIsNone(match.player_two)
+        self.assertEqual(match.challenge, self.challenge)
+        self.assertEqual(match.used_challenge_ids, [match.challenge_id])
+        self.assertEqual(match.bot_round_status, BattleMatch.BotRoundStatus.READY)
+        self.assertIsNone(match.bot_next_solve_at)
+
+    def test_battle_api_room_state_progresses_bot_match(self):
+        next_challenge = Challenge.objects.create(
+            title='Battle Challenge Two',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Challenge 2',
+            prompt='Prompt 2',
+            expected_answer='next',
+        )
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            challenge=self.challenge,
+            mode=BattleMatch.Mode.BOT,
+            status=BattleMatch.Status.LIVE,
+            started_at=timezone.now(),
+            used_challenge_ids=[self.challenge.id],
+            bot_round_status=BattleMatch.BotRoundStatus.RUNNING,
+            bot_next_solve_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        self.client.force_login(self.first)
+        response = self.client.get(f'/api/battle/?room_code={match.room_code}')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['player_two_score'], 1)
+        self.assertEqual(payload['challenge_id'], next_challenge.id)
+
+    def test_battle_api_can_start_and_forfeit_bot_round_without_websocket(self):
+        next_challenge = Challenge.objects.create(
+            title='Battle Challenge Two',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Challenge 2',
+            prompt='Prompt 2',
+            expected_answer='next',
+        )
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            challenge=self.challenge,
+            mode=BattleMatch.Mode.BOT,
+            status=BattleMatch.Status.LIVE,
+            started_at=timezone.now(),
+            used_challenge_ids=[self.challenge.id],
+            bot_round_status=BattleMatch.BotRoundStatus.READY,
+        )
+
+        self.client.force_login(self.first)
+        start_response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({
+                'room_code': match.room_code,
+                'battle_action': 'start',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(start_response.status_code, 200)
+        start_payload = start_response.json()
+        self.assertEqual(start_payload['bot_round_status'], BattleMatch.BotRoundStatus.RUNNING)
+        self.assertTrue(start_payload['bot_next_solve_at'])
+
+        forfeit_response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({
+                'room_code': match.room_code,
+                'battle_action': 'forfeit',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(forfeit_response.status_code, 200)
+        forfeit_payload = forfeit_response.json()
+        self.assertEqual(forfeit_payload['player_two_score'], 1)
+        self.assertEqual(forfeit_payload['bot_round_status'], BattleMatch.BotRoundStatus.READY)
+        self.assertEqual(forfeit_payload['challenge_id'], next_challenge.id)
+
+    def test_battle_api_can_finalize_live_battle_without_websocket(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+            player_one_score=3,
+            player_two_score=1,
+        )
+
+        self.client.force_login(self.first)
+        response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({
+                'room_code': match.room_code,
+                'battle_action': 'finalize',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['status'], BattleMatch.Status.FINISHED)
+        self.assertEqual(payload['winner'], self.first.username)
+
     def test_unauthorized_live_room_access_denied(self):
         match = BattleMatch.objects.create(
             player_one=self.first,
@@ -209,6 +400,63 @@ class BattleApiAndAccessTests(TestCase):
         response = self.client.get(reverse('battle-live', args=[match.room_code]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['challenge'].id, self.challenge.id)
+
+    def test_bot_battle_live_view_labels_computer_opponent(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            challenge=self.challenge,
+            mode=BattleMatch.Mode.BOT,
+            status=BattleMatch.Status.LIVE,
+            started_at=timezone.now(),
+        )
+        self.client.force_login(self.first)
+        response = self.client.get(reverse('battle-live', args=[match.room_code]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Computer Battle')
+        self.assertContains(response, 'Computer')
+
+    def test_submit_attempt_in_bot_battle_advances_to_next_challenge(self):
+        next_challenge = Challenge.objects.create(
+            title='Battle Challenge Two',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Challenge 2',
+            prompt='Prompt 2',
+            expected_answer='next',
+        )
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            challenge=self.challenge,
+            mode=BattleMatch.Mode.BOT,
+            status=BattleMatch.Status.LIVE,
+            started_at=timezone.now(),
+            used_challenge_ids=[self.challenge.id],
+            bot_round_status=BattleMatch.BotRoundStatus.RUNNING,
+            bot_next_solve_at=timezone.now() + timedelta(seconds=45),
+        )
+        UserChallengeProg.objects.update_or_create(
+            user=self.first,
+            challenge=self.challenge,
+            defaults={'is_unlocked': True, 'is_solved': True},
+        )
+
+        self.client.force_login(self.first)
+        response = self.client.post(
+            reverse('challenge-submit', args=[self.challenge.slug]),
+            {
+                'answer': 'ok',
+                'battle_room_code': match.room_code,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['is_correct'])
+        self.assertTrue(payload['battle_reload_required'])
+        self.assertEqual(payload['battle_player_one_score'], 1)
+        self.assertEqual(payload['battle_next_challenge_title'], next_challenge.title)
 
     def test_same_challenge_for_both_players_in_same_room(self):
         self.client.force_login(self.first)
@@ -249,13 +497,16 @@ class BattleApiAndAccessTests(TestCase):
         self.assertIsNone(match.preferred_topic)
         self.assertIsNotNone(match.challenge)
 
-    def test_lobby_template_contains_single_matchmake_flow(self):
+    def test_lobby_template_contains_online_and_computer_matchmake_flows(self):
         self.client.force_login(self.first)
         response = self.client.get(reverse('battle-lobby'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="matchmakeBtn"')
+        self.assertContains(response, 'id="battleComputerBtn"')
         self.assertContains(response, 'id="matchStatus"')
         self.assertContains(response, 'startMatchmaking')
+        self.assertContains(response, 'battle_mode')
+        self.assertContains(response, 'Computer Marathon')
         self.assertNotContains(response, 'if (button)')
         self.assertNotContains(response, 'statusEl.innerHTML')
 
@@ -310,9 +561,11 @@ class BattleApiAndAccessTests(TestCase):
         script_path = Path(settings.BASE_DIR) / 'static' / 'js' / 'battle-client.js'
         script = script_path.read_text(encoding='utf-8')
         self.assertNotIn('alert-${type}', script)
+        self.assertNotIn('window.confirm', script)
         self.assertIn("error: 'alert-danger'", script)
         self.assertIn('queueScoreToken', script)
         self.assertIn('flushPendingScoreTokens', script)
+        self.assertIn('openBattleConfirmDialog', script)
 
 
 class BattleConsumerSecurityTests(TransactionTestCase):
@@ -465,6 +718,106 @@ class BattleConsumerSecurityTests(TransactionTestCase):
             Leaderboard.objects.get(user=self.player_one, scope=Leaderboard.Scope.GLOBAL).score,
             self.match.xp_stake,
         )
+
+    def test_register_bot_player_solve_advances_to_new_challenge_without_repeat(self):
+        second_challenge = Challenge.objects.create(
+            title='WS Challenge Two',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='WS challenge two',
+            prompt='WS prompt two',
+            expected_answer='ws2',
+        )
+        self.match.player_two = None
+        self.match.mode = BattleMatch.Mode.BOT
+        self.match.used_challenge_ids = [self.challenge.id]
+        self.match.bot_round_status = BattleMatch.BotRoundStatus.RUNNING
+        self.match.bot_next_solve_at = timezone.now() + timedelta(seconds=30)
+        self.match.save(update_fields=['player_two', 'mode', 'used_challenge_ids', 'bot_round_status', 'bot_next_solve_at'])
+
+        attempt = ChallengeAttempt.objects.create(
+            user=self.player_one,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_score_eligible=False,
+            is_correct=True,
+            score=0,
+            submitted_answer='ws',
+        )
+
+        updated_match, challenge_advanced = register_bot_player_solve(self.match, attempt)
+
+        self.assertTrue(challenge_advanced)
+        self.assertEqual(updated_match.player_one_score, 1)
+        self.assertEqual(updated_match.challenge_id, second_challenge.id)
+        self.assertEqual(updated_match.used_challenge_ids, [self.challenge.id, second_challenge.id])
+        attempt.refresh_from_db()
+        self.assertTrue(attempt.battle_score_applied)
+
+    def test_reconcile_bot_match_advances_computer_to_new_challenge(self):
+        second_challenge = Challenge.objects.create(
+            title='WS Challenge Two',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='WS challenge two',
+            prompt='WS prompt two',
+            expected_answer='ws2',
+        )
+        self.match.player_two = None
+        self.match.mode = BattleMatch.Mode.BOT
+        self.match.used_challenge_ids = [self.challenge.id]
+        self.match.bot_round_status = BattleMatch.BotRoundStatus.RUNNING
+        self.match.bot_next_solve_at = timezone.now() - timedelta(seconds=1)
+        self.match.save(update_fields=['player_two', 'mode', 'used_challenge_ids', 'bot_round_status', 'bot_next_solve_at'])
+
+        updated_match, changed = reconcile_bot_match(self.match)
+
+        self.assertTrue(changed)
+        self.assertEqual(updated_match.player_two_score, 1)
+        self.assertEqual(updated_match.challenge_id, second_challenge.id)
+        self.assertEqual(updated_match.used_challenge_ids, [self.challenge.id, second_challenge.id])
+
+    def test_start_forfeit_and_restart_bot_round_cycle(self):
+        Challenge.objects.create(
+            title='WS Challenge Three',
+            topic=self.topic,
+            order_index=2,
+            difficulty=Challenge.Difficulty.HARD,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='WS challenge three',
+            prompt='WS prompt three',
+            expected_answer='ws3',
+        )
+        self.match.player_two = None
+        self.match.mode = BattleMatch.Mode.BOT
+        self.match.used_challenge_ids = [self.challenge.id]
+        self.match.bot_round_status = BattleMatch.BotRoundStatus.READY
+        self.match.bot_next_solve_at = None
+        self.match.save(update_fields=['player_two', 'mode', 'used_challenge_ids', 'bot_round_status', 'bot_next_solve_at'])
+
+        started_match, started = start_bot_round(self.match)
+        self.assertTrue(started)
+        self.assertEqual(started_match.bot_round_status, BattleMatch.BotRoundStatus.RUNNING)
+        self.assertIsNotNone(started_match.bot_next_solve_at)
+
+        forfeited_match, advanced = forfeit_bot_round(started_match)
+        self.assertTrue(advanced)
+        self.assertEqual(forfeited_match.player_two_score, 1)
+        self.assertEqual(forfeited_match.bot_round_status, BattleMatch.BotRoundStatus.READY)
+        self.assertIsNone(forfeited_match.bot_next_solve_at)
+
+        restarted_match, restarted = restart_bot_match(forfeited_match)
+        self.assertTrue(restarted)
+        self.assertEqual(restarted_match.player_one_score, 0)
+        self.assertEqual(restarted_match.player_two_score, 0)
+        self.assertEqual(restarted_match.bot_round_status, BattleMatch.BotRoundStatus.READY)
+        self.assertIsNone(restarted_match.bot_next_solve_at)
+        self.assertIsNotNone(restarted_match.challenge)
+        self.assertEqual(len(restarted_match.used_challenge_ids), 1)
 
 
 class BattleRewardsTests(TestCase):
