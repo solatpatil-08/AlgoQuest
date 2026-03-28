@@ -1,6 +1,7 @@
 import importlib.util
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.utils import get_random_secret_key
 
@@ -39,6 +40,52 @@ _load_env_file(BASE_DIR / '.env')
 def _env_bool(name, default=False):
     return os.getenv(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
 
+
+def _env_text(name, default=''):
+    value = os.getenv(name, default).strip()
+    upper_value = value.upper()
+    if upper_value.startswith('ROTATE_') or value.startswith('replace-with-') or value.startswith('your-'):
+        return ''
+    return value
+
+
+def _postgres_db_config(name, user, password, host, port, options=None):
+    config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': name,
+        'USER': user,
+        'PASSWORD': password,
+        'HOST': host,
+        'PORT': port,
+    }
+    if options:
+        config['OPTIONS'] = options
+    return {'default': config}
+
+
+def _database_from_url(database_url):
+    parsed = urlparse(database_url)
+    if parsed.scheme not in {'postgres', 'postgresql'}:
+        raise ImproperlyConfigured('DATABASE_URL must start with postgres:// or postgresql://')
+
+    db_name = unquote(parsed.path.lstrip('/'))
+    if not db_name:
+        raise ImproperlyConfigured('DATABASE_URL must include a database name')
+
+    options = {key: value for key, value in parse_qsl(parsed.query, keep_blank_values=False)}
+    sslmode = os.getenv('POSTGRES_SSLMODE', '').strip()
+    if sslmode and 'sslmode' not in options:
+        options['sslmode'] = sslmode
+
+    return _postgres_db_config(
+        name=db_name,
+        user=unquote(parsed.username or ''),
+        password=unquote(parsed.password or ''),
+        host=parsed.hostname or '',
+        port=str(parsed.port or 5432),
+        options=options or None,
+    )
+
 DEBUG = _env_bool('DJANGO_DEBUG', True)
 
 # SECURITY WARNING: keep the secret key used in production secret.
@@ -62,6 +109,7 @@ CHANNELS_AVAILABLE = importlib.util.find_spec("channels") is not None
 # Application definition
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -87,6 +135,7 @@ if CHANNELS_AVAILABLE:
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -119,19 +168,41 @@ WSGI_APPLICATION = 'AlgoQuest.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-USE_POSTGRES = _env_bool('DJANGO_USE_POSTGRES', False)
+DATABASE_URL = _env_text('DATABASE_URL')
+USE_POSTGRES = _env_bool('DJANGO_USE_POSTGRES', bool(DATABASE_URL))
 
-if USE_POSTGRES:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('POSTGRES_DB', '').strip(),
-            'USER': os.getenv('POSTGRES_USER', '').strip(),
-            'PASSWORD': os.getenv('POSTGRES_PASSWORD', '').strip(),
-            'HOST': os.getenv('POSTGRES_HOST', '127.0.0.1').strip(),
-            'PORT': os.getenv('POSTGRES_PORT', '5432').strip(),
-        }
+if DATABASE_URL:
+    DATABASES = _database_from_url(DATABASE_URL)
+elif USE_POSTGRES:
+    postgres_config = {
+        'POSTGRES_DB': _env_text('POSTGRES_DB'),
+        'POSTGRES_USER': _env_text('POSTGRES_USER'),
+        'POSTGRES_PASSWORD': _env_text('POSTGRES_PASSWORD'),
+        'POSTGRES_HOST': _env_text('POSTGRES_HOST', '127.0.0.1'),
+        'POSTGRES_PORT': _env_text('POSTGRES_PORT', '5432'),
     }
+    missing_postgres_settings = [
+        name for name, value in postgres_config.items()
+        if name != 'POSTGRES_PORT' and not value
+    ]
+    if missing_postgres_settings:
+        raise ImproperlyConfigured(
+            'Missing PostgreSQL settings: ' + ', '.join(missing_postgres_settings)
+        )
+
+    postgres_options = {}
+    postgres_sslmode = _env_text('POSTGRES_SSLMODE')
+    if postgres_sslmode:
+        postgres_options['sslmode'] = postgres_sslmode
+
+    DATABASES = _postgres_db_config(
+        name=postgres_config['POSTGRES_DB'],
+        user=postgres_config['POSTGRES_USER'],
+        password=postgres_config['POSTGRES_PASSWORD'],
+        host=postgres_config['POSTGRES_HOST'],
+        port=postgres_config['POSTGRES_PORT'],
+        options=postgres_options or None,
+    )
 else:
     DATABASES = {
         'default': {
@@ -177,9 +248,34 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = Path(os.getenv('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles')))
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.getenv('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
+
+raw_csrf_trusted_origins = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip() for origin in raw_csrf_trusted_origins.split(',') if origin.strip()
+]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', True)
+    SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', True)
+    SECURE_HSTS_PRELOAD = _env_bool('DJANGO_SECURE_HSTS_PRELOAD', True)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
 
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
@@ -200,10 +296,10 @@ AUTHENTICATION_BACKENDS = [
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
-GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '').strip()
-GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '').strip()
-GITHUB_OAUTH_CLIENT_ID = os.getenv('GITHUB_OAUTH_CLIENT_ID', '').strip()
-GITHUB_OAUTH_CLIENT_SECRET = os.getenv('GITHUB_OAUTH_CLIENT_SECRET', '').strip()
+GOOGLE_OAUTH_CLIENT_ID = _env_text('GOOGLE_OAUTH_CLIENT_ID')
+GOOGLE_OAUTH_CLIENT_SECRET = _env_text('GOOGLE_OAUTH_CLIENT_SECRET')
+GITHUB_OAUTH_CLIENT_ID = _env_text('GITHUB_OAUTH_CLIENT_ID')
+GITHUB_OAUTH_CLIENT_SECRET = _env_text('GITHUB_OAUTH_CLIENT_SECRET')
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {

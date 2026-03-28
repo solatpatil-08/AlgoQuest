@@ -16,6 +16,8 @@ env/
 # Django
 db.sqlite3
 media/
+staticfiles/
+.koyeb-static-test/
 
 # Local environment and secrets
 .env
