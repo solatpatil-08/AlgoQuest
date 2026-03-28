@@ -49,6 +49,10 @@ def _env_text(name, default=''):
     return value
 
 
+def _split_csv_env(value):
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
 def _postgres_db_config(name, user, password, host, port, options=None):
     config = {
         'ENGINE': 'django.db.backends.postgresql',
@@ -86,21 +90,26 @@ def _database_from_url(database_url):
         options=options or None,
     )
 
-DEBUG = _env_bool('DJANGO_DEBUG', True)
+RENDER = _env_bool('RENDER', False)
+RENDER_EXTERNAL_HOSTNAME = _env_text('RENDER_EXTERNAL_HOSTNAME')
+
+DEBUG = _env_bool('DJANGO_DEBUG', not RENDER)
 
 # SECURITY WARNING: keep the secret key used in production secret.
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+SECRET_KEY = _env_text('DJANGO_SECRET_KEY') or _env_text('SECRET_KEY')
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = get_random_secret_key()
     else:
         raise ImproperlyConfigured('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is False')
 
-raw_allowed_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', '')
+raw_allowed_hosts = _env_text('DJANGO_ALLOWED_HOSTS')
 if raw_allowed_hosts:
-    ALLOWED_HOSTS = [host.strip() for host in raw_allowed_hosts.split(',') if host.strip()]
+    ALLOWED_HOSTS = _split_csv_env(raw_allowed_hosts)
 elif DEBUG:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver']
+elif RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME]
 else:
     ALLOWED_HOSTS = []
 
@@ -260,10 +269,10 @@ STORAGES = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(os.getenv('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
 
-raw_csrf_trusted_origins = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS', '')
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip() for origin in raw_csrf_trusted_origins.split(',') if origin.strip()
-]
+raw_csrf_trusted_origins = _env_text('DJANGO_CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = _split_csv_env(raw_csrf_trusted_origins)
+if not CSRF_TRUSTED_ORIGINS and RENDER_EXTERNAL_HOSTNAME and not DEBUG:
+    CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_EXTERNAL_HOSTNAME}']
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 

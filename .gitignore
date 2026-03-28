@@ -18,6 +18,7 @@ db.sqlite3
 media/
 staticfiles/
 .koyeb-static-test/
+.render-static-test/
 
 # Local environment and secrets
 .env

@@ -76,37 +76,41 @@ or a single connection string:
 DATABASE_URL=postgresql://algoquest_user:replace-with-db-password@127.0.0.1:5432/algoquest_db
 ```
 
-On Koyeb, PostgreSQL is the recommended production database. If you use a Koyeb Database Service, set `DATABASE_URL` from the database connection string and set `DJANGO_ALLOWED_HOSTS={{ KOYEB_PUBLIC_DOMAIN }}` in your service environment variables.
+For production, PostgreSQL is the recommended database. On Render, set `DATABASE_URL` from your Render PostgreSQL connection string.
 
-## Koyeb Deployment
+## Render Deployment
 
-This repository includes a root [Procfile](c:/Users/Hp/DjangoProjects/AlgoQuest/Procfile) so Koyeb buildpack deployments can start the app with Daphne/ASGI:
+This repository includes both [build.sh](c:/Users/Hp/DjangoProjects/AlgoQuest/build.sh) and [render.yaml](c:/Users/Hp/DjangoProjects/AlgoQuest/render.yaml) for Render deployment.
 
-```text
-web: daphne -b 0.0.0.0 -p ${PORT:-8000} AlgoQuest.asgi:application
-```
+The easiest path is using a Render Blueprint:
 
-Recommended Koyeb setup:
+1. Push this repository to GitHub.
+2. In Render, create a new Blueprint and point it to this repository.
+3. Render will create:
+   - a PostgreSQL database named `algoquest-db`
+   - a Python web service named `algoquest-web`
+4. The Blueprint will:
+   - install dependencies
+   - run `collectstatic`
+   - run `migrate`
+   - start the app with Daphne/ASGI
 
-1. Use `buildpack` deployment from GitHub.
-2. Set the build command to:
+If you deploy manually in the Render dashboard instead, use:
+
 ```bash
-python manage.py collectstatic --noinput
+Build Command: bash build.sh
+Start Command: daphne -b 0.0.0.0 -p $PORT AlgoQuest.asgi:application
 ```
-3. Leave the run command blank so Koyeb uses the `Procfile`, or set it to the same Daphne command explicitly.
-4. Add these environment variables:
+
+Recommended environment variables for a manual Render deploy:
+
 ```env
 DJANGO_DEBUG=False
 DJANGO_SECRET_KEY=replace-with-a-new-secret
-DJANGO_ALLOWED_HOSTS={{ KOYEB_PUBLIC_DOMAIN }}
-DJANGO_CSRF_TRUSTED_ORIGINS=https://{{ KOYEB_PUBLIC_DOMAIN }}
 DATABASE_URL=postgresql://...
-POSTGRES_SSLMODE=require
 ```
-5. After the first deploy, run migrations:
-```bash
-python manage.py migrate
-```
+
+Render automatically provides `RENDER` and `RENDER_EXTERNAL_HOSTNAME`, and this project now uses those values to derive safe production defaults for `DEBUG`, `ALLOWED_HOSTS`, and `CSRF_TRUSTED_ORIGINS` when you do not set them manually.
 
 Notes:
 - Static files are served by WhiteNoise in production.
