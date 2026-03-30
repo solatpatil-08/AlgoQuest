@@ -1716,6 +1716,29 @@ class ChallengeBankLoadCommandTests(TestCase):
         self.assertEqual(challenge.slug, collision_slug)
         self.assertEqual(challenge.algorithm_type, Challenge.AlgorithmType.BFS)
 
+    def test_challenge_slug_generation_truncates_long_values_for_postgres(self):
+        topic = Topic.objects.create(
+            stable_id='algo_' + ('very_long_topic_' * 8),
+            label='Long Topic',
+            category=Topic.Category.DSA_CORE,
+            description='desc',
+        )
+        challenge = Challenge.objects.create(
+            topic=topic,
+            order_index=0,
+            title='Very Long Challenge Title ' * 20,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            algorithm_type=Challenge.AlgorithmType.BFS,
+            difficulty=Challenge.Difficulty.EASY,
+            description='desc',
+            prompt='prompt',
+            expected_answer='queue',
+        )
+
+        slug_max_length = Challenge._meta.get_field('slug').max_length
+        self.assertLessEqual(len(challenge.slug), slug_max_length)
+        self.assertTrue(challenge.slug.startswith('algo'))
+
     def test_loaded_challenge_detail_route_is_accessible(self):
         self._run_loader('--reset')
         sample = Challenge.objects.filter(topic__isnull=False, is_active=True).first()

@@ -54,6 +54,7 @@ class Command(BaseCommand):
         topics_updated = 0
         challenges_created = 0
         challenges_updated = 0
+        slug_max_length = Challenge._meta.get_field('slug').max_length or 50
 
         for topic_data in data.get('topics', []):
             topic, topic_created = Topic.objects.update_or_create(
@@ -89,7 +90,7 @@ class Command(BaseCommand):
                     'is_visual_supported': topic.visualization_type != 'conceptual',
                 }
 
-                desired_slug = slugify(f"{topic.stable_id}-{challenge_data['title']}")
+                desired_slug = slugify(f"{topic.stable_id}-{challenge_data['title']}")[:slug_max_length]
                 challenge = Challenge.objects.filter(topic=topic, order_index=order_index).first()
                 challenge_created = False
 
@@ -109,7 +110,9 @@ class Command(BaseCommand):
                 if not slug_in_use:
                     challenge.slug = desired_slug
                 elif not challenge.slug:
-                    challenge.slug = slugify(f"{desired_slug}-{order_index}")
+                    suffix = f'-{order_index}'
+                    base_slug = desired_slug[: max(0, slug_max_length - len(suffix))]
+                    challenge.slug = f'{base_slug}{suffix}'
 
                 challenge.save()
 

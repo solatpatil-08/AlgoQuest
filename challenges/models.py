@@ -3,6 +3,13 @@ from django.db import models
 from django.utils.text import slugify
 
 
+def _trimmed_slug(value, max_length):
+    slug = slugify(value or '')
+    if max_length:
+        slug = slug[:max_length]
+    return slug
+
+
 class Topic(models.Model):
     """Normalized algorithm/topic definition for scalable challenge bank."""
 
@@ -91,7 +98,7 @@ class Challenge(models.Model):
         HARD = 'hard', 'Hard'
 
     title = models.CharField(max_length=150)
-    slug = models.SlugField(unique=True, blank=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     challenge_type = models.CharField(max_length=20, choices=ChallengeType.choices)
     algorithm_type = models.CharField(
         max_length=20,
@@ -172,12 +179,15 @@ class Challenge(models.Model):
     }
 
     def save(self, *args, **kwargs):
+        slug_max_length = self._meta.get_field('slug').max_length
         if not self.slug:
             # Include topic stable_id if available to avoid collisions across topics
             if self.topic and self.topic.stable_id:
-                self.slug = slugify(f"{self.topic.stable_id}-{self.title}")
+                self.slug = _trimmed_slug(f"{self.topic.stable_id}-{self.title}", slug_max_length)
             else:
-                self.slug = slugify(self.title)
+                self.slug = _trimmed_slug(self.title, slug_max_length)
+        elif slug_max_length:
+            self.slug = self.slug[:slug_max_length]
         super().save(*args, **kwargs)
 
     def __str__(self):
