@@ -111,16 +111,11 @@
                             <span>Continue with GitHub</span>
                         </button>
                     </form>
-                    {% else %}
-                    <button type="button" class="btn btn-github btn-social-disabled w-100 py-2 mt-2" disabled aria-disabled="true">
-                        <i class="bi bi-github" aria-hidden="true"></i>
-                        <span>Continue with GitHub</span>
-                    </button>
                     {% endif %}
 
                     {% if not google_oauth_configured and not github_oauth_configured %}
                     <p class="auth-social-hint mt-3 mb-0">
-                        Add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> in <code>.env</code> to enable Google sign-in.
+                        Google and GitHub sign-in are not configured for this deployment yet.
                     </p>
                     {% endif %}
 
