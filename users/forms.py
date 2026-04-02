@@ -116,6 +116,27 @@ class UserSettingsForm(forms.ModelForm):
         return email
 
 
+class UsernameChangeForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ('username',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['username'].label = 'Username'
+        self.fields['username'].widget.attrs.update(
+            {
+                'class': 'form-control',
+                'placeholder': 'Choose a unique username',
+                'maxlength': 150,
+                'autocomplete': 'username',
+            }
+        )
+
+    def clean_username(self):
+        return self.cleaned_data.get('username', '').strip()
+
+
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile

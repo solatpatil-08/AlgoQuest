@@ -305,6 +305,7 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
+SOCIALACCOUNT_ADAPTER = 'users.adapters.AlgoQuestSocialAccountAdapter'
 
 GOOGLE_OAUTH_CLIENT_ID = _env_text('GOOGLE_OAUTH_CLIENT_ID')
 GOOGLE_OAUTH_CLIENT_SECRET = _env_text('GOOGLE_OAUTH_CLIENT_SECRET')

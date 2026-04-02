@@ -5,6 +5,7 @@ from django.contrib.messages import get_messages
 from django.core import mail
 from django.db import connection
 from django.db.utils import IntegrityError
+from django.http import HttpResponse
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.contrib.auth.tokens import default_token_generator
@@ -363,3 +364,82 @@ class UserProfileIdentityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(User.objects.filter(id=self.user.id, profile__isnull=False).exists())
+
+    def test_settings_username_update_succeeds_for_unique_standard_username(self):
+        response = self.client.post(
+            reverse('account-settings'),
+            {
+                'action': 'username_update',
+                'username': 'profile_user_2',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('account-settings'))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, 'profile_user_2')
+
+    @patch('users.views.render', return_value=HttpResponse('ok'))
+    def test_settings_username_update_rejects_taken_username(self, mock_render):
+        User.objects.create_user(
+            username='taken_username',
+            email='taken@example.com',
+            password='StrongPass123!',
+        )
+
+        response = self.client.post(
+            reverse('account-settings'),
+            {
+                'action': 'username_update',
+                'username': 'taken_username',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        context = mock_render.call_args.args[2]
+        username_form = context['username_form']
+        self.assertIn('username', username_form.errors)
+        self.assertIn('already exists', username_form.errors['username'][0])
+
+    @patch('users.views.render', return_value=HttpResponse('ok'))
+    def test_settings_username_update_rejects_invalid_username(self, mock_render):
+        response = self.client.post(
+            reverse('account-settings'),
+            {
+                'action': 'username_update',
+                'username': 'invalid username',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        context = mock_render.call_args.args[2]
+        username_form = context['username_form']
+        self.assertIn('username', username_form.errors)
+        self.assertIn('Enter a valid username', username_form.errors['username'][0])
+
+    @patch('users.views.render', return_value=HttpResponse('ok'))
+    def test_settings_delete_account_requires_exact_username_confirmation(self, _mock_render):
+        response = self.client.post(
+            reverse('account-settings'),
+            {
+                'action': 'delete_account',
+                'confirm_username': 'wrong-value',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+
+    def test_settings_delete_account_removes_user_and_logs_out(self):
+        response = self.client.post(
+            reverse('account-settings'),
+            {
+                'action': 'delete_account',
+                'confirm_username': self.user.username,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('home'))
+        self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
+        self.assertNotIn('_auth_user_id', self.client.session)

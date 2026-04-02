@@ -165,6 +165,34 @@ class MatchmakingTests(TestCase):
 
         self.assertEqual(selected, second_array_challenge)
 
+    def test_select_challenge_for_match_falls_back_to_topic_pool_if_all_are_solved(self):
+        user = User.objects.create_user(username='solver_all', password='StrongPass123!')
+        second_array_challenge = Challenge.objects.create(
+            title='Array Battle Three',
+            topic=self.topic_arrays,
+            order_index=2,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Array challenge 3',
+            prompt='Array prompt 3',
+            expected_answer='c',
+        )
+        user.challenge_progress.create(
+            challenge=self.array_challenge,
+            is_solved=True,
+            is_unlocked=True,
+        )
+        user.challenge_progress.create(
+            challenge=second_array_challenge,
+            is_solved=True,
+            is_unlocked=True,
+        )
+
+        selected = select_challenge_for_match(topic=self.topic_arrays, participants=[user])
+
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.topic_id, self.topic_arrays.id)
+
     def test_create_bot_match_initializes_random_marathon_state(self):
         user = User.objects.create_user(username='bot_runner', password='StrongPass123!')
 
@@ -254,6 +282,7 @@ class BattleApiAndAccessTests(TestCase):
         match = BattleMatch.objects.get(room_code=room_code)
         self.assertEqual(match.status, BattleMatch.Status.LIVE)
         self.assertEqual(match.challenge, self.challenge)
+        self.assertIn(match.challenge_id, match.used_challenge_ids)
 
     def test_battle_api_post_can_start_bot_battle_immediately(self):
         self.client.force_login(self.first)
@@ -279,6 +308,20 @@ class BattleApiAndAccessTests(TestCase):
         self.assertEqual(match.used_challenge_ids, [match.challenge_id])
         self.assertEqual(match.bot_round_status, BattleMatch.BotRoundStatus.READY)
         self.assertIsNone(match.bot_next_solve_at)
+
+    def test_battle_api_start_handles_missing_profile_gracefully(self):
+        self.first.profile.delete()
+        self.client.force_login(self.first)
+        response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({'battle_mode': BattleMatch.Mode.BOT}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn('room_code', payload)
+        self.assertIn('mode', payload)
 
     def test_battle_api_room_state_progresses_bot_match(self):
         next_challenge = Challenge.objects.create(
@@ -383,6 +426,99 @@ class BattleApiAndAccessTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['status'], BattleMatch.Status.FINISHED)
         self.assertEqual(payload['winner'], self.first.username)
+
+    def test_battle_api_score_action_advances_to_next_challenge_without_websocket(self):
+        next_challenge = Challenge.objects.create(
+            title='Battle Challenge Next',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.MEDIUM,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='Challenge 2',
+            prompt='Prompt 2',
+            expected_answer='next',
+        )
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+            used_challenge_ids=[self.challenge.id],
+        )
+        attempt = ChallengeAttempt.objects.create(
+            user=self.first,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_score_eligible=True,
+            is_correct=True,
+            score=100,
+            submitted_answer='ok',
+        )
+        score_token = build_score_token(
+            room_code=match.room_code,
+            attempt_id=attempt.id,
+            user_id=self.first.id,
+        )
+
+        self.client.force_login(self.first)
+        response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({
+                'room_code': match.room_code,
+                'battle_action': 'score',
+                'score_token': score_token,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['challenge_changed'])
+        self.assertEqual(payload['challenge_id'], next_challenge.id)
+        self.assertEqual(payload['player_one_score'], 1)
+
+        match.refresh_from_db()
+        self.assertEqual(match.challenge_id, next_challenge.id)
+        self.assertIn(self.challenge.id, match.used_challenge_ids)
+        self.assertIn(next_challenge.id, match.used_challenge_ids)
+
+    def test_battle_api_score_action_rejects_reused_token(self):
+        match = BattleMatch.objects.create(
+            player_one=self.first,
+            player_two=self.second,
+            challenge=self.challenge,
+            status=BattleMatch.Status.LIVE,
+            used_challenge_ids=[self.challenge.id],
+        )
+        attempt = ChallengeAttempt.objects.create(
+            user=self.first,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_score_eligible=True,
+            is_correct=True,
+            score=100,
+            submitted_answer='ok',
+            battle_score_applied=True,
+        )
+        score_token = build_score_token(
+            room_code=match.room_code,
+            attempt_id=attempt.id,
+            user_id=self.first.id,
+        )
+
+        self.client.force_login(self.first)
+        response = self.client.post(
+            '/api/battle/',
+            data=json.dumps({
+                'room_code': match.room_code,
+                'battle_action': 'score',
+                'score_token': score_token,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('already used', response.json()['error'])
 
     def test_unauthorized_live_room_access_denied(self):
         match = BattleMatch.objects.create(
@@ -666,6 +802,49 @@ class BattleConsumerSecurityTests(TransactionTestCase):
         attempt.refresh_from_db()
         self.assertEqual(self.match.player_one_score, 1)
         self.assertTrue(attempt.battle_score_applied)
+
+    def test_score_update_advances_pvp_match_to_next_unused_challenge(self):
+        second_challenge = Challenge.objects.create(
+            title='WS Challenge Next',
+            topic=self.topic,
+            order_index=1,
+            difficulty=Challenge.Difficulty.EASY,
+            challenge_type=Challenge.ChallengeType.ALGORITHM,
+            description='next challenge',
+            prompt='next prompt',
+            expected_answer='next',
+        )
+        self.match.used_challenge_ids = [self.challenge.id]
+        self.match.save(update_fields=['used_challenge_ids'])
+
+        attempt = ChallengeAttempt.objects.create(
+            user=self.player_one,
+            challenge=self.challenge,
+            attempt_index=1,
+            is_score_eligible=True,
+            is_correct=True,
+            score=100,
+            submitted_answer='ws',
+        )
+        token = build_score_token(
+            room_code=self.match.room_code,
+            attempt_id=attempt.id,
+            user_id=self.player_one.id,
+        )
+
+        consumer = self._consumer_for(self.player_one)
+        result = async_to_sync(consumer._apply_score)(
+            {'event': 'score_update', 'score_token': token}
+        )
+
+        self.assertTrue(result['ok'])
+        self.assertTrue(result['state']['challenge_changed'])
+        self.assertEqual(result['state']['challenge_id'], second_challenge.id)
+
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.challenge_id, second_challenge.id)
+        self.assertIn(self.challenge.id, self.match.used_challenge_ids)
+        self.assertIn(second_challenge.id, self.match.used_challenge_ids)
 
     def test_score_update_rejects_token_from_different_user(self):
         attempt = ChallengeAttempt.objects.create(

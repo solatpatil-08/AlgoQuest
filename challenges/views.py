@@ -3444,7 +3444,7 @@ def submit_attempt_view(request, slug):
                     'battle_player_one_score': locked_match.player_one_score,
                     'battle_player_two_score': locked_match.player_two_score,
                     'battle_used_challenge_count': locked_match.used_challenge_count,
-                    'battle_total_challenge_count': bot_challenge_count(),
+                    'battle_total_challenge_count': bot_challenge_count(topic=locked_match.preferred_topic),
                 })
                 if challenge_advanced and locked_match.challenge:
                     response_data['battle_next_challenge_title'] = locked_match.challenge.title

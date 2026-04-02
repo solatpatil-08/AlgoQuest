@@ -151,7 +151,7 @@ function getCsrfToken() {
     return csrfCookie ? decodeURIComponent(csrfCookie.split('=').slice(1).join('=')) : '';
 }
 
-async function postBattleAction(action) {
+async function postBattleAction(action, extraPayload = {}) {
     if (!roomCode) {
         throw new Error('Battle room code is missing.');
     }
@@ -170,6 +170,7 @@ async function postBattleAction(action) {
         body: JSON.stringify({
             room_code: roomCode,
             battle_action: action,
+            ...extraPayload,
         }),
     });
     let data = {};
@@ -405,12 +406,16 @@ function renderBattleState(data) {
     if (data.challenge_id !== undefined && data.challenge_id !== null) {
         const challengeChanged = currentChallengeId !== null && data.challenge_id !== currentChallengeId;
         currentChallengeId = data.challenge_id;
-        if (isBotBattle && (challengeChanged || data.challenge_changed)) {
-            const reloadMessage = data.bot_action === 'restart'
-                ? 'Marathon restarted. Loading a fresh random challenge...'
-                : data.last_solver === 'computer'
-                    ? 'Computer took the round. Loading the next random challenge...'
-                    : 'Point scored. Loading the next random challenge...';
+        if (challengeChanged || data.challenge_changed) {
+            const reloadMessage = isBotBattle
+                ? (
+                    data.bot_action === 'restart'
+                        ? 'Marathon restarted. Loading a fresh random challenge...'
+                        : data.last_solver === 'computer'
+                            ? 'Computer took the round. Loading the next random challenge...'
+                            : 'Point scored. Loading the next random challenge...'
+                )
+                : 'Point scored. Loading the next battle challenge...';
             triggerChallengeReload(reloadMessage);
             return;
         }
@@ -455,8 +460,15 @@ function sendScoreIncrement(scoreToken) {
     if (battleFinished) return false;
 
     if (!isSocketOpen()) {
-        queueScoreToken(scoreToken);
-        renderStatus('Socket disconnected. Score update queued and will sync on reconnect.', 'warning');
+        postBattleAction('score', { score_token: scoreToken }).catch((error) => {
+            queueScoreToken(scoreToken);
+            renderStatus(
+                (error && error.message)
+                    ? `${error.message} Score update queued and will retry on reconnect.`
+                    : 'Socket disconnected. Score update queued and will sync on reconnect.',
+                'warning'
+            );
+        });
         return true;
     }
 

@@ -1,9 +1,11 @@
 import logging
+import random
 
 from django.db import transaction
 from django.utils import timezone
 
 from challenges.models import Challenge, Topic
+from users.models import UserProfile
 
 from .bot_matches import initialize_bot_match
 from .models import BattleMatch
@@ -51,28 +53,55 @@ def select_challenge_for_match(topic=None, participants=None):
             .distinct()
         )
 
+    def pick_random_from_queryset(queryset):
+        candidate_ids = list(queryset.values_list('id', flat=True))
+        if not candidate_ids:
+            return None
+        return base_queryset.filter(id=random.choice(candidate_ids)).first()
+
     if topic is not None:
-        topic_challenge = (
-            candidate_queryset.filter(topic=topic)
-            .order_by('order_index', 'id')
-            .first()
-        )
+        topic_challenge = pick_random_from_queryset(candidate_queryset.filter(topic=topic))
         if topic_challenge:
             return topic_challenge
 
-        topic_fallback = (
-            base_queryset.filter(topic=topic)
-            .order_by('order_index', 'id')
-            .first()
-        )
+        topic_fallback = pick_random_from_queryset(base_queryset.filter(topic=topic))
         if topic_fallback:
             return topic_fallback
 
-    match_fresh_challenge = candidate_queryset.order_by('topic_id', 'order_index', 'id').first()
+    match_fresh_challenge = pick_random_from_queryset(candidate_queryset)
     if match_fresh_challenge:
         return match_fresh_challenge
 
-    return base_queryset.order_by('topic_id', 'order_index', 'id').first()
+    return pick_random_from_queryset(base_queryset)
+
+
+def select_next_challenge_for_live_match(match):
+    """
+    Pick the next unused algorithm challenge for an ongoing battle.
+    Respects topic preference when one is set.
+    """
+    queryset = Challenge.objects.filter(
+        is_active=True,
+        challenge_type=Challenge.ChallengeType.ALGORITHM,
+    ).select_related('topic')
+    if match.preferred_topic_id:
+        queryset = queryset.filter(topic_id=match.preferred_topic_id)
+
+    used_ids = list(match.used_challenge_ids or [])
+    if match.challenge_id and match.challenge_id not in used_ids:
+        used_ids.append(match.challenge_id)
+
+    available_ids = list(
+        queryset.exclude(id__in=used_ids).values_list('id', flat=True)
+    )
+    if not available_ids:
+        return None, used_ids
+
+    next_challenge_id = random.choice(available_ids)
+    next_challenge = queryset.filter(id=next_challenge_id).first()
+    if next_challenge and next_challenge.id not in used_ids:
+        used_ids.append(next_challenge.id)
+    return next_challenge, used_ids
 
 
 def _waiting_room_for_user(user):
@@ -90,7 +119,7 @@ def _waiting_room_for_user(user):
 
 
 def find_or_create_match(user, topic_preference=None):
-    profile = user.profile
+    profile, _ = UserProfile.objects.get_or_create(user=user)
     preferred_topic = resolve_topic_preference(topic_preference)
 
     # Reuse an already-open waiting room for this user to avoid queue spam.
@@ -119,7 +148,7 @@ def find_or_create_match(user, topic_preference=None):
                 continue
             if match.player_two_id is not None or match.status != BattleMatch.Status.WAITING:
                 continue
-            opponent_profile = match.player_one.profile
+            opponent_profile, _ = UserProfile.objects.get_or_create(user=match.player_one)
             if (
                 abs(opponent_profile.level - profile.level) > 2
                 or abs(opponent_profile.xp - profile.xp) > 400
@@ -143,6 +172,10 @@ def find_or_create_match(user, topic_preference=None):
                     topic=match.preferred_topic,
                     participants=[match.player_one, user],
                 )
+            used_ids = list(match.used_challenge_ids or [])
+            if match.challenge_id and match.challenge_id not in used_ids:
+                used_ids.append(match.challenge_id)
+            match.used_challenge_ids = used_ids
             match.save(
                 update_fields=[
                     'preferred_topic',
@@ -150,6 +183,7 @@ def find_or_create_match(user, topic_preference=None):
                     'status',
                     'started_at',
                     'challenge',
+                    'used_challenge_ids',
                 ]
             )
             return match, False
@@ -166,7 +200,7 @@ def find_or_create_match(user, topic_preference=None):
 
 
 def create_bot_match(user, topic_preference=None):
-    profile = user.profile
+    profile, _ = UserProfile.objects.get_or_create(user=user)
     preferred_topic = resolve_topic_preference(topic_preference)
 
     existing_live_bot = (

@@ -29,6 +29,7 @@ from .bot_matches import (
     restart_bot_match,
     start_bot_round,
 )
+from .matchmaking import select_next_challenge_for_live_match
 from .models import BattleMatch
 from .score_tokens import parse_score_token
 
@@ -214,8 +215,20 @@ class BattleConsumer(AsyncWebsocketConsumer):
             elif user.id == match.player_two_id:
                 match.player_two_score += 1
 
-            match.save(update_fields=['player_one_score', 'player_two_score'])
-            return {'ok': True, 'state': self._serialize_match_state(match)}
+            challenge_changed = False
+            last_solver = ''
+            next_challenge, used_ids = select_next_challenge_for_live_match(match)
+            if next_challenge:
+                match.challenge = next_challenge
+                challenge_changed = True
+                last_solver = 'player'
+            match.used_challenge_ids = used_ids
+
+            match.save(update_fields=['player_one_score', 'player_two_score', 'challenge', 'used_challenge_ids'])
+            state = self._serialize_match_state(match)
+            state['challenge_changed'] = challenge_changed
+            state['last_solver'] = last_solver
+            return {'ok': True, 'state': state}
 
     @sync_to_async
     def _progress_bot_match(self):

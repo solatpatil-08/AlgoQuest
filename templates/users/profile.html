@@ -21,7 +21,7 @@
                                 </div>
                                 <div class="profile-hero-copy">
                                     <div class="profile-section-kicker">Main Profile</div>
-                                    <h2 class="h3 mb-1">Profile &amp; Settings</h2>
+                                    <h2 class="h3 mb-1">Profile</h2>
                                     <button
                                         type="button"
                                         class="profile-hero-subtitle profile-copy-trigger profile-copy-inline mb-2"
@@ -37,7 +37,7 @@
                                         {% if profile.bio %}
                                             {{ profile.bio }}
                                         {% else %}
-                                            This is your main identity card. Update your coding bio, preferences, and account details in the edit frame below.
+                                            This is your main identity card. Update your coding bio and profile preferences in the profile editor below.
                                         {% endif %}
                                     </p>
                                 </div>
@@ -153,9 +153,9 @@
             <div class="card-body">
                 <div class="profile-panel-header profile-edit-header">
                     <div>
-                        <div class="profile-section-kicker">Edit Profile</div>
-                        <h2 class="h4 mb-1">Update Your Details</h2>
-                        <p class="text-muted mb-0">This lower frame is for changes only. Update the fields here, then save to refresh the profile frame above.</p>
+                        <div class="profile-section-kicker">Profile</div>
+                        <h2 class="h4 mb-1">Update Profile Details</h2>
+                        <p class="text-muted mb-0">This section updates your profile information and coding identity only.</p>
                     </div>
                 </div>
                 <form method="post" class="profile-settings-form">

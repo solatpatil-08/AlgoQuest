@@ -169,6 +169,7 @@
 {% block scripts %}
 <script>
 const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+    const loginRedirectUrl = "{% url 'login' %}?next={% url 'battle-lobby' %}";
     const matchmakeBtn = document.getElementById('matchmakeBtn');
     const battleComputerBtn = document.getElementById('battleComputerBtn');
     const matchStatus = document.getElementById('matchStatus');
@@ -247,7 +248,10 @@ const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "tr
 
     async function startMatchmaking(mode = 'pvp', topicId = null, triggerButton = null) {
         if (!isAuthenticated) {
-            setStatus('<i class="bi bi-shield-lock me-1"></i>Please log in to start matchmaking.', 'error');
+            setStatus('<i class="bi bi-shield-lock me-1"></i>Please log in to start matchmaking. Redirecting...', 'error');
+            window.setTimeout(() => {
+                window.location.href = loginRedirectUrl;
+            }, 350);
             return;
         }
 

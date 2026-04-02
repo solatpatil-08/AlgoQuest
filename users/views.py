@@ -3,7 +3,7 @@ import time
 from email.utils import formataddr
 
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout as auth_logout
 from django.contrib.auth.views import (
     LoginView,
     PasswordResetCompleteView,
@@ -32,6 +32,7 @@ from .forms import (
     CustomSetPasswordForm,
     PasswordResetOtpForm,
     SignUpForm,
+    UsernameChangeForm,
     UserProfileForm,
     UserSettingsForm,
 )
@@ -279,6 +280,45 @@ def profile_settings_view(request):
             'form': form,
             'profile_form': profile_form,
             'profile': profile,
+        },
+    )
+
+
+@login_required
+def account_settings_view(request):
+    username_action = 'username_update'
+    delete_account_action = 'delete_account'
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+        username_form = UsernameChangeForm(instance=request.user)
+
+        if action == username_action:
+            username_form = UsernameChangeForm(request.POST, instance=request.user)
+            if username_form.is_valid():
+                username_form.save()
+                messages.success(request, 'Username updated successfully.')
+                return redirect('account-settings')
+            messages.error(request, 'Please fix the username errors before saving.')
+        elif action == delete_account_action:
+            confirmation_username = (request.POST.get('confirm_username') or '').strip()
+            if confirmation_username != request.user.username:
+                messages.error(request, 'Type your exact username to confirm account deletion.')
+            else:
+                user_to_delete = request.user
+                auth_logout(request)
+                user_to_delete.delete()
+                return redirect('home')
+    else:
+        username_form = UsernameChangeForm(instance=request.user)
+
+    return render(
+        request,
+        'users/settings.html',
+        {
+            'username_form': username_form,
+            'username_action': username_action,
+            'delete_account_action': delete_account_action,
         },
     )
 

@@ -105,6 +105,31 @@
     line-height: 1.25;
 }
 
+.dashboard-top-players-panel {
+    max-height: calc(5 * 3.4rem);
+    overflow-y: auto;
+    padding-right: 0.35rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(37, 99, 235, 0.42) transparent;
+}
+
+.dashboard-top-players-panel::-webkit-scrollbar {
+    width: 7px;
+}
+
+.dashboard-top-players-panel::-webkit-scrollbar-thumb {
+    background: rgba(37, 99, 235, 0.42);
+    border-radius: 999px;
+}
+
+.dashboard-top-players-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dashboard-top-players-panel .list-group-item {
+    min-height: 3.4rem;
+}
+
 @media (max-width: 991.98px) {
     .dashboard-achievements-panel {
         max-height: none;

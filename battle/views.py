@@ -8,12 +8,20 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from challenges.models import ChallengeAttempt
 from challenges.models import Challenge, Topic
 from leaderboard.services import finalize_battle_rewards
 
 from .bot_matches import bot_challenge_count, forfeit_bot_round, reconcile_bot_match, restart_bot_match, start_bot_round
-from .matchmaking import create_bot_match, find_or_create_match, resolve_topic_preference, select_challenge_for_match
+from .matchmaking import (
+    create_bot_match,
+    find_or_create_match,
+    resolve_topic_preference,
+    select_challenge_for_match,
+    select_next_challenge_for_live_match,
+)
 from .models import BattleMatch
+from .score_tokens import parse_score_token
 from .serializers import BattleMatchSerializer
 
 def _assign_match_challenge_if_needed(match):
@@ -65,6 +73,62 @@ def _serialize_match_state_for_client(match):
         'bot_score_interval_seconds': match.get_bot_score_interval_seconds(),
         'bot_next_solve_at': match.bot_next_solve_at.isoformat() if match.bot_next_solve_at else '',
     }
+
+
+def _apply_pvp_score_with_token(match, user, score_token):
+    if match.status != BattleMatch.Status.LIVE:
+        raise ValueError('Scores can only be updated during a live battle.')
+    if match.is_bot_match:
+        raise ValueError('Computer battles update score directly from challenge submission.')
+
+    token_payload = parse_score_token(score_token)
+    if not token_payload:
+        raise ValueError('Invalid or expired score token.')
+    if token_payload['room_code'] != match.room_code:
+        raise ValueError('Score token does not belong to this room.')
+    if token_payload['user_id'] != user.id:
+        raise ValueError('Score token does not belong to this user.')
+
+    attempt = (
+        ChallengeAttempt.objects.select_for_update()
+        .filter(id=token_payload['attempt_id'], user=user)
+        .select_related('challenge')
+        .first()
+    )
+    if not attempt:
+        raise ValueError('Referenced attempt was not found.')
+    if attempt.challenge_id != match.challenge_id:
+        raise ValueError('Score token challenge does not match this battle.')
+    if not attempt.is_correct or not attempt.is_score_eligible:
+        raise ValueError('Attempt is not eligible for battle scoring.')
+    if attempt.battle_score_applied:
+        raise ValueError('Score token was already used.')
+
+    attempt.battle_score_applied = True
+    attempt.save(update_fields=['battle_score_applied'])
+
+    if user.id == match.player_one_id:
+        match.player_one_score += 1
+    elif user.id == match.player_two_id:
+        match.player_two_score += 1
+
+    challenge_changed = False
+    last_solver = ''
+    next_challenge, used_ids = select_next_challenge_for_live_match(match)
+    if next_challenge:
+        match.challenge = next_challenge
+        challenge_changed = True
+        last_solver = 'player'
+    match.used_challenge_ids = used_ids
+    match.save(update_fields=['player_one_score', 'player_two_score', 'challenge', 'used_challenge_ids'])
+
+    payload = _serialize_match_state_for_client(match)
+    payload.update({
+        'challenge_changed': challenge_changed,
+        'last_solver': last_solver,
+        'battle_action': 'score',
+    })
+    return payload
 
 
 def _finalize_live_match_for_client(match):
@@ -237,6 +301,16 @@ class BattleMatchApiView(APIView):
                         return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                     payload = _serialize_match_state_for_client(match)
                     payload['bot_action'] = 'finalize'
+                    return Response(payload, status=status.HTTP_200_OK)
+
+                if battle_action == 'score':
+                    score_token = (request.data.get('score_token') or '').strip()
+                    if not score_token:
+                        return Response({'error': 'Score token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+                    try:
+                        payload = _apply_pvp_score_with_token(match, request.user, score_token)
+                    except ValueError as exc:
+                        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                     return Response(payload, status=status.HTTP_200_OK)
 
                 if not match.is_bot_match:
