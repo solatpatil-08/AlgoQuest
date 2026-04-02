@@ -98,7 +98,6 @@ def _finalize_live_match_for_client(match):
     return match
 
 
-@login_required
 def battle_lobby_view(request):
     battle_challenge_filter = Q(
         challenges__is_active=True,

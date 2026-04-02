@@ -229,6 +229,12 @@ class BattleApiAndAccessTests(TestCase):
         response = self.client.get('/api/battle/')
         self.assertEqual(response.status_code, 403)
 
+    def test_battle_lobby_is_accessible_for_anonymous_users(self):
+        response = self.client.get(reverse('battle-lobby'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Battle Arena')
+        self.assertContains(response, 'Login')
+
     def test_battle_api_post_returns_waiting_for_first_user_and_live_for_second(self):
         self.client.force_login(self.first)
         first_response = self.client.post(

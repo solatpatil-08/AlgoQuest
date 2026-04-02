@@ -45,11 +45,11 @@
     <link href="{% static 'css/animation.css' %}" rel="stylesheet">
     <link href="{% static 'css/style.css' %}" rel="stylesheet">
 </head>
-{% url 'dashboard' as back_exit_fallback %}
-{% if not back_exit_fallback %}{% url 'home' as back_exit_fallback %}{% endif %}
-{% if not back_exit_fallback %}{% url 'challenges:list' as back_exit_fallback %}{% endif %}
-{% if not back_exit_fallback %}{% url 'challenges-list' as back_exit_fallback %}{% endif %}
-{% if not back_exit_fallback %}{% url 'login' as back_exit_fallback %}{% endif %}
+{% if user.is_authenticated %}
+    {% url 'dashboard' as back_exit_fallback %}
+{% else %}
+    {% url 'home' as back_exit_fallback %}
+{% endif %}
 
 <body class="{% block body_class %}{% endblock %}{% if not hide_back_exit_control %} has-page-exit-control{% endif %}">
 

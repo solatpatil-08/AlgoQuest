@@ -75,6 +75,20 @@ class UserViewsTests(TestCase):
         messages = [str(message) for message in get_messages(response.wsgi_request)]
         self.assertIn('Invalid username/email or password.', messages)
 
+    def test_accounts_signup_alias_redirects_to_custom_signup(self):
+        response = self.client.get('/accounts/signup/')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('signup'))
+
+    def test_accounts_password_reset_alias_redirects_to_custom_reset(self):
+        response = self.client.get('/accounts/password/reset/')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('password_reset'))
+
+    def test_unconfigured_social_login_endpoint_does_not_500(self):
+        response = self.client.get('/accounts/google/login/')
+        self.assertNotEqual(response.status_code, 500)
+
     def test_password_reset_request_flow_sends_email(self):
         user = User.objects.create_user(username='resetuser', email='reset@example.com', password='StrongPass123!')
 

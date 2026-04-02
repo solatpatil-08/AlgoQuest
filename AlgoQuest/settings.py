@@ -151,6 +151,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'users.middleware.SocialLoginConfigurationGuardMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
