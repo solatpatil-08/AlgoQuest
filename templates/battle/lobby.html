@@ -1,0 +1,398 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in-up">
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h1 class="h3 mb-1"><i class="bi bi-lightning me-2 text-gradient"></i>Battle Arena</h1>
+        <p class="text-muted mb-0">Find opponents and compete in real-time algorithm battles</p>
+    </div>
+
+    <div class="row g-4">
+        <!-- Find Match -->
+        <div class="col-lg-6">
+            <div class="card border-0 h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="stat-icon" style="background: var(--aq-danger-soft-bg); color: var(--aq-danger);">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                        </div>
+                        <div>
+                            <h2 class="h5 mb-0">Find a Match</h2>
+                            <p class="text-muted mb-0" style="font-size: 0.875rem;">Level-matched opponent matchmaking</p>
+                        </div>
+                    </div>
+                    <p class="text-muted">Get paired with an opponent of similar skill level and battle it out in real-time coding challenges.</p>
+                    {% if user.is_authenticated %}
+                        {% csrf_token %}
+                        <div class="mt-auto d-flex flex-wrap gap-2">
+                            <button id="matchmakeBtn" class="btn btn-primary px-4 py-2">
+                                <i class="bi bi-search me-2"></i>Battle Online
+                            </button>
+                            <button id="battleComputerBtn" class="btn btn-outline-primary px-4 py-2">
+                                <i class="bi bi-cpu me-2"></i>Computer Marathon
+                            </button>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info mt-auto mb-0">
+                            <i class="bi bi-info-circle me-2"></i><a href="{% url 'login' %}">Login</a> to join battles.
+                        </div>
+                    {% endif %}
+                    <p class="mt-3 text-muted mb-0" id="matchStatus" style="font-size: 0.875rem;"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Matches -->
+        <div class="col-lg-6">
+            <div class="card border-0 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="stat-icon feature-icon-green">
+                            <i class="bi bi-broadcast"></i>
+                        </div>
+                        <div>
+                            <h2 class="h5 mb-0">Active Matches</h2>
+                            <p class="text-muted mb-0" style="font-size: 0.875rem;">Currently running battles</p>
+                        </div>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        {% for match in active_matches %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-semibold">Match #{{ match.id }}</span>
+                                    <span class="badge badge-accent ms-2" style="font-size: 0.7rem;">{{ match.status }}</span>
+                                    <div class="text-muted small mt-1">
+                                        {{ match.player_one.username }} vs {{ match.player_two.username|default:"Waiting..." }}
+                                    </div>
+                                </div>
+                                {% if user.id == match.player_one_id or user.id == match.player_two_id %}
+                                    <a href="{% url 'battle-live' match.room_code %}" class="btn btn-outline-primary btn-sm px-3">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>Open
+                                    </a>
+                                {% else %}
+                                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" disabled aria-disabled="true">
+                                        <i class="bi bi-lock me-1"></i>Private Match
+                                    </button>
+                                {% endif %}
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item text-center py-4">
+                                <div class="empty-state" style="padding: 0;">
+                                    <div class="empty-icon"><i class="bi bi-broadcast"></i></div>
+                                    <p>No active matches currently.</p>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Algorithm/Topic Battle Cards -->
+    {% if topic_data %}
+        <div class="mt-5">
+            <div class="mb-4">
+                <h2 class="h4"><i class="bi bi-database me-2 text-gradient"></i>Battle Topics</h2>
+                <p class="text-muted">Select a topic to battle challenges in that area</p>
+            </div>
+            <div class="row g-4">
+                {% for item in topic_data %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card border-0 battle-card h-100" style="cursor: pointer; transition: all 0.3s ease;">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    {% if item.topic.visualization_type == 'graph' %}
+                                        <i class="bi bi-diagram-3" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% elif item.topic.visualization_type == 'tree' %}
+                                        <i class="bi bi-diagram-2" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% elif item.topic.visualization_type == 'matrix' or item.topic.visualization_type == 'grid' %}
+                                        <i class="bi bi-grid-3x3" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% else %}
+                                        <i class="bi bi-puzzle" style="font-size: 1.5rem; color: var(--aq-primary);"></i>
+                                    {% endif %}
+                                    <div>
+                                        <h3 class="h6 mb-0">{{ item.topic.label }}</h3>
+                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">{{ item.topic.get_category_display }}</p>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-3">{{ item.topic.description|truncatewords:15 }}</p>
+                                
+                                <!-- Challenge Count -->
+                                <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 0.875rem;">
+                                    <i class="bi bi-list-check me-1"></i>{{ item.challenge_count }} challenges
+                                </div>
+                                
+                                <!-- Difficulty Distribution -->
+                                <div class="mb-3">
+                                    <div class="row g-2">
+                                        <div class="col-4 text-center">
+                                            <div class="p-2 rounded" style="background: var(--aq-success-soft-bg);">
+                                                <div style="font-weight: 600; color: var(--aq-accent);">{{ item.difficulty_distribution.easy }}</div>
+                                                <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Easy</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <div class="p-2 rounded" style="background: var(--aq-warning-soft-bg);">
+                                                <div style="font-weight: 600; color: var(--aq-warning);">{{ item.difficulty_distribution.medium }}</div>
+                                                <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Medium</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <div class="p-2 rounded" style="background: var(--aq-danger-soft-bg);">
+                                                <div style="font-weight: 600; color: var(--aq-danger);">{{ item.difficulty_distribution.hard }}</div>
+                                                <div style="font-size: 0.75rem; color: var(--aq-text-secondary);">Hard</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-auto d-grid gap-2">
+                                    <button type="button" class="btn btn-primary battle-topic-btn" data-topic-id="{{ item.topic.stable_id }}">
+                                        <i class="bi bi-wifi me-1"></i>Battle Online
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary battle-topic-bot-btn" data-topic-id="{{ item.topic.stable_id }}">
+                                        <i class="bi bi-cpu me-1"></i>Computer Marathon
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const isAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+    const loginRedirectUrl = "{% url 'login' %}?next={% url 'battle-lobby' %}";
+    const matchmakeBtn = document.getElementById('matchmakeBtn');
+    const battleComputerBtn = document.getElementById('battleComputerBtn');
+    const matchStatus = document.getElementById('matchStatus');
+    const topicBattleButtons = document.querySelectorAll('.battle-topic-btn');
+    const topicBattleBotButtons = document.querySelectorAll('.battle-topic-bot-btn');
+    let waitingPollTimer = null;
+    let waitingRoomCode = '';
+
+    function getCsrfToken() {
+        const tokenInput = document.querySelector("input[name='csrfmiddlewaretoken']");
+        return tokenInput ? tokenInput.value : '';
+    }
+
+    function setStatus(message, type = 'muted') {
+        if (!matchStatus) return;
+        const typeClassMap = {
+            muted: 'text-muted',
+            info: 'text-info',
+            success: 'text-success',
+            error: 'text-danger',
+        };
+        matchStatus.className = `mt-3 mb-0 ${typeClassMap[type] || typeClassMap.muted}`;
+        matchStatus.innerHTML = message;
+    }
+
+    function setLoadingState(button, loading, loadingText, idleHtml) {
+        if (!button) return;
+        if (loading) {
+            button.disabled = true;
+            button.dataset.originalHtml = idleHtml || button.innerHTML;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText}`;
+            return;
+        }
+        button.disabled = false;
+        button.innerHTML = button.dataset.originalHtml || idleHtml || button.innerHTML;
+    }
+
+    function stopWaitingPoll() {
+        if (waitingPollTimer) {
+            window.clearInterval(waitingPollTimer);
+            waitingPollTimer = null;
+        }
+        waitingRoomCode = '';
+    }
+
+    async function pollWaitingRoom() {
+        if (!isAuthenticated || !waitingRoomCode) {
+            return;
+        }
+        try {
+            const response = await fetch('/api/battle/', {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+            });
+            if (!response.ok) {
+                return;
+            }
+            const matches = await response.json();
+            if (!Array.isArray(matches)) {
+                return;
+            }
+            const room = matches.find((match) => match && match.room_code === waitingRoomCode);
+            if (!room) {
+                return;
+            }
+            if (room.status === 'live') {
+                const roomCode = waitingRoomCode;
+                stopWaitingPoll();
+                setStatus('<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...', 'success');
+                window.location.href = `/battle/live/${roomCode}/`;
+            }
+        } catch (error) {
+            // Keep waiting silently; transient poll failures should not interrupt user flow.
+        }
+    }
+
+    async function startMatchmaking(mode = 'pvp', topicId = null, triggerButton = null) {
+        if (!isAuthenticated) {
+            setStatus('<i class="bi bi-shield-lock me-1"></i>Please log in to start matchmaking. Redirecting...', 'error');
+            window.setTimeout(() => {
+                window.location.href = loginRedirectUrl;
+            }, 350);
+            return;
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Missing CSRF token. Refresh and try again.', 'error');
+            return;
+        }
+
+        stopWaitingPoll();
+
+        const mainButtonIdleHtml = '<i class="bi bi-search me-2"></i>Battle Online';
+        const botButtonIdleHtml = '<i class="bi bi-cpu me-2"></i>Computer Marathon';
+        setLoadingState(matchmakeBtn, true, mode === 'bot' ? 'Preparing...' : 'Searching...', mainButtonIdleHtml);
+        setLoadingState(battleComputerBtn, true, mode === 'bot' ? 'Preparing...' : 'Searching...', botButtonIdleHtml);
+        if (triggerButton && triggerButton !== matchmakeBtn) {
+            setLoadingState(triggerButton, true, mode === 'bot' ? 'Preparing...' : 'Starting...', triggerButton.innerHTML);
+        }
+        setStatus(
+            mode === 'bot'
+                ? '<i class="bi bi-cpu me-1"></i>Preparing your battle against the computer...'
+                : '<i class="bi bi-hourglass-split me-1"></i>Finding a suitable battle room...',
+            'info'
+        );
+
+        try {
+            const response = await fetch('/api/battle/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    battle_mode: mode,
+                    ...(topicId ? { topic_preference: topicId } : {}),
+                }),
+            });
+
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                data = null;
+            }
+
+            if (!response.ok) {
+                const errorMessage = data && (data.detail || data.error)
+                    ? (data.detail || data.error)
+                    : `Matchmaking failed (${response.status}).`;
+                setStatus(`<i class="bi bi-exclamation-triangle me-1"></i>${errorMessage}`, 'error');
+                return;
+            }
+
+            if (!data || !data.room_code) {
+                setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Server response was missing room information.', 'error');
+                return;
+            }
+
+            if (data.is_waiting) {
+                setStatus('<i class="bi bi-clock me-1"></i>Battle room created. Waiting for opponent...', 'info');
+                waitingRoomCode = data.room_code;
+                if (waitingPollTimer) {
+                    window.clearInterval(waitingPollTimer);
+                }
+                waitingPollTimer = window.setInterval(pollWaitingRoom, 3000);
+                pollWaitingRoom();
+            } else {
+                stopWaitingPoll();
+                setStatus(
+                    mode === 'bot'
+                        ? '<i class="bi bi-check-circle me-1"></i>Computer battle ready. Redirecting to live battle...'
+                        : '<i class="bi bi-check-circle me-1"></i>Opponent found. Redirecting to live battle...',
+                    'success'
+                );
+                window.setTimeout(() => {
+                    window.location.href = `/battle/live/${data.room_code}/`;
+                }, 800);
+            }
+        } catch (error) {
+            console.error('Battle matchmaking error:', error);
+            setStatus('<i class="bi bi-wifi-off me-1"></i>Network error while finding a match. Please retry.', 'error');
+        } finally {
+            setLoadingState(matchmakeBtn, false, 'Searching...', mainButtonIdleHtml);
+            setLoadingState(battleComputerBtn, false, 'Preparing...', botButtonIdleHtml);
+            if (triggerButton && triggerButton !== matchmakeBtn) {
+                setLoadingState(triggerButton, false, 'Starting...', triggerButton.innerHTML);
+            }
+        }
+    }
+
+    window.addEventListener('beforeunload', stopWaitingPoll);
+
+    if (matchmakeBtn) {
+        matchmakeBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            startMatchmaking('pvp', null, matchmakeBtn);
+        });
+    }
+
+    if (battleComputerBtn) {
+        battleComputerBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            startMatchmaking('bot', null, battleComputerBtn);
+        });
+    }
+
+    topicBattleButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const topicId = this.getAttribute('data-topic-id');
+            if (!topicId) {
+                setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Topic id is missing.', 'error');
+                return;
+            }
+            startMatchmaking('pvp', topicId, this);
+        });
+    });
+
+    topicBattleBotButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            const topicId = this.getAttribute('data-topic-id');
+            if (!topicId) {
+                setStatus('<i class="bi bi-exclamation-triangle me-1"></i>Topic id is missing.', 'error');
+                return;
+            }
+            startMatchmaking('bot', topicId, this);
+        });
+    });
+
+    // Hover effect for battle cards
+    const battleCards = document.querySelectorAll('.battle-card');
+    battleCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.boxShadow = 'var(--aq-shadow-md)';
+            this.style.transform = 'translateY(-4px)';
+        });
+        card.addEventListener('mouseleave', function() {
+            this.style.boxShadow = 'none';
+            this.style.transform = 'translateY(0)';
+        });
+    });
+</script>
+{% endblock %}
