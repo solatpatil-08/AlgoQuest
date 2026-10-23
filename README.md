@@ -78,9 +78,35 @@ DATABASE_URL=postgresql://algoquest_user:replace-with-db-password@127.0.0.1:5432
 
 For production, PostgreSQL is the recommended database. On Render, set `DATABASE_URL` from your Render PostgreSQL connection string.
 
+## Vercel Deployment
+
+This repository is configured for serverless deployment on **Vercel** using `vercel.json` and `build_files.sh`.
+
+### 1. Database Prerequisite (PostgreSQL)
+Vercel Serverless Functions operate in an ephemeral, read-only file system. **SQLite cannot persist data on Vercel.** Before deploying, create a free cloud PostgreSQL database (e.g., on [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Aiven](https://aiven.io)).
+
+### 2. Steps to Deploy on Vercel
+1. Push this repository to GitHub.
+2. In the [Vercel Dashboard](https://vercel.com/), click **Add New...** > **Project**.
+3. Import your **`AlgoQuest`** repository.
+4. In the Project Configuration:
+   - **Framework Preset**: Select **Other** (Vercel automatically detects `vercel.json`).
+   - **Root Directory**: `./` (default).
+5. Open the **Environment Variables** section and configure:
+   - `DJANGO_SECRET_KEY`: A secure random secret string.
+   - `DJANGO_DEBUG`: `False`
+   - `DATABASE_URL`: Your hosted PostgreSQL connection string (e.g., `postgresql://user:pass@ep-host.neon.tech/algoquest_db?sslmode=require`).
+   - `RUN_MIGRATIONS_ON_BUILD`: `true` (optional, to run migrations automatically during deployment).
+   - `LOAD_CHALLENGE_BANK_ON_BUILD`: `true` (optional, to load challenges on first deploy).
+6. Click **Deploy**. Vercel will install dependencies, collect static files, and launch your serverless app.
+
+> [!NOTE]
+> **Real-time WebSockets vs. HTTP Polling**:
+> Vercel Functions are serverless and do not support long-lived persistent WebSocket connections (Daphne). The battle arena automatically falls back to HTTP polling and REST APIs (`/api/battle/`) for user-vs-bot and scoring. For full multi-player real-time WebSocket capabilities, deploy with Daphne on a container platform like Render or Railway.
+
 ## Render Deployment
 
-This repository includes both [build.sh](c:/Users/Hp/DjangoProjects/AlgoQuest/build.sh) and [render.yaml](c:/Users/Hp/DjangoProjects/AlgoQuest/render.yaml) for Render deployment.
+This repository includes both `build.sh` and `render.yaml` for Render deployment.
 
 The easiest path is using a Render Blueprint:
 

@@ -93,7 +93,11 @@ def _database_from_url(database_url):
 RENDER = _env_bool('RENDER', False)
 RENDER_EXTERNAL_HOSTNAME = _env_text('RENDER_EXTERNAL_HOSTNAME')
 
-DEBUG = _env_bool('DJANGO_DEBUG', not RENDER)
+VERCEL = _env_bool('VERCEL', False)
+VERCEL_URL = _env_text('VERCEL_URL')
+VERCEL_PROJECT_PRODUCTION_URL = _env_text('VERCEL_PROJECT_PRODUCTION_URL')
+
+DEBUG = _env_bool('DJANGO_DEBUG', not (RENDER or VERCEL))
 
 # SECURITY WARNING: keep the secret key used in production secret.
 SECRET_KEY = _env_text('DJANGO_SECRET_KEY') or _env_text('SECRET_KEY')
@@ -108,10 +112,16 @@ if raw_allowed_hosts:
     ALLOWED_HOSTS = _split_csv_env(raw_allowed_hosts)
 elif DEBUG:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver']
-elif RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME]
 else:
-    ALLOWED_HOSTS = []
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver']
+    if RENDER_EXTERNAL_HOSTNAME:
+        ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    if VERCEL or VERCEL_URL or VERCEL_PROJECT_PRODUCTION_URL:
+        ALLOWED_HOSTS.extend(['.vercel.app', 'now.sh'])
+        if VERCEL_URL:
+            ALLOWED_HOSTS.append(VERCEL_URL)
+        if VERCEL_PROJECT_PRODUCTION_URL:
+            ALLOWED_HOSTS.append(VERCEL_PROJECT_PRODUCTION_URL)
 
 CHANNELS_AVAILABLE = importlib.util.find_spec("channels") is not None
 
@@ -272,15 +282,22 @@ MEDIA_ROOT = Path(os.getenv('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
 
 raw_csrf_trusted_origins = _env_text('DJANGO_CSRF_TRUSTED_ORIGINS')
 CSRF_TRUSTED_ORIGINS = _split_csv_env(raw_csrf_trusted_origins)
-if not CSRF_TRUSTED_ORIGINS and RENDER_EXTERNAL_HOSTNAME and not DEBUG:
-    CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_EXTERNAL_HOSTNAME}']
+if not CSRF_TRUSTED_ORIGINS and not DEBUG:
+    if RENDER_EXTERNAL_HOSTNAME:
+        CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
+    if VERCEL or VERCEL_URL or VERCEL_PROJECT_PRODUCTION_URL:
+        CSRF_TRUSTED_ORIGINS.append('https://*.vercel.app')
+        if VERCEL_URL:
+            CSRF_TRUSTED_ORIGINS.append(f'https://{VERCEL_URL}')
+        if VERCEL_PROJECT_PRODUCTION_URL:
+            CSRF_TRUSTED_ORIGINS.append(f'https://{VERCEL_PROJECT_PRODUCTION_URL}')
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', True)
+    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', not VERCEL)
     SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '31536000'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', True)
     SECURE_HSTS_PRELOAD = _env_bool('DJANGO_SECURE_HSTS_PRELOAD', True)
